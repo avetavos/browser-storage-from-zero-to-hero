@@ -1,6 +1,6 @@
-# Node.js Deep Dive
+# Browser Storage & Data — From Zero to Hero
 
-A bilingual (EN/TH), interactive, standalone course that teaches the **Node.js runtime and server-side JavaScript** in depth — from JavaScript essentials and the event loop to streams, core APIs, modules/npm, and tooling. It is language-core focused (the runtime and the language), not a framework tutorial.
+A bilingual (EN/TH), standalone, beginner→advanced course on **client-side storage** — the storage landscape, `localStorage`/`sessionStorage`, cookies, IndexedDB (fundamentals + advanced), the Cache API & Storage Manager, Web/Shared Workers, and cross-tab data (BroadcastChannel, Web Locks, OPFS). Examples run **in your browser** via a same-origin runner, diagrams are **Mermaid**, and there's a **read-mode** toggle.
 
 ## Tech Stack
 
@@ -8,9 +8,10 @@ A bilingual (EN/TH), interactive, standalone course that teaches the **Node.js r
 | ----- | ---------- |
 | Site framework | [Astro 6](https://astro.build) + [Starlight 0.40](https://starlight.astro.build) |
 | UI islands | [Preact](https://preactjs.com) (via `@astrojs/preact`) |
-| Runnable code | **Hybrid `<NodeRunner>`** — pure-JS snippets run live in a sandboxed iframe (editable; `console.*` output captured); Node-API snippets show an "Open in StackBlitz" button that opens a real Node project (WebContainer) via the StackBlitz SDK |
+| Hands-on | **`<StorageRunner>`** runs JS in a **same-origin** iframe (`sandbox="allow-scripts allow-same-origin"`) so `localStorage`/`sessionStorage`/`IndexedDB`/Cache/`BroadcastChannel`/Web Locks/OPFS (and dedicated Workers via Blob URL) actually run, with console output. `stackblitz` mode opens SharedWorker / multi-tab demos. |
+| Diagrams | Client-side, theme-aware **Mermaid** (`<Mermaid>` + `public/enhance.js`) |
+| Reading | **Read-mode** toggle (hides sidebar/TOC, widens content) via `public/enhance.js` |
 | Unit tests | [Vitest](https://vitest.dev) + `@testing-library/preact` |
-| Styling | Starlight default + custom CSS (`src/styles/custom.css`) |
 | i18n | Starlight built-in, `defaultLocale: 'en'`, locales: `en` + `th` |
 
 ## Commands
@@ -23,58 +24,53 @@ npm run preview    # Preview the production build locally
 npm test           # Run Vitest unit tests
 ```
 
-> No runner build step — JavaScript runs in the browser; Node examples run on StackBlitz. No backend.
-
 ## Content Structure
 
 ```
 src/content/docs/
-  en/                  # English — served at /en/...
-    js-essentials/
-    event-loop-async/
-    core-apis/
-    streams/
-    http-networking/
-    modules-npm/
-    testing-tooling/
-    index.mdx          # EN landing (splash)
-  th/                  # Thai — served at /th/...
+  en/                          # English — served at /en/...
+    intro-storage-landscape/
+    web-storage/
+    cookies/
+    indexeddb-fundamentals/
+    indexeddb-advanced/
+    cache-and-quota/
+    workers-sharedworker/
+    cross-tab-and-files/
+    index.mdx                  # EN landing (splash)
+  th/                          # Thai — served at /th/...
     (same module directories)
-    index.mdx          # TH landing (splash)
+    index.mdx
 ```
 
-### The 7 Modules
+### The 8 Modules
 
-| Directory | Module | Runner |
-| --------- | ------ | ------ |
-| `js-essentials` | JavaScript Essentials | in-browser JS (modules lesson: node) |
-| `event-loop-async` | Event Loop & Async | in-browser JS |
-| `core-apis` | Core APIs (process/Buffer/fs/events) | node (StackBlitz) |
-| `streams` | Streams & I/O | node (StackBlitz) |
-| `http-networking` | HTTP & Networking | node (StackBlitz) |
-| `modules-npm` | Modules & npm | code / node |
-| `testing-tooling` | Testing & Tooling | code / node |
+| Directory | Module |
+| --------- | ------ |
+| `intro-storage-landscape` | Intro: Storage Landscape |
+| `web-storage` | localStorage & sessionStorage |
+| `cookies` | Cookies |
+| `indexeddb-fundamentals` | IndexedDB Fundamentals |
+| `indexeddb-advanced` | IndexedDB Advanced |
+| `cache-and-quota` | Cache API & Quota |
+| `workers-sharedworker` | Web Workers & SharedWorker |
+| `cross-tab-and-files` | Cross-Tab & Files (BroadcastChannel, Web Locks, OPFS) |
 
-### Lesson Template
+### Components & Lesson Template
 
-frontmatter (`title`, `description`, `sidebar.order`) → imports → concept intro → prose → hoisted `export const ...Code` + `<NodeRunner code={...} [node] />` → `<Callout>` (key point / gotcha) → `<Quiz>` → `<ProgressTracker>` (last). IDs follow `<module>/<slug>`.
+- **`StorageRunner.tsx`** `{ code, stackblitz? }` — same-origin iframe runner with console capture (storage APIs work); `storage-project.ts` builds the StackBlitz SharedWorker/multi-tab project. Runnable examples are a hoisted `export const ...Code` (JS that uses a storage API + `console.log`) + `<StorageRunner code={...} />`. Demo keys are namespaced `demo:` / `demo_` and cleaned up.
+- **`Mermaid.astro`** `{ code, title }`, **`Callout.astro`** `{ title }`, **`Quiz.tsx`** `{ id, questions }` (0-based `answer`, field `q`), **`ProgressTracker.tsx`** `{ id }`.
+
+Lesson order: frontmatter → imports → concept intro → prose (fenced `js` + `<Mermaid>`) → `export const ...Code` + `<StorageRunner>` (where runnable) → `<Callout>` → `<Quiz>` → `<ProgressTracker>` (last). IDs follow `<module>/<slug>`.
 
 > **⚠️ Authoring notes:**
-> - **`<NodeRunner code={...} />`** runs JS in the browser (editable, click Run). **`<NodeRunner code={...} node />`** is for snippets needing the Node runtime (process/Buffer/fs/http/streams/require/npm) — code + "Open in StackBlitz", no in-browser run.
-> - **In `export const` snippets, prefer string concatenation over template literals** to avoid escaping. If you must use a template literal, escape interpolation as `\${...}` and backticks as `` \` ``.
-> - **Never put a bare `{...}` in prose or headings** — keep object/destructuring examples in backtick code spans or fenced ```js blocks.
-> - **Internal links must include the base path**, e.g. `/nodejs-deep-dive/en/event-loop-async/`.
-> - **Do NOT run a `\n`/`\t`-doubling escaping codemod** on this content — it corrupts indentation. Verify by building + browser-testing instead.
-
-## How the Hybrid Runner Works
-
-`<NodeRunner>` (`src/components/NodeRunner.tsx`) has two modes, both backed by pure helpers in `src/components/node-runner.ts`:
-
-- **JS mode (default):** `buildJsSrcdoc(code)` builds an iframe `srcdoc` that overrides `console.*` to print into the page and runs the snippet in an async IIFE. Sync, promises, microtasks, and `setTimeout` all execute with correct ordering. Editable + re-runnable.
-- **Node mode (`node` prop):** `buildNodeProject(code)` builds a minimal Node project (`package.json` with `"type":"module"` + `index.js`); the button calls the StackBlitz SDK's `openProject` to launch it in a WebContainer. Falls back to opening `stackblitz.com/fork/node` + copying the code.
+> - The runner is **same-origin on purpose** — storage APIs throw in an opaque origin. Examples namespace demo keys and clean up so runs don't pollute the site's storage.
+> - **In `export const` snippets:** escape `${`→`\${` (worker-source/template literals) and double-escape `\\n`. Fenced blocks are literal.
+> - **Never a bare `{...}`/`${...}` in prose** — keep JS objects/JSON in code spans / fenced blocks / `export const`. **Diagrams are Mermaid, not ASCII.**
+> - **Internal links include the base path** (`/browser-storage-from-zero-to-hero/en/...`); cross-course links use the full `https://avetavos.github.io/<course>/...` URL.
 
 ## Deployment
 
-Fully static (`output: 'static'`) → `dist/`. Deploys to GitHub Pages via `.github/workflows/deploy.yml` (build with `withastro/action` on Node 22, publish with `actions/deploy-pages`).
+Fully static → `dist/`. Base path in `astro.config.mjs`: `site: 'https://avetavos.github.io'`, `base: '/browser-storage-from-zero-to-hero'`.
 
-One-time setup: create the repo, push `main`, set **Settings → Pages → Source: GitHub Actions**. The base path in `astro.config.mjs` is `site: 'https://avetavos.github.io'`, `base: '/nodejs-deep-dive'`. If you change `base`, update the base-prefixed links in `src/content/docs/{en,th}/index.mdx`.
+Deployed to GitHub Pages via **branch-source** (`gh-pages`): build `dist/`, add `.nojekyll`, push to `gh-pages`, set **Settings → Pages → Source: Deploy from a branch → `gh-pages` / `/`**, then **request a Pages build** (`gh api -X POST repos/<owner>/<repo>/pages/builds`) — flipping the source alone does not trigger one. If you change `base`, update the base-prefixed links in `src/content/docs/{en,th}/index.mdx`.
