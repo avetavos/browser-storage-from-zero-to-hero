@@ -1,6 +1,63 @@
 ---
 title: Browser Storage & Data — From Zero to Hero
-description: Learn client-side storage — Web Storage, cookies, IndexedDB, the Cache API, Workers, and cross-tab data.
+description: Learn client-side storage from first principles — localStorage/sessionStorage, cookies, IndexedDB, the Cache API & quota, Web/Shared Workers, and cross-tab data — with examples that run in your browser.
 template: splash
+hero:
+  tagline: A standalone, beginner→advanced course on browser storage & client-side data. localStorage, cookies, IndexedDB, the Cache API, Workers, and cross-tab sharing — every example runs right in the page.
+  actions:
+    - text: Start here
+      link: /browser-storage-from-zero-to-hero/en/intro-storage-landscape/
+      icon: right-arrow
+      variant: primary
+    - text: Jump to Web Storage
+      link: /browser-storage-from-zero-to-hero/en/web-storage/
+      icon: open-book
 ---
-Coming soon.
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## What you'll learn
+
+<CardGrid>
+  <Card title="Intro: Storage Landscape" icon="rocket">
+    The options, the same-origin policy, sync vs async, quota & persistence. [Start →](/browser-storage-from-zero-to-hero/en/intro-storage-landscape/)
+  </Card>
+  <Card title="localStorage & sessionStorage" icon="seti:default">
+    The Web Storage API, JSON, the storage event, limits. [Learn →](/browser-storage-from-zero-to-hero/en/web-storage/)
+  </Card>
+  <Card title="Cookies" icon="seti:config">
+    document.cookie, attributes &amp; SameSite, the Cookie Store API. [Bake →](/browser-storage-from-zero-to-hero/en/cookies/)
+  </Card>
+  <Card title="IndexedDB Fundamentals" icon="seti:db">
+    Object stores, versioning, transactions, CRUD. [Store →](/browser-storage-from-zero-to-hero/en/indexeddb-fundamentals/)
+  </Card>
+  <Card title="IndexedDB Advanced" icon="puzzle">
+    Indexes, cursors & ranges, the idb library, migrations, blobs. [Go deeper →](/browser-storage-from-zero-to-hero/en/indexeddb-advanced/)
+  </Card>
+  <Card title="Cache API & Quota" icon="random">
+    Cache Storage, the Storage Manager, eviction, Cache vs IndexedDB. [Cache →](/browser-storage-from-zero-to-hero/en/cache-and-quota/)
+  </Card>
+  <Card title="Web Workers & SharedWorker" icon="setting">
+    Off-main-thread work, postMessage, transferables, a shared service. [Thread →](/browser-storage-from-zero-to-hero/en/workers-sharedworker/)
+  </Card>
+  <Card title="Cross-Tab & Files" icon="approve-check">
+    BroadcastChannel, Web Locks, cross-tab state, File System Access & OPFS. [Coordinate →](/browser-storage-from-zero-to-hero/en/cross-tab-and-files/)
+  </Card>
+</CardGrid>
+
+## How this course works
+
+<CardGrid>
+  <Card title="Runs in your browser" icon="rocket">
+    A same-origin runner executes localStorage, IndexedDB, Cache, BroadcastChannel, Web Locks, OPFS, and Workers — with real output.
+  </Card>
+  <Card title="Diagrams that explain" icon="puzzle">
+    Storage decision trees, the IndexedDB object-store model, and worker message flow as Mermaid diagrams.
+  </Card>
+  <Card title="Pick the right tool" icon="approve-check">
+    Clear guidance on cookies vs Web Storage vs IndexedDB vs Cache vs OPFS, with quotas and persistence.
+  </Card>
+  <Card title="Bilingual + read mode" icon="translate">
+    English and ไทย, quizzes with saved progress, and a distraction-free read mode.
+  </Card>
+</CardGrid>
