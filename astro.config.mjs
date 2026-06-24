@@ -9,12 +9,12 @@ export default defineConfig({
   // GitHub Pages project site. Update `site` to your GitHub username and `base`
   // to your repo name if they differ.
   site: 'https://avetavos.github.io',
-  base: '/nodejs-deep-dive',
+  base: '/browser-storage-from-zero-to-hero',
   output: 'static',
   integrations: [starlight({
-      title: 'Node.js Deep Dive',
+      title: 'Browser Storage & Data — From Zero to Hero',
       head: [
-        { tag: 'script', attrs: { type: 'module', src: '/nodejs-deep-dive/enhance.js' } },
+        { tag: 'script', attrs: { type: 'module', src: '/browser-storage-from-zero-to-hero/enhance.js' } },
       ],
       defaultLocale: 'en',
       locales: {
@@ -22,15 +22,16 @@ export default defineConfig({
         th: { label: 'ไทย', lang: 'th' },
       },
       customCss: ['./src/styles/custom.css'],
-      social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/avetavos/nodejs-deep-dive' }],
+      social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/avetavos/browser-storage-from-zero-to-hero' }],
       sidebar: [
-        { label: 'JavaScript Essentials', items: [{ autogenerate: { directory: 'js-essentials' } }] },
-        { label: 'Event Loop & Async', items: [{ autogenerate: { directory: 'event-loop-async' } }] },
-        { label: 'Core APIs', items: [{ autogenerate: { directory: 'core-apis' } }] },
-        { label: 'Streams & I/O', items: [{ autogenerate: { directory: 'streams' } }] },
-        { label: 'HTTP & Networking', items: [{ autogenerate: { directory: 'http-networking' } }] },
-        { label: 'Modules & npm', items: [{ autogenerate: { directory: 'modules-npm' } }] },
-        { label: 'Testing & Tooling', items: [{ autogenerate: { directory: 'testing-tooling' } }] },
+        { label: 'Intro: Storage Landscape', items: [{ autogenerate: { directory: 'intro-storage-landscape' } }] },
+        { label: 'localStorage & sessionStorage', items: [{ autogenerate: { directory: 'web-storage' } }] },
+        { label: 'Cookies', items: [{ autogenerate: { directory: 'cookies' } }] },
+        { label: 'IndexedDB Fundamentals', items: [{ autogenerate: { directory: 'indexeddb-fundamentals' } }] },
+        { label: 'IndexedDB Advanced', items: [{ autogenerate: { directory: 'indexeddb-advanced' } }] },
+        { label: 'Cache API & Quota', items: [{ autogenerate: { directory: 'cache-and-quota' } }] },
+        { label: 'Web Workers & SharedWorker', items: [{ autogenerate: { directory: 'workers-sharedworker' } }] },
+        { label: 'Cross-Tab & Files', items: [{ autogenerate: { directory: 'cross-tab-and-files' } }] },
       ],
       }), preact()],
 });
