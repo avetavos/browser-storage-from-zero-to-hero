@@ -43,3 +43,6 @@ html.read-mode .sidebar, html.read-mode .sidebar-pane, html.read-mode .right-sid
 html.read-mode .main-frame { padding-inline-start: 0 !important; padding-top: 0 !important; }
 html.read-mode .main-pane { width: 100%; }
 html.read-mode .sl-container, html.read-mode .sl-markdown-content { max-width: 50rem; margin-inline: auto; }
+
+/* Runner: cancel Starlight flow margin on all runner internals (bar, buttons, textarea, output) so nothing shifts */
+.sl-markdown-content .nr * { margin-top: 0; }
