@@ -1,0 +1,173 @@
+---
+title: 'Reading and Writing Cookies'
+description: 'document.cookie to read all cookies, set one, and a helper to get/set/delete by name.'
+sidebar:
+  order: 3
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## The document.cookie quirk
+
+`document.cookie` does not behave like a normal JavaScript property. It has two completely different behaviors depending on whether you read it or write to it.
+
+**Reading** returns ALL cookies for the current page as a single semicolon-separated string:
+
+```js
+// If three cookies are set:
+console.log(document.cookie);
+// "theme=dark; user=Alice; lang=en"
+```
+
+**Writing** sets (or updates) ONE cookie — it does not replace all cookies:
+
+```js
+document.cookie = 'theme=light; Max-Age=86400; SameSite=Lax';
+// Only theme is updated — other cookies are untouched
+```
+
+This asymmetry is the most surprising part of the cookies API. Writing to `document.cookie` is more like calling a `setCookie()` function than assigning to a string property.
+
+## Setting a cookie
+
+The syntax for setting a cookie is a string with the name=value first, followed by optional attributes separated by semicolons:
+
+```js
+// Session cookie (no Expires/Max-Age — deleted when browser closes)
+document.cookie = 'demo_pref=dark; SameSite=Lax';
+
+// Persistent cookie (survives browser restarts)
+document.cookie = 'demo_pref=dark; Max-Age=86400; SameSite=Lax';
+
+// Path-scoped cookie
+document.cookie = 'demo_pref=dark; Max-Age=86400; Path=/app; SameSite=Lax';
+```
+
+Always include `SameSite=Lax` as a minimum for client-set cookies. Modern browsers default to `Lax` for cookies set without a `SameSite` attribute, but being explicit is safer.
+
+## Reading a specific cookie
+
+Because reading `document.cookie` returns all cookies as one string, you need to parse it to find a specific cookie by name:
+
+```js
+function getCookie(name) {
+  var pairs = document.cookie.split('; ');
+  for (var i = 0; i < pairs.length; i++) {
+    var pair = pairs[i].split('=');
+    if (pair[0] === name) return decodeURIComponent(pair[1]);
+  }
+  return null;
+}
+
+var theme = getCookie('demo_pref'); // 'dark' or null
+```
+
+Note the `decodeURIComponent` call — values set with `encodeURIComponent` must be decoded on read.
+
+## Deleting a cookie
+
+You cannot delete a cookie by assigning an empty string. You delete a cookie by setting it with `Max-Age=0` (or an `Expires` date in the past):
+
+```js
+function deleteCookie(name) {
+  document.cookie = name + '=; Max-Age=0; SameSite=Lax';
+}
+
+deleteCookie('demo_pref');
+```
+
+## The complete helper pattern
+
+Here is the full get/set/delete pattern used in production code:
+
+```js
+function setCookie(name, value, maxAge) {
+  document.cookie = name + '=' + encodeURIComponent(value) +
+    '; Max-Age=' + maxAge + '; SameSite=Lax';
+}
+
+function getCookie(name) {
+  var pairs = document.cookie.split('; ');
+  for (var i = 0; i < pairs.length; i++) {
+    var pair = pairs[i].split('=');
+    if (pair[0] === name) return decodeURIComponent(pair[1]);
+  }
+  return null;
+}
+
+function deleteCookie(name) {
+  document.cookie = name + '=; Max-Age=0; SameSite=Lax';
+}
+```
+
+## Runnable demo: set, read, delete
+
+export const readingWritingCode = `// Helper functions
+function setCookie(name, value, maxAge) {
+  document.cookie = name + '=' + encodeURIComponent(value) + '; Max-Age=' + maxAge + '; SameSite=Lax';
+}
+function getCookie(name) {
+  var pairs = document.cookie.split('; ');
+  for (var i = 0; i < pairs.length; i++) {
+    var pair = pairs[i].split('=');
+    if (pair[0] === name) return decodeURIComponent(pair[1]);
+  }
+  return null;
+}
+function deleteCookie(name) {
+  document.cookie = name + '=; Max-Age=0; SameSite=Lax';
+}
+
+// Demo: set -> read -> delete
+setCookie('demo_user', 'Alice', 60);
+console.log('Set demo_user=Alice');
+console.log('Read:', getCookie('demo_user'));
+
+deleteCookie('demo_user');
+console.log('After delete:', getCookie('demo_user'));`;
+
+<StorageRunner client:visible code={readingWritingCode} />
+
+<Callout title="document.cookie does not work like a normal property">
+Reading `document.cookie` returns all cookies as one big string. Writing to it sets exactly one cookie — it never clears other cookies. To delete a cookie you must set it again with `Max-Age=0`. Always use `encodeURIComponent` when setting values and `decodeURIComponent` when reading them to handle special characters safely.
+</Callout>
+
+export const quizReadingWriting = [
+  {
+    q: 'What does reading document.cookie return?',
+    options: [
+      'An object with all cookie names as keys',
+      'The most recently set cookie as a string',
+      'All cookies as a semicolon-separated string of name=value pairs',
+      'null if no cookies are set',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'How do you delete a cookie using document.cookie?',
+    options: [
+      'document.cookie = "name=";',
+      'document.cookie = "name=; Max-Age=0;";',
+      'delete document.cookie["name"];',
+      'document.cookie.remove("name");',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'You write document.cookie = "lang=en; SameSite=Lax". What happens to existing cookies?',
+    options: [
+      'All existing cookies are deleted and replaced with lang=en',
+      'Only the lang cookie is added or updated; other cookies are unchanged',
+      'An error is thrown because you cannot assign a string to document.cookie',
+      'The lang cookie is added to the Cookie header but not stored',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="cookies/reading-writing" questions={quizReadingWriting} />
+
+<ProgressTracker client:visible id="cookies/reading-writing" />

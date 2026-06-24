@@ -1,0 +1,154 @@
+---
+title: 'Opening a Database'
+description: 'How to open an IndexedDB database with indexedDB.open(), handle onupgradeneeded, onsuccess, and onerror, and understand version management.'
+sidebar:
+  order: 2
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## Opening a database with `indexedDB.open()`
+
+Unlike the Promise-based `fetch()` API, `indexedDB.open(name, version)` returns an **`IDBOpenDBRequest`** — not a Promise. You interact with it by attaching event handler callbacks.
+
+```js
+const request = indexedDB.open('my-database', 1);
+```
+
+The two arguments are:
+
+- **`name`** — a string that identifies the database within the origin. Every origin has its own isolated namespace.
+- **`version`** — a positive integer. If the database does not yet exist, it is created at this version. If it already exists at a lower version, an upgrade is triggered.
+
+Omitting `version` defaults to version `1` on creation, or the current version if the database already exists.
+
+## The three event handlers
+
+### `onupgradeneeded`
+
+Fires when the database is first created **or** when the requested version is higher than the stored version. This is where you define (or migrate) your schema — create object stores, add indexes, delete old stores.
+
+```js
+request.onupgradeneeded = (event) => {
+  const db = event.target.result; // IDBDatabase
+  // Create an object store with 'id' as the key path
+  db.createObjectStore('notes', { keyPath: 'id' });
+};
+```
+
+`event.target.result` (equivalently `request.result` inside the handler) is the `IDBDatabase` instance. Any schema changes made here are wrapped in an implicit upgrade transaction.
+
+### `onsuccess`
+
+Fires after `onupgradeneeded` completes (or immediately, if no upgrade was needed). The database is open and ready for use.
+
+```js
+request.onsuccess = (event) => {
+  const db = event.target.result; // IDBDatabase
+  console.log('Opened:', db.name, 'at version', db.version);
+};
+```
+
+### `onerror`
+
+Fires when the open request fails — for example, if the user's browser is in private mode with storage blocked, or if another tab holds a version-change transaction that was blocked.
+
+```js
+request.onerror = (event) => {
+  console.error('Failed to open DB:', event.target.error);
+};
+```
+
+## The `versionchange` event
+
+After the database is open, your `IDBDatabase` instance can receive a `versionchange` event. This happens when another tab (or the same page after a reload) calls `indexedDB.open()` with a **higher** version number.
+
+```js
+db.onversionchange = () => {
+  db.close(); // release the connection so the upgrade can proceed
+  alert('Database is outdated. Please reload the page.');
+};
+```
+
+If you do not close the connection, the upgrade in the other context will be blocked until you do.
+
+## The complete open pattern
+
+Wrapping the callback-based API in a `Promise` makes it composable with `async/await`:
+
+```js
+function openDatabase(name, version) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(name, version);
+
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('notes')) {
+        db.createObjectStore('notes', { keyPath: 'id' });
+      }
+    };
+
+    request.onsuccess = (event) => {
+      const db = event.target.result;
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
+
+    request.onerror = (event) => {
+      reject(event.target.error);
+    };
+  });
+}
+
+// Usage
+const db = await openDatabase('my-database', 1);
+console.log('Ready:', db.name, db.version);
+```
+
+## Runnable: open, inspect, close, and clean up
+
+export const openingADbCode = `const db = await new Promise((resolve, reject) => {
+  const req = indexedDB.open('demo-open', 1);
+  req.onupgradeneeded = (e) => {
+    const db = e.target.result;
+    db.createObjectStore('notes', { keyPath: 'id' });
+    console.log('Schema created: notes store');
+  };
+  req.onsuccess = (e) => resolve(e.target.result);
+  req.onerror = (e) => reject(e.target.error);
+});
+console.log('DB name:', db.name, '| version:', db.version);
+db.close();
+indexedDB.deleteDatabase('demo-open');
+console.log('Cleanup done');`;
+
+<StorageRunner client:visible code={openingADbCode} />
+
+<Callout title="onupgradeneeded is the only place to modify schema">
+You can only call `createObjectStore()`, `deleteObjectStore()`, or create indexes inside an `onupgradeneeded` handler. Attempting these operations outside of an upgrade transaction will throw a `DOMException`. If you need to add a new store, bump the version number — that triggers `onupgradeneeded` again with the old and new version numbers available on `event.oldVersion` and `event.newVersion`.
+</Callout>
+
+export const quizOpeningADb = [
+  {
+    q: 'What does indexedDB.open("myDB", 1) return?',
+    options: ['A Promise that resolves to an IDBDatabase', 'An IDBOpenDBRequest object', 'An IDBDatabase directly', 'A DOMException if the DB does not exist'],
+    answer: 1,
+  },
+  {
+    q: 'In which event handler must you call db.createObjectStore()?',
+    options: ['onsuccess', 'onerror', 'onupgradeneeded', 'onversionchange'],
+    answer: 2,
+  },
+  {
+    q: 'What event fires on your open IDBDatabase when another context requests a higher version of the same database?',
+    options: ['onerror', 'onblocked', 'onupgradeneeded', 'onversionchange'],
+    answer: 3,
+  },
+];
+
+<Quiz client:visible id="indexeddb-fundamentals/opening-a-db" questions={quizOpeningADb} />
+
+<ProgressTracker client:visible id="indexeddb-fundamentals/opening-a-db" />

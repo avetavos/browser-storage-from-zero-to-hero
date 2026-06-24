@@ -1,0 +1,124 @@
+---
+title: 'The Storage Manager'
+description: 'navigator.storage.estimate() returns usage and quota; persist() and persisted() control eviction protection.'
+sidebar:
+  order: 3
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## navigator.storage
+
+The `navigator.storage` object is the entry point to the Storage Manager API. It gives you visibility into how much disk space the current origin is consuming, what quota the browser has granted, and whether the origin's data is protected from eviction.
+
+All three methods are async and return Promises.
+
+### `navigator.storage.estimate()`
+
+Returns a Promise that resolves to an object with two properties:
+
+- `usage` — the number of bytes currently used by the origin across all storage mechanisms (Cache API, IndexedDB, localStorage, etc.)
+- `quota` — the maximum number of bytes the browser is willing to grant to this origin
+
+Both values are in bytes and are estimates. The browser may round or cap them for privacy reasons.
+
+```js
+const { usage, quota } = await navigator.storage.estimate();
+
+const usageMB = (usage / 1024 ** 2).toFixed(2);
+const quotaMB = (quota / 1024 ** 2).toFixed(2);
+
+console.log(\`Used: \${usageMB} MB of \${quotaMB} MB available\`);
+```
+
+Quota is dynamic — it varies based on how much free space is available on the device. On mobile devices with limited storage, the quota may be much smaller than on desktop machines.
+
+### `navigator.storage.persist()`
+
+Requests that the browser grant *persistent* storage to the current origin. Returns a Promise that resolves to `true` if the request was granted, or `false` if the browser declined.
+
+```js
+const granted = await navigator.storage.persist();
+console.log('Persistent storage granted:', granted);
+```
+
+Whether the browser grants persistence depends on browser heuristics, such as whether the user has added the site to their home screen, how often the user visits, or whether the user explicitly approved a permission prompt. You cannot force it to return `true`.
+
+### `navigator.storage.persisted()`
+
+Checks whether the current origin already has persistent storage. Returns a Promise that resolves to `true` if storage is currently persistent, or `false` if it is best-effort.
+
+```js
+const isPersistent = await navigator.storage.persisted();
+
+if (isPersistent) {
+  console.log('Data is safe from automatic eviction');
+} else {
+  console.log('Data may be evicted under storage pressure');
+}
+```
+
+Use `persisted()` at app startup to determine whether you need to show a "please allow persistent storage" prompt to the user.
+
+## Runnable: estimate and check persistence
+
+export const storageManagerCode = `(async () => {
+  // Check current usage and quota
+  const { usage, quota } = await navigator.storage.estimate();
+
+  const usageMB = (usage / 1024 ** 2).toFixed(2);
+  const quotaMB = (quota / 1024 ** 2).toFixed(2);
+
+  console.log('Storage usage:', usageMB, 'MB');
+  console.log('Storage quota:', quotaMB, 'MB');
+  console.log('Usage as % of quota:', ((usage / quota) * 100).toFixed(4) + '%');
+
+  // Check whether storage is currently persistent
+  const isPersistent = await navigator.storage.persisted();
+  console.log('Is persistent:', isPersistent);
+
+  if (!isPersistent) {
+    console.log('Tip: call navigator.storage.persist() to request eviction protection');
+  }
+})();`;
+
+<StorageRunner client:visible code={storageManagerCode} />
+
+<Callout title="Key point">
+`navigator.storage.estimate()` reports usage across **all** storage for the origin — not just the Cache API. IndexedDB, Service Worker registrations, and other APIs all count toward the same quota. Monitor it in production apps that cache large assets or store significant amounts of offline data.
+</Callout>
+
+export const quizStorageManager = [
+  {
+    q: 'What unit does navigator.storage.estimate() return usage and quota in?',
+    options: ['Kilobytes', 'Megabytes', 'Bytes', 'Gigabytes'],
+    answer: 2,
+  },
+  {
+    q: 'What does navigator.storage.persist() return?',
+    options: [
+      'A string: "granted" or "denied"',
+      'A boolean: true if persistent storage was granted',
+      'The current usage and quota object',
+      'undefined — it works by side effect only',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'Which storage mechanisms are included in the usage reported by navigator.storage.estimate()?',
+    options: [
+      'Only the Cache API',
+      'Only IndexedDB',
+      'All storage for the origin: Cache API, IndexedDB, localStorage, and others',
+      'Only storage written by Service Workers',
+    ],
+    answer: 2,
+  },
+];
+
+<Quiz client:visible id="cache-and-quota/storage-manager" questions={quizStorageManager} />
+
+<ProgressTracker client:visible id="cache-and-quota/storage-manager" />

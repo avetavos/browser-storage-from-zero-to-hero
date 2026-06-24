@@ -1,0 +1,227 @@
+---
+title: 'การวนซ้ำด้วย Cursors และ Ranges'
+description: 'เดินผ่านระเบียนใน IndexedDB ด้วย openCursor() ขยับด้วย cursor.continue() และกรองด้วย IDBKeyRange'
+sidebar:
+  order: 3
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## Cursor คืออะไร?
+
+การอ่านระเบียนเดียวด้วยคีย์ผ่าน `objectStore.get(key)` นั้นรวดเร็ว แต่บางครั้งคุณจำเป็นต้อง **เดินผ่านระเบียนจำนวนมาก** — เพื่อกรอง รวบรวม หรือแปลงข้อมูลระหว่างทาง นั่นคือสิ่งที่ cursor มีไว้เพื่อ
+
+Cursor ชี้ไปที่ระเบียนหนึ่งในแต่ละครั้ง คุณเปิดมันบน object store (หรือ index) ประมวลผลระเบียนปัจจุบัน จากนั้นเรียก `cursor.continue()` เพื่อเลื่อนไปยังระเบียนถัดไป เมื่อไม่มีระเบียนเหลืออีก cursor จะ resolve เป็น `null` ซึ่งเป็นสัญญาณว่าการวนซ้ำเสร็จสิ้นแล้ว
+
+```js
+const request = objectStore.openCursor();
+
+request.onsuccess = (event) => {
+  const cursor = event.target.result;
+  if (cursor) {
+    console.log(cursor.key, cursor.value);
+    cursor.continue(); // advance to next record
+  } else {
+    console.log('Done — no more records');
+  }
+};
+```
+
+## การเปิด Cursor
+
+`objectStore.openCursor(query, direction)` — ทั้งสองอาร์กิวเมนต์เป็นตัวเลือก
+
+- **`query`** — เป็น `IDBKeyRange` หรือคีย์เฉพาะ ละเว้น (หรือส่ง `null`) เพื่อวนซ้ำระเบียนทั้งหมด
+- **`direction`** — `"next"` (ค่าเริ่มต้น เรียงจากน้อยไปมาก), `"prev"` (เรียงจากมากไปน้อย), `"nextunique"` หรือ `"prevunique"`
+
+```js
+// All records, ascending order (default)
+objectStore.openCursor();
+
+// All records, descending order
+objectStore.openCursor(null, 'prev');
+
+// Only records with keys 2–3 (inclusive on both ends)
+objectStore.openCursor(IDBKeyRange.bound(2, 3));
+```
+
+## IDBKeyRange — การกรองด้วยคีย์
+
+`IDBKeyRange` ช่วยให้คุณระบุชุดย่อยของคีย์โดยไม่ต้องสแกนทุกระเบียน เมธอด factory ทั้งสี่ได้แก่:
+
+| เมธอด | สิ่งที่จับคู่ |
+|---|---|
+| `IDBKeyRange.only(value)` | คีย์เพียงหนึ่งเดียวที่ตรงกันพอดี |
+| `IDBKeyRange.lowerBound(lower, open?)` | คีย์ที่ ≥ lower (ส่ง `true` เพื่อไม่รวม lower เอง) |
+| `IDBKeyRange.upperBound(upper, open?)` | คีย์ที่ ≤ upper (ส่ง `true` เพื่อไม่รวม upper เอง) |
+| `IDBKeyRange.bound(lower, upper, lowerOpen?, upperOpen?)` | คีย์ระหว่าง lower และ upper รวมขอบทั้งสองโดยค่าเริ่มต้น |
+
+```js
+IDBKeyRange.only(42)           // key === 42
+IDBKeyRange.lowerBound(10)     // key >= 10
+IDBKeyRange.lowerBound(10, true) // key > 10
+IDBKeyRange.upperBound(50)     // key <= 50
+IDBKeyRange.bound(10, 50)      // 10 <= key <= 50
+IDBKeyRange.bound(10, 50, true, true) // 10 < key < 50
+```
+
+## การห่อการวนซ้ำ Cursor ด้วย Promise
+
+callback แบบ `onsuccess` ดิบๆ นั้นยุ่งยาก การห่อรูปแบบนี้ไว้ใน helper จะทำให้ใช้ร่วมกับ `async/await` ได้สะดวกขึ้น:
+
+```js
+function iterateCursor(store, range = null) {
+  return new Promise((resolve, reject) => {
+    const results = [];
+    const req = store.openCursor(range);
+    req.onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (cursor) {
+        results.push(cursor.value);
+        cursor.continue();
+      } else {
+        resolve(results);
+      }
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+```
+
+## ตัวอย่างรัน: วนซ้ำระเบียนทั้งหมด แล้ววนซ้ำตาม Range
+
+การสาธิตด้านล่างนี้:
+1. เปิดฐานข้อมูลและเติมข้อมูลคะแนนผู้เล่นสี่ระเบียน
+2. ใช้ cursor เพื่อวนซ้ำระเบียน **ทั้งหมด** และแสดงผลแต่ละรายการ
+3. ใช้ `IDBKeyRange.bound(2, 3)` เพื่อวนซ้ำเฉพาะระเบียนที่มี `id` 2 และ 3
+4. ลบฐานข้อมูลหลังจากนั้นเพื่อไม่ให้เหลือร่องรอย
+
+export const cursorsCode = `(async function() {
+  // Helper: wrap an IDBRequest in a Promise
+  function req(r) {
+    return new Promise((res, rej) => {
+      r.onsuccess = () => res(r.result);
+      r.onerror  = () => rej(r.error);
+    });
+  }
+
+  // Helper: iterate a cursor and collect all values
+  function iterateCursor(store, range) {
+    return new Promise((resolve, reject) => {
+      const results = [];
+      const r = store.openCursor(range);
+      r.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (cursor) {
+          results.push(cursor.value);
+          cursor.continue();
+        } else {
+          resolve(results);
+        }
+      };
+      r.onerror = () => reject(r.error);
+    });
+  }
+
+  // --- Open / seed ---
+  const db = await new Promise((resolve, reject) => {
+    const openReq = indexedDB.open('demo-advanced-cursors', 1);
+    openReq.onupgradeneeded = (e) => {
+      const database = e.target.result;
+      database.createObjectStore('scores', { keyPath: 'id' });
+    };
+    openReq.onsuccess = () => resolve(openReq.result);
+    openReq.onerror   = () => reject(openReq.error);
+  });
+
+  const seedTx = db.transaction('scores', 'readwrite');
+  const seedStore = seedTx.objectStore('scores');
+  await Promise.all([
+    req(seedStore.put({ id: 1, player: 'Alice', score: 150 })),
+    req(seedStore.put({ id: 2, player: 'Bob',   score: 80  })),
+    req(seedStore.put({ id: 3, player: 'Carol', score: 200 })),
+    req(seedStore.put({ id: 4, player: 'Dave',  score: 60  })),
+  ]);
+  await new Promise((res, rej) => {
+    seedTx.oncomplete = res;
+    seedTx.onerror    = () rej(seedTx.error);
+  });
+
+  // --- Iterate ALL records ---
+  console.log('=== All records (cursor, no range) ===');
+  const allTx    = db.transaction('scores', 'readonly');
+  const allStore = allTx.objectStore('scores');
+  const allRows  = await iterateCursor(allStore, null);
+  for (const row of allRows) {
+    console.log(\`  \${row.player}: \${row.score}\`);
+  }
+
+  // --- Iterate with IDBKeyRange.bound(2, 3) ---
+  console.log('=== Range: ids 2–3 only ===');
+  const rangeTx    = db.transaction('scores', 'readonly');
+  const rangeStore = rangeTx.objectStore('scores');
+  const rangeRows  = await iterateCursor(rangeStore, IDBKeyRange.bound(2, 3));
+  for (const row of rangeRows) {
+    console.log(\`  \${row.player}: \${row.score}\`);
+  }
+
+  // --- Cleanup ---
+  db.close();
+  await new Promise((res, rej) => {
+    const del = indexedDB.deleteDatabase('demo-advanced-cursors');
+    del.onsuccess = res;
+    del.onerror   = () => rej(del.error);
+  });
+  console.log('Database deleted — cleanup complete.');
+})();`;
+
+<StorageRunner client:visible code={cursorsCode} />
+
+<Callout title="ประเด็นสำคัญ">
+Cursor ไม่ได้โหลดระเบียนทั้งหมดเข้าหน่วยความจำพร้อมกัน — มันเดินผ่านทีละรายการ ต้องเรียก `cursor.continue()` ภายใน handler ของ `onsuccess` เสมอเพื่อเลื่อนไปหน้า หากลืมเรียกจะทำให้การวนซ้ำหยุดนิ่งโดยไม่มีข้อผิดพลาด จับคู่ cursor กับ `IDBKeyRange` เพื่อหลีกเลี่ยงการสแกนระเบียนที่ไม่จำเป็น
+</Callout>
+
+export const quizCursorsAndRanges = [
+  {
+    q: 'Cursor จะ resolve เป็นค่าใดเมื่อไม่มีระเบียนเหลืออีกให้วนซ้ำ?',
+    options: ['undefined', 'null', '0', 'มันจะโยน StopIteration error'],
+    answer: 1,
+  },
+  {
+    q: 'factory ใดของ IDBKeyRange ที่สร้าง range ครอบคลุมคีย์ตั้งแต่ 5 ถึง 10 รวมขอบทั้งสองด้าน?',
+    options: [
+      'IDBKeyRange.between(5, 10)',
+      'IDBKeyRange.bound(5, 10)',
+      'IDBKeyRange.lowerBound(5) && IDBKeyRange.upperBound(10)',
+      'IDBKeyRange.only(5, 10)',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'จะเกิดอะไรขึ้นหากลืมเรียก cursor.continue() ภายใน handler ของ onsuccess?',
+    options: [
+      'Cursor จะเลื่อนไปยังระเบียนถัดไปโดยอัตโนมัติ',
+      'จะเกิด error ขึ้นทันที',
+      'การวนซ้ำหยุดนิ่ง — onsuccess จะไม่ถูกเรียกอีก',
+      'Transaction จะถูก rollback',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'คุณต้องการวนซ้ำเฉพาะระเบียนที่มีคีย์มากกว่า 10 อย่างเคร่งครัด range ใดถูกต้อง?',
+    options: [
+      'IDBKeyRange.lowerBound(10)',
+      'IDBKeyRange.lowerBound(10, true)',
+      'IDBKeyRange.bound(10, Infinity)',
+      'IDBKeyRange.upperBound(10, true)',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="indexeddb-advanced/cursors-and-ranges" questions={quizCursorsAndRanges} />
+
+<ProgressTracker client:visible id="indexeddb-advanced/cursors-and-ranges" />

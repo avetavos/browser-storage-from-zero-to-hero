@@ -1,0 +1,166 @@
+---
+title: 'การดำเนินการ CRUD'
+description: 'add, put, get, getAll, delete และ count — ทุก method สำหรับอ่านและเขียนข้อมูลใน IndexedDB object store'
+sidebar:
+  order: 5
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## ตารางอ้างอิง method CRUD
+
+ทุกการดำเนินการข้อมูลใน IndexedDB ผ่าน `IDBObjectStore` คุณได้รับ store จาก transaction แล้วเรียกใช้หนึ่งใน method หกตัวนี้:
+
+| Method | Mode ที่ต้องใช้ | คำอธิบาย |
+|---|---|---|
+| `add(value)` | readwrite | เพิ่ม record ใหม่; โยน `ConstraintError` ถ้า key ซ้ำ |
+| `put(value)` | readwrite | เพิ่มหรือเขียนทับ (upsert); ไม่โยน error เมื่อ key ซ้ำ |
+| `get(key)` | readonly | คืน record เดียว หรือ `undefined` ถ้าไม่มี key นั้น |
+| `getAll()` | readonly | คืน array ของ record ทั้งหมดใน store |
+| `delete(key)` | readwrite | ลบ record ที่มี key ที่ระบุ; ไม่มีผลถ้าไม่พบ |
+| `count()` | readonly | คืนจำนวน record ทั้งหมด |
+
+ทุก method คืน `IDBRequest` โดยผลลัพธ์จะพร้อมใช้งานภายใน callback `onsuccess` ของ request ในรูป `request.result`
+
+## `add` เทียบกับ `put`
+
+`add(value)` ใช้สำหรับ record **ใหม่** เท่านั้น หาก record ที่มี key path value เดิมมีอยู่แล้ว request จะเรียก `onerror` พร้อม `ConstraintError` และไม่มีการเขียนข้อมูล
+
+`put(value)` คือ **upsert**: เขียน record ไม่ว่าจะมี key อยู่แล้วหรือไม่ ใช้ `put` เมื่อต้องการพฤติกรรม "สร้างหรืออัปเดต" โดยไม่ต้องตรวจสอบก่อน
+
+```js
+const tx = db.transaction(['products'], 'readwrite');
+const store = tx.objectStore('products');
+
+// add — ปลอดภัยเฉพาะเมื่อ id 1 ยังไม่มีอยู่
+store.add({ id: 1, name: 'Apple', price: 1.5 });
+
+// put — ปลอดภัยเสมอ; เขียนทับถ้า id 1 มีอยู่แล้ว
+store.put({ id: 1, name: 'Apple', price: 1.99 });
+```
+
+## `get` คืน `undefined` ไม่ใช่ `null`
+
+ต่างจาก Web Storage ที่ key ที่ไม่มีอยู่จะคืน `null` ใน IndexedDB นั้น `get(key)` จะ resolve เป็น **`undefined`** เมื่อไม่มี record ที่ตรงกัน ให้ตรวจสอบ `=== undefined` เสมอ ไม่ใช่ `!result` เพื่อแยกแยะ record ที่ไม่มีออกจาก record ที่เก็บค่า falsy
+
+```js
+const tx = db.transaction(['products'], 'readonly');
+const store = tx.objectStore('products');
+const req = store.get(999);
+
+req.onsuccess = () => {
+  console.log(req.result); // undefined — key 999 ไม่มีอยู่
+};
+```
+
+## การ wrap IDBRequest ด้วย Promise
+
+callback แบบ `IDBRequest` ดิบๆ นั้นยาว helper เล็กๆ ช่วยให้ทุก store method ใช้กับ `await` ได้:
+
+```js
+function promisifyReq(r) {
+  return new Promise((res, rej) => {
+    r.onsuccess = () => res(r.result);
+    r.onerror  = () => rej(r.error);
+  });
+}
+
+// ตอนนี้สามารถ await ทุก store method ได้
+const apple = await promisifyReq(store.get(1));
+```
+
+## Runnable: ตัวอย่าง CRUD ครบทุกขั้นตอน
+
+export const crudCode = `function promisifyReq(r) {
+  return new Promise((res, rej) => {
+    r.onsuccess = () => res(r.result);
+    r.onerror   = () => rej(r.error);
+  });
+}
+
+const db = await new Promise((resolve, reject) => {
+  const req = indexedDB.open('demo-crud', 1);
+  req.onupgradeneeded = (e) => {
+    e.target.result.createObjectStore('products', { keyPath: 'id' });
+  };
+  req.onsuccess = (e) => resolve(e.target.result);
+  req.onerror   = (e) => reject(e.target.error);
+});
+
+// --- add two records ---
+const txW = db.transaction(['products'], 'readwrite');
+const sw  = txW.objectStore('products');
+await promisifyReq(sw.add({ id: 1, name: 'Apple',  price: 1.5 }));
+await promisifyReq(sw.add({ id: 2, name: 'Banana', price: 0.8 }));
+await new Promise(r => { txW.oncomplete = r; });
+console.log('Added 2 records');
+
+// --- get one record ---
+const txR  = db.transaction(['products'], 'readonly');
+const sr   = txR.objectStore('products');
+const apple = await promisifyReq(sr.get(1));
+console.log('get(1):', JSON.stringify(apple));
+
+// --- getAll ---
+const all = await promisifyReq(sr.getAll());
+console.log('getAll:', JSON.stringify(all));
+
+// --- delete one record ---
+const txD = db.transaction(['products'], 'readwrite');
+const sd  = txD.objectStore('products');
+await promisifyReq(sd.delete(2));
+await new Promise(r => { txD.oncomplete = r; });
+console.log('Deleted id=2');
+
+// --- count remaining ---
+const txC = db.transaction(['products'], 'readonly');
+const sc  = txC.objectStore('products');
+const n   = await promisifyReq(sc.count());
+console.log('Count:', n);
+
+db.close();
+indexedDB.deleteDatabase('demo-crud');
+console.log('Cleanup done');`;
+
+<StorageRunner client:visible code={crudCode} />
+
+<Callout title="add กับ put — และ undefined กับ null">
+ใช้ `add` เมื่อต้องการความแน่ใจว่ากำลังสร้าง record ใหม่; มันจะโยน error เมื่อ key ซ้ำ ใช้ `put` เมื่อต้องการพฤติกรรม upsert และไม่สนใจว่า record มีอยู่แล้วหรือไม่
+
+`get(key)` จะ resolve เป็น `undefined` ไม่ใช่ `null` เมื่อไม่มี key นั้นอยู่ ต่างจาก `localStorage.getItem` ที่คืน `null` ให้ตรวจสอบ `result === undefined` เสมอเพื่อตรวจจับ record ที่หายไป
+</Callout>
+
+export const quizCrud = [
+  {
+    q: 'คุณเรียก store.add({ id: 1, name: "Apple" }) ในขณะที่ record ที่มี id 1 มีอยู่แล้ว จะเกิดอะไรขึ้น?',
+    options: [
+      'record เดิมถูกเขียนทับโดยไม่แจ้งเตือน',
+      'request เรียก onerror พร้อม ConstraintError',
+      'record ใหม่ถูกเพิ่มโดยใช้ key ที่สร้างอัตโนมัติ',
+      'method คืนค่า null',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'store.get(999) จะ resolve เป็นอะไรเมื่อไม่มี record ที่มี key 999?',
+    options: ['null', 'false', 'undefined', 'มันโยน NotFoundError'],
+    answer: 2,
+  },
+  {
+    q: 'ต้องใช้ transaction mode ใดเพื่อเรียก store.delete(key)?',
+    options: ['readonly', 'readwrite', 'readwriteflush', 'ใช้ mode ใดก็ได้'],
+    answer: 1,
+  },
+  {
+    q: 'คุณต้องการอัปเดต record ถ้ามีอยู่แล้ว หรือเพิ่มใหม่ถ้าไม่มี — ในการเรียกครั้งเดียว จะใช้ method ใด?',
+    options: ['add', 'update', 'put', 'set'],
+    answer: 2,
+  },
+];
+
+<Quiz client:visible id="indexeddb-fundamentals/crud" questions={quizCrud} />
+
+<ProgressTracker client:visible id="indexeddb-fundamentals/crud" />

@@ -1,0 +1,131 @@
+---
+title: 'Synchronous vs asynchronous storage'
+description: 'Why Web Storage and cookies block the main thread, how IndexedDB and the Cache API avoid that, and a runnable timing comparison.'
+sidebar:
+  order: 4
+---
+
+import Mermaid from '../../../../components/Mermaid.astro';
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## The main thread is JavaScript's single execution lane
+
+Browsers run JavaScript, layout, and painting on a single main thread. When any JavaScript call takes a long time to return, it holds up everything else — animations stutter, clicks go unresponsive, and the browser may show a "page not responding" warning. This is called **jank**.
+
+## Synchronous storage: Web Storage and cookies
+
+`localStorage`, `sessionStorage`, and `document.cookie` are all **synchronous**. When you call `localStorage.getItem('key')`, the browser reads from disk, returns the value, and only then lets your code continue. Your script cannot do anything else while it waits.
+
+For a single small read this is imperceptible. But problems surface when you:
+
+- Loop over thousands of keys
+- Store large serialised objects (many kilobytes each)
+- Write on every keystroke or scroll event
+- Parse the entire cookie string on a hot code path
+
+Because all of this happens on the main thread, heavy Web Storage use can introduce measurable frame-time delays.
+
+```js
+// Every one of these calls is synchronous — the thread blocks until each completes
+const start = performance.now();
+for (let i = 0; i < 1000; i++) {
+  localStorage.setItem('key-' + i, 'value-' + i);
+}
+const elapsed = performance.now() - start;
+console.log('1 000 writes took ' + elapsed.toFixed(2) + ' ms');
+```
+
+## Asynchronous storage: IndexedDB and Cache API
+
+IndexedDB and the Cache API are **asynchronous**. Every operation returns a Promise (or fires an event) and your code continues immediately. The actual I/O happens off the main thread. When results are ready, the browser calls your callback or resolves your Promise.
+
+```js
+// This returns immediately — the write happens in the background
+const db = await idb.openDB('my-db', 1, {
+  upgrade(db) { db.createObjectStore('items'); }
+});
+await db.put('items', { name: 'Alice' }, 'user-1');
+console.log('Write complete — main thread was never blocked');
+```
+
+## Two-lane model
+
+export const syncAsyncDiagram = `flowchart LR
+  subgraph Sync["Synchronous (Web Storage / Cookies)"]
+    direction TB
+    T1[Main thread] -->|blocked| R1[localStorage.getItem]
+    R1 -->|returns| T1
+  end
+  subgraph Async["Asynchronous (IndexedDB / Cache API)"]
+    direction TB
+    T2[Main thread] -->|fires request| IDB[IndexedDB / Cache]
+    T2 -->|continues immediately| T2
+    IDB -->|Promise resolves| T2
+  end`;
+
+<Mermaid code={syncAsyncDiagram} title="Synchronous storage blocks the calling thread; asynchronous storage lets it keep running" />
+
+## Runnable timing comparison
+
+The snippet below times 10 000 `localStorage.setItem` calls synchronously, logs the elapsed time, and then cleans up every `demo:` key it created.
+
+export const timingCode = `const COUNT = 10_000;
+const start = performance.now();
+
+// Synchronous: all 10 000 writes block the thread
+for (let i = 0; i < COUNT; i++) {
+  localStorage.setItem('demo:bench-' + i, 'v' + i);
+}
+const elapsed = performance.now() - start;
+console.log(COUNT + ' synchronous localStorage writes: ' + elapsed.toFixed(2) + ' ms');
+
+// Clean up all demo: keys
+let removed = 0;
+for (let i = 0; i < COUNT; i++) {
+  localStorage.removeItem('demo:bench-' + i);
+  removed++;
+}
+console.log('Cleaned up ' + removed + ' demo keys');
+console.log('Remaining demo keys in localStorage:',
+  Object.keys(localStorage).filter(k => k.startsWith('demo:')).length);`;
+
+<StorageRunner client:visible code={timingCode} />
+
+<Callout title="Performance tip">
+If your storage access pattern involves large objects, frequent writes, or happens inside a scroll or animation callback, switch to IndexedDB. Its async, off-thread model keeps the main thread free for rendering and input handling, eliminating the jank that synchronous Web Storage can introduce.
+</Callout>
+
+export const quizSyncAsync = [
+  {
+    q: 'Why does heavy localStorage use cause UI jank?',
+    options: [
+      'localStorage data is too large for the browser to handle quickly',
+      'localStorage calls block the main JavaScript thread until they complete',
+      'localStorage triggers a full page re-render on every write',
+      'The browser throttles localStorage in background tabs',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'Which of the following storage APIs is asynchronous?',
+    options: ['localStorage', 'sessionStorage', 'document.cookie', 'Cache API'],
+    answer: 3,
+  },
+  {
+    q: 'What does an asynchronous storage call return immediately to the caller?',
+    options: [
+      'The stored value',
+      'A boolean indicating success',
+      'A Promise (or request object) that resolves later',
+      'undefined, and the result is never accessible',
+    ],
+    answer: 2,
+  },
+];
+
+<Quiz client:visible id="intro-storage-landscape/sync-vs-async" questions={quizSyncAsync} />
+
+<ProgressTracker client:visible id="intro-storage-landscape/sync-vs-async" />

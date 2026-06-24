@@ -1,0 +1,132 @@
+---
+title: 'SharedWorker'
+description: 'SharedWorker คือ worker instance เดียวที่ถูกแชร์ร่วมกันทุก tab ในต้นกำเนิดเดียวกัน — เหมือนบริการน้ำหนักเบาภายในเบราว์เซอร์'
+sidebar:
+  order: 4
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## SharedWorker คืออะไร?
+
+`SharedWorker` คือ Web Worker ที่ถูกแชร์ร่วมกันใน **browsing context ทั้งหมด** (tabs, windows, iframes) ที่มีต้นกำเนิดเดียวกัน ต่างจาก Dedicated Worker ที่มีอยู่เพียงสำหรับหน้าเดียว SharedWorker จะมีชีวิตอยู่จนกว่า tab ที่เชื่อมต่ออยู่ทั้งหมดจะปิด ให้คิดว่ามันเป็น "บริการ" น้ำหนักเบาภายในเบราว์เซอร์ — สามารถเก็บ state ที่แชร์ร่วมกัน ลดคำขอเครือข่ายที่ซ้ำกัน และซิงโครไนซ์ข้อมูลข้าม tab โดยไม่ต้องพึ่ง backend
+
+## ความแตกต่างหลักจาก Dedicated Worker
+
+| | Dedicated Worker | SharedWorker |
+|---|---|---|
+| Instance ต่อ tab? | ใช่ — หนึ่งต่อหน้า | ไม่ — หนึ่งแชร์ร่วมกันทุก tab |
+| Constructor | `new Worker(url)` | `new SharedWorker(url)` |
+| การสื่อสาร | `worker.postMessage` โดยตรง | `worker.port.postMessage` ผ่าน MessagePort |
+| Worker รับ connect หรือไม่? | ไม่ | ใช่ — event `onconnect` จะยิงทุกครั้งที่มี tab ใหม่ |
+| อายุการใช้งาน | ผูกกับหน้าที่เป็นเจ้าของ | จนกว่า tab ที่เชื่อมต่อทั้งหมดจะปิด |
+
+## API
+
+มีขั้นตอนสำคัญสี่ขั้นตอนในการใช้งาน SharedWorker
+
+**ขั้นตอนที่ 1 — ในเธรดหลัก:**
+
+```js
+const worker = new SharedWorker('shared-worker.js');
+worker.port.start();          // must call start() to activate the port
+worker.port.postMessage('hello');
+worker.port.onmessage = (e) => console.log(e.data);
+```
+
+**ขั้นตอนที่ 2 — ใน worker (`shared-worker.js`):**
+
+```js
+const ports = [];
+self.onconnect = (e) => {
+  const port = e.ports[0];
+  ports.push(port);
+  port.start();
+  port.onmessage = (ev) => {
+    // echo to all connected tabs
+    for (const p of ports) p.postMessage('echo: ' + ev.data);
+  };
+};
+```
+
+## ทำไม SharedWorker จึงต้องใช้หลาย tab
+
+พลังที่แท้จริงของ `SharedWorker` อยู่ที่การแชร์ state ข้าม tab การเปิด tab เดียวแทบไม่แสดงให้เห็นความสามารถนี้ — คุณต้องมีอย่างน้อยสอง tab จึงจะเห็นความแตกต่าง นั่นคือเหตุผลที่ตัวอย่างที่รันได้ด้านล่างเปิดใน StackBlitz ซึ่งคุณสามารถเปิดสองหน้าต่างเบราว์เซอร์ที่ชี้ไปยัง URL เดียวกันได้
+
+## ตัวอย่างที่รันได้: ตัวนับแชร์ร่วมกันข้าม tab (StackBlitz)
+
+export const sharedWorkerCode = `// shared-worker.js (runs ONCE, shared by every tab)
+// var count = 0;
+// var ports = [];
+// self.onconnect = function(e) {
+//   var port = e.ports[0];
+//   ports.push(port);
+//   port.onmessage = function(ev) {
+//     if (ev.data === 'inc') count++;
+//     for (var i = 0; i < ports.length; i++) ports[i].postMessage({ count: count });
+//   };
+//   port.start();
+//   port.postMessage({ count: count });
+// };
+
+// main.js (runs in EACH tab)
+// var worker = new SharedWorker('shared-worker.js');
+// worker.port.onmessage = function(e) { console.log('count =', e.data.count); };
+// worker.port.start();
+// worker.port.postMessage('inc'); // increment from this tab`;
+
+<StorageRunner stackblitz client:visible code={sharedWorkerCode} />
+
+<Callout title="ประเด็นสำคัญ">
+`SharedWorker` มีเพียง ONE instance ต่อ origin ทุก tab ที่เรียก `new SharedWorker(url)` ด้วย URL เดียวกันจะเชื่อมต่อไปยัง worker เดียวกัน event `onconnect` จะยิงหนึ่งครั้งต่อ tab ต้องเรียก `port.start()` ทั้งฝั่งหน้าเว็บและฝั่ง worker
+</Callout>
+
+export const quizSharedWorker = [
+  {
+    q: "มี SharedWorker instance กี่ตัวเมื่อสาม tab บน origin เดียวกันทั้งหมดเรียก `new SharedWorker('sw.js')`?",
+    options: [
+      'สามตัว — หนึ่งตัวต่อ tab',
+      'สองตัว — tab แรกได้ instance ของตัวเอง',
+      'หนึ่งตัว — ทุก tab เชื่อมต่อไปยัง instance เดียวกัน',
+      'ศูนย์ตัว — SharedWorker ยังไม่รองรับ',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'event ใดที่ยิงใน script ของ SharedWorker เมื่อ tab ใหม่เชื่อมต่อ?',
+    options: [
+      'onmessage',
+      'onconnect',
+      'onport',
+      'onopen',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'ทำไมจึงต้องเรียก `port.start()` ใน SharedWorker?',
+    options: [
+      'เพื่อสร้าง port object',
+      'เพื่อเปิดใช้งาน MessagePort เพื่อไม่ให้ข้อความถูก queue ไว้',
+      'เพื่อลงทะเบียน worker กับเบราว์เซอร์',
+      'เพื่อป้องกันไม่ให้ worker ถูกยกเลิก',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'prop ใดที่ส่งให้ StorageRunner เพื่อเปิด demo SharedWorker ใน StackBlitz?',
+    options: [
+      'inline',
+      'blob',
+      'stackblitz',
+      'shared',
+    ],
+    answer: 2,
+  },
+];
+
+<Quiz client:visible id="workers-sharedworker/sharedworker" questions={quizSharedWorker} />
+
+<ProgressTracker client:visible id="workers-sharedworker/sharedworker" />

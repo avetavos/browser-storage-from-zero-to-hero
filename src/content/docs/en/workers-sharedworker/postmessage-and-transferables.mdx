@@ -1,0 +1,109 @@
+---
+title: 'postMessage and Transferables'
+description: 'Structured clone copies data; transferables move ownership of ArrayBuffer and avoid the copy cost.'
+sidebar:
+  order: 3
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## How postMessage copies data — structured clone
+
+By default, `postMessage` deep-clones the value using the **structured clone algorithm**. This is more capable than `JSON.stringify`: it handles circular references, `TypedArray`, `Blob`, `Map`, `Set`, `Date`, and more. The original object on the sending side is completely untouched — both sides end up with independent copies.
+
+The cost of structured clone is proportional to the size of the data. Cloning a few small objects is negligible. Cloning a 10 MB `ArrayBuffer` means copying 10 MB across thread boundaries — measurably slow for real-time workloads.
+
+```js
+const arr = [1, 2, 3];
+worker.postMessage(arr);      // arr is cloned — original is unchanged
+console.log(arr);             // [1, 2, 3] — still here
+```
+
+## Transferables — zero-copy ownership transfer
+
+To avoid copying large buffers, pass them as **transferables** in the second argument to `postMessage`. Instead of cloning, the browser moves ownership of the underlying memory to the receiver. The source side is **detached** immediately — its `byteLength` drops to 0 and any attempt to read or write it throws.
+
+```js
+const buffer = new ArrayBuffer(1024 * 1024); // 1 MB
+worker.postMessage(buffer, [buffer]);          // transfer ownership
+console.log(buffer.byteLength);               // 0 — detached!
+```
+
+The second argument is an array of transferable objects. Every item in that array must also appear as (or inside) the first argument — otherwise the browser won't know where to route it.
+
+## When to use transferables
+
+- Large `ArrayBuffer`s (images, audio, binary blobs) — transferables are orders of magnitude faster than clone for multi-MB data
+- `MessagePort` — transfer a port to route messages directly between two workers without going through the main thread
+- `OffscreenCanvas` — transfer canvas rendering to a worker for off-thread 2D or WebGL drawing
+- For small plain objects, structured clone is fine and simpler — don't over-engineer
+
+## Runnable: transfer an ArrayBuffer, observe detachment
+
+This demo creates a 1 MB `ArrayBuffer`, fills byte 0 with the value 42, then transfers it to a worker. Notice the `byteLength` printed before and after the transfer call.
+
+export const transferCode = `var workerSrc = 'self.onmessage = function(e) {' +
+  ' var buf = e.data;' +
+  ' var view = new Uint8Array(buf);' +
+  ' console.log("[worker] received buffer, byteLength:", buf.byteLength, "first byte:", view[0]);' +
+  ' self.postMessage("done");' +
+  '};';
+var buf = new ArrayBuffer(1024 * 1024);
+var view = new Uint8Array(buf);
+view[0] = 42;
+console.log('Before transfer, byteLength:', buf.byteLength);
+var url = URL.createObjectURL(new Blob([workerSrc], {type: 'application/javascript'}));
+var w = new Worker(url);
+w.onmessage = function(e) {
+  console.log('Main thread received:', e.data);
+  w.terminate();
+  URL.revokeObjectURL(url);
+};
+w.postMessage(buf, [buf]);
+console.log('After transfer, byteLength:', buf.byteLength, '(detached — 0)');`;
+
+<StorageRunner client:visible code={transferCode} />
+
+<Callout title="Key point">
+Transferables are zero-copy. Once you transfer an `ArrayBuffer`, the sending side is detached — `byteLength` becomes 0. Never read from a buffer after transferring it.
+</Callout>
+
+export const quizTransferables = [
+  {
+    q: 'What algorithm does postMessage use by default to copy data?',
+    options: [
+      'JSON serialization',
+      'Structured clone',
+      'Shallow copy',
+      'Base64 encoding',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'After calling `worker.postMessage(buffer, [buffer])`, what is `buffer.byteLength` in the main thread?',
+    options: [
+      'Unchanged — a copy was sent',
+      '0 — the buffer is detached',
+      'undefined',
+      'It throws an error',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'Which of the following is NOT a transferable type?',
+    options: [
+      'ArrayBuffer',
+      'MessagePort',
+      'OffscreenCanvas',
+      'Plain JavaScript Object',
+    ],
+    answer: 3,
+  },
+];
+
+<Quiz client:visible id="workers-sharedworker/postmessage-and-transferables" questions={quizTransferables} />
+
+<ProgressTracker client:visible id="workers-sharedworker/postmessage-and-transferables" />

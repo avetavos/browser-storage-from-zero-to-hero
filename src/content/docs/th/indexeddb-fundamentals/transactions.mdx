@@ -1,0 +1,167 @@
+---
+title: ทรานแซกชัน
+description: เรียนรู้ว่า IndexedDB transactions รวมการดำเนินการหลายขั้นตอนเป็นหน่วยอะตอมิกที่ทั้งหมดสำเร็จหรือล้มเหลวพร้อมกัน และการทำงานของ auto-commit
+sidebar:
+  order: 4
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## ทรานแซกชันคืออะไร?
+
+**ทรานแซกชัน** คือกลุ่มของการดำเนินการฐานข้อมูลที่ทำงานเป็นหน่วยอะตอมิกเดียว ซึ่งเป็นไปตามหลักการ ACID: การดำเนินการ **ทั้งหมด** ต้องสำเร็จ หรือไม่มีการดำเนินการใดเลยที่จะถูกนำไปใช้ หากการดำเนินการใดล้มเหลว ทรานแซกชันทั้งหมดจะถูก rollback กลับสู่สถานะก่อนที่จะเริ่มต้น
+
+ใน IndexedDB การอ่านและการเขียนทุกครั้งต้องเกิดขึ้นภายในทรานแซกชัน ไม่มีวิธีเข้าถึง object store โดยตรง — คุณต้องผ่านทรานแซกชันก่อนเสมอ
+
+## การเปิดทรานแซกชัน
+
+ใช้ `db.transaction()` เพื่อเปิดทรานแซกชันใหม่ โดยรับสองอาร์กิวเมนต์: อาร์เรย์ของชื่อ store ที่ต้องการเข้าถึง และสตริง mode
+
+```js
+// ทรานแซกชันแบบอ่านอย่างเดียว — สำหรับการอ่านเท่านั้น
+const tx = db.transaction(['storeName'], 'readonly');
+
+// ทรานแซกชันแบบอ่าน-เขียน — สำหรับการอ่านและการเขียน
+const tx = db.transaction(['storeName'], 'readwrite');
+```
+
+เมื่อได้ทรานแซกชันแล้ว ให้เรียก `tx.objectStore('storeName')` เพื่อรับ reference ของ `IDBObjectStore` ที่จำเป็นสำหรับการออก request:
+
+```js
+const store = tx.objectStore('storeName');
+const request = store.get(42);
+```
+
+## โหมดของทรานแซกชัน
+
+IndexedDB รองรับสองโหมด:
+
+- **`readonly`** — ทรานแซกชัน readonly หลายตัวบน store เดียวกันสามารถทำงานพร้อมกันได้ ใช้โหมดนี้เมื่อต้องการอ่านข้อมูลเท่านั้น
+- **`readwrite`** — ล็อกแบบ exclusive บน store แต่ละตัวที่ระบุไว้ ทรานแซกชัน readwrite ได้เพียงตัวเดียวเท่านั้นที่สามารถเข้าถึง store ที่กำหนดได้ในเวลาหนึ่ง ทรานแซกชันอื่นต้องรอจนกว่าจะเสร็จสิ้น
+
+ควรเลือก `readonly` เมื่อไม่จำเป็นต้องเขียนข้อมูลเสมอ — ช่วยให้เกิด parallelism ได้ดีขึ้นและหลีกเลี่ยงการล็อกที่ไม่จำเป็น
+
+## การรับฟัง Event ของทรานแซกชัน
+
+ทรานแซกชันจะ fire สาม event ที่ควรจัดการ:
+
+```js
+tx.oncomplete = () => {
+  // request ทั้งหมดในทรานแซกชันสำเร็จและถูก commit แล้ว
+  console.log('Transaction committed successfully');
+};
+
+tx.onerror = (event) => {
+  // request อย่างน้อยหนึ่งตัวล้มเหลว — ทรานแซกชันถูก rollback
+  console.error('Transaction error:', tx.error);
+};
+
+tx.onabort = () => {
+  // ทรานแซกชันถูก abort อย่างชัดเจนผ่าน tx.abort()
+  console.warn('Transaction aborted');
+};
+```
+
+`oncomplete` จะ fire หลังจาก request ทุกตัวภายในทรานแซกชันเสร็จสมบูรณ์และการเปลี่ยนแปลงถูกบันทึกลงดิสก์แล้วเท่านั้น นี่คือจุดที่เหมาะสมในการยืนยันกับผู้ใช้ว่าข้อมูลถูกบันทึกแล้ว
+
+## พฤติกรรม Auto-Commit
+
+ทรานแซกชันของ IndexedDB ใช้ **auto-commit**: เมื่อ request ที่รอดำเนินการตัวสุดท้ายในทรานแซกชันเสร็จสิ้นและ JavaScript call stack กลับสู่ event loop โดยไม่มี request ใหม่เข้าคิว ทรานแซกชันจะ commit โดยอัตโนมัติ
+
+ซึ่งหมายความว่าคุณต้องออก request ทั้งหมดใน **chain แบบ synchronous** — success handler ของ request หนึ่งจะ trigger request ถัดไป หากคุณ yield ไปยัง event loop ระหว่าง request (เช่น การ await `fetch()` หรือห่อ logic ใน `setTimeout`) ทรานแซกชันจะ commit ไปแล้วเมื่อ code ของคุณ resume และ request ใหม่ที่ออกต่อทรานแซกชันนั้นจะเกิด error
+
+```js
+// ผิด — ห้ามทำแบบนี้
+tx.oncomplete = async () => { /* ... */ };  // ไม่ใช่ pattern ที่ถูกต้อง
+
+const store = tx.objectStore('items');
+store.get(1).onsuccess = async (e) => {
+  const data = await fetch('/api/extra');  // yield ไปยัง event loop — ทรานแซกชันหายไปแล้ว!
+  store.put({ ...e.target.result, extra: data }); // ERROR: ทรานแซกชัน commit ไปแล้ว
+};
+```
+
+```js
+// ถูกต้อง — เก็บ request ทั้งหมดไว้ใน synchronous microtask chain เดียวกัน
+const store = tx.objectStore('items');
+const getReq = store.get(1);
+getReq.onsuccess = (e) => {
+  store.put({ ...e.target.result, updated: true }); // ออกแบบ synchronous — ยังอยู่ใน tx
+};
+```
+
+## ตัวอย่างที่รันได้
+
+โค้ดด้านล่างเปิดฐานข้อมูล สร้าง object store `items` เปิด readwrite transaction เพิ่ม record และรอ `oncomplete` ก่อนปิด
+
+export const transactionsCode = `
+const db = await new Promise((resolve, reject) => {
+  const req = indexedDB.open('demo-tx', 1);
+  req.onupgradeneeded = (e) => {
+    e.target.result.createObjectStore('items', { keyPath: 'id' });
+  };
+  req.onsuccess = (e) => resolve(e.target.result);
+  req.onerror = (e) => reject(e.target.error);
+});
+
+await new Promise((resolve, reject) => {
+  const tx = db.transaction(['items'], 'readwrite');
+  const store = tx.objectStore('items');
+  store.add({ id: 1, name: 'Widget' });
+  tx.oncomplete = () => {
+    console.log('Transaction complete — item saved');
+    resolve();
+  };
+  tx.onerror = () => reject(tx.error);
+});
+
+db.close();
+indexedDB.deleteDatabase('demo-tx');
+console.log('Cleanup done');
+`.trim();
+
+<StorageRunner client:visible code={transactionsCode} />
+
+<Callout title="อย่า yield ภายใน transaction ที่ยังใช้งานอยู่">
+อย่าใช้ `await fetch()`, `await setTimeout()` หรือ call อื่นใดที่คืนการควบคุมไปยัง event loop ในขณะที่ transaction ยังเปิดอยู่ IndexedDB จะ auto-commit transaction ทันทีที่ call stack ว่างเปล่าโดยไม่มี request ที่รอดำเนินการ request ที่ตามมาทั้งหมดบน transaction นั้นจะล้มเหลวด้วย `TransactionInactiveError` ให้เก็บ read และ write ทั้งหมดไว้ใน synchronous call chain เดียว
+</Callout>
+
+export const quizTransactions = [
+  {
+    q: "การที่ transaction เป็น 'atomic' หมายความว่าอะไร?",
+    options: [
+      "การดำเนินการแต่ละรายการทำงานเร็วที่สุดเท่าที่จะเป็นไปได้",
+      "การดำเนินการทั้งหมดสำเร็จพร้อมกัน หรือล้มเหลวพร้อมกัน",
+      "การดำเนินการทำงานแบบขนานเพื่อประสิทธิภาพที่ดีขึ้น",
+      "Transaction ใช้หน่วยความจำน้อยที่สุดเท่าที่เป็นไปได้"
+    ],
+    answer: 1
+  },
+  {
+    q: "โหมด transaction ใดที่อนุญาตให้หลาย transaction ทำงานพร้อมกันบน store เดียวกัน?",
+    options: [
+      "readwrite",
+      "versionchange",
+      "readonly",
+      "concurrent"
+    ],
+    answer: 2
+  },
+  {
+    q: "จะเกิดอะไรขึ้นถ้าคุณ await fetch() ภายใน readwrite transaction ก่อนออก store request ตัวที่สอง?",
+    options: [
+      "Transaction จะหยุดชั่วคราวและ resume หลัง fetch เสร็จสิ้น",
+      "fetch จะถูกเข้าคิวและทำงานหลัง transaction commit",
+      "Transaction จะ auto-commit และ request ตัวที่สองจะ throw TransactionInactiveError",
+      "ไม่มีอะไรเกิดขึ้น — IndexedDB รอให้ promise ทั้งหมด resolve"
+    ],
+    answer: 2
+  }
+];
+
+<Quiz client:visible id="indexeddb-fundamentals/transactions" questions={quizTransactions} />
+
+<ProgressTracker client:visible id="indexeddb-fundamentals/transactions" />

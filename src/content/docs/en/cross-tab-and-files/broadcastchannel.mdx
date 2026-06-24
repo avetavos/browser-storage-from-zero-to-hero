@@ -1,0 +1,141 @@
+---
+title: 'BroadcastChannel'
+description: 'Publish/subscribe messaging across tabs and workers with BroadcastChannel — postMessage, onmessage, and close.'
+sidebar:
+  order: 2
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## What is BroadcastChannel?
+
+`BroadcastChannel` is a browser API that provides a simple publish/subscribe message bus scoped to the same origin. Any tab, iframe, or worker that creates a channel with the same name automatically joins the same group. When one member calls `postMessage`, every other member receives the message via its `onmessage` handler.
+
+It is conceptually similar to `localStorage`'s `storage` event, but with important differences:
+
+| Feature | BroadcastChannel | `storage` event |
+|---|---|---|
+| Message content | Any structured-cloneable value | String only (storage value) |
+| Works in workers | Yes (Shared/Service Workers) | No |
+| Fires in the sending tab | No | No |
+| Requires localStorage write | No — direct | Yes |
+
+## Creating and using a channel
+
+```js
+// Create (or join) a channel by name
+const ch = new BroadcastChannel('my-channel');
+
+// Listen for messages
+ch.onmessage = (event) => {
+  console.log('Got:', event.data);
+};
+
+// Send a message to all other members
+ch.postMessage({ type: 'UPDATE', payload: 42 });
+
+// When done, release resources
+ch.close();
+```
+
+The name is the only identifier — two pages on the same origin using `new BroadcastChannel('chat')` are automatically peers. There is no server or registration step.
+
+## Event-listener style
+
+You can also use `addEventListener` instead of the `onmessage` assignment. This lets you attach multiple listeners:
+
+```js
+const ch = new BroadcastChannel('notifications');
+
+ch.addEventListener('message', (e) => {
+  console.log('Handler 1:', e.data);
+});
+
+ch.addEventListener('message', (e) => {
+  console.log('Handler 2:', e.data);
+});
+```
+
+## Closing a channel
+
+Call `ch.close()` when you no longer need to receive messages. The channel is not shared state — closing in one tab has no effect on other tabs. If you forget to close it, the browser may keep an event-listener reference alive.
+
+```js
+const ch = new BroadcastChannel('demo:temp');
+// ... use it ...
+ch.close(); // releases internal resources
+```
+
+## Runnable: post and receive on the same channel
+
+The demo below creates a channel, attaches a listener, posts a message, and closes after receipt. Because sender and receiver are in the same page the message echoes back — in a real app the listener lives in a separate tab.
+
+export const bcCode = `const ch = new BroadcastChannel('demo:bc-lesson');
+
+ch.onmessage = (e) => {
+  console.log('onmessage fired:', JSON.stringify(e.data));
+  ch.close();
+  console.log('Channel closed.');
+};
+
+ch.postMessage({ type: 'HELLO', from: 'lesson', ts: Date.now() });
+console.log('postMessage called.');
+// NOTE: In a real app the listener runs in a SECOND tab.
+// Same-page echo works here only because the event loop
+// dispatches the message back to this context.`;
+
+<StorageRunner client:visible code={bcCode} />
+
+<Callout title="Key point">
+`BroadcastChannel` does not fire the `message` event in the sending tab in real multi-tab usage — only in other tabs and workers. The single-page echo above works in the runner because both sender and receiver are in the same JS context; do not rely on this pattern in production code.
+</Callout>
+
+export const quizBroadcastChannel = [
+  {
+    q: 'What value types can you pass to BroadcastChannel.postMessage()?',
+    options: [
+      'Strings only',
+      'JSON-serialisable objects only',
+      'Any structured-cloneable value (objects, arrays, ArrayBuffers, etc.)',
+      'Only numbers and booleans',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'Two tabs on https://example.com both create new BroadcastChannel("sync"). Tab A calls postMessage. Which tabs receive the message event?',
+    options: [
+      'Tab A only',
+      'Tab B only',
+      'Both Tab A and Tab B',
+      'Neither — postMessage is fire-and-forget',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'What happens when you call ch.close() in one tab?',
+    options: [
+      'The channel is destroyed for all tabs',
+      'All pending messages are lost',
+      'Only that tab stops receiving messages; other tabs are unaffected',
+      'An error is thrown if other tabs are still connected',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'Which of the following is a key advantage of BroadcastChannel over the localStorage storage event?',
+    options: [
+      'BroadcastChannel persists data across sessions',
+      'BroadcastChannel works inside Web Workers',
+      'BroadcastChannel fires in the sender tab too',
+      'BroadcastChannel has a larger size quota',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="cross-tab-and-files/broadcastchannel" questions={quizBroadcastChannel} />
+
+<ProgressTracker client:visible id="cross-tab-and-files/broadcastchannel" />

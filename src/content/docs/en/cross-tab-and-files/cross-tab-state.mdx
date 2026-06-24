@@ -1,0 +1,152 @@
+---
+title: 'Cross-Tab Shared State'
+description: 'Combine BroadcastChannel, localStorage/IndexedDB, and Web Locks to build a shared-state layer with leader election.'
+sidebar:
+  order: 4
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## The problem: keeping tabs in sync
+
+Imagine a multi-tab dashboard. Tab A increments a counter. Tab B should see the new value without polling. The storage event on `localStorage` can notify Tab B, but it only carries the raw new string value — there is no structured state layer built in.
+
+A robust solution combines three primitives:
+
+1. **`localStorage` (or IndexedDB)** — the persistent source of truth.
+2. **BroadcastChannel** — instant notification to all other tabs when state changes.
+3. **Web Locks** — prevent two tabs from writing at the same time (leader election or write serialisation).
+
+## Pattern: broadcast-on-write
+
+The simplest pattern: every tab that writes state also broadcasts the change.
+
+```js
+const ch = new BroadcastChannel('demo:app-state');
+
+async function setState(key, value) {
+  await navigator.locks.request('demo:state-write', async () => {
+    localStorage.setItem(key, JSON.stringify(value));
+    ch.postMessage({ type: 'STATE_UPDATE', key, value });
+  });
+}
+
+// React to changes from other tabs
+ch.onmessage = (e) => {
+  if (e.data.type === 'STATE_UPDATE') {
+    console.log('Remote update:', e.data.key, '=', e.data.value);
+    // Update local UI here
+  }
+};
+```
+
+The lock ensures that if two tabs try to write simultaneously, they queue rather than race.
+
+## Leader election with Web Locks
+
+For expensive work (e.g., a single tab polling an API), you want exactly one "leader" tab to do the work and broadcast results to followers. Web Locks make this straightforward:
+
+```js
+async function runAsLeader() {
+  // Only one tab can hold 'leader' at a time.
+  // The lock is held for the entire async block — when this tab closes the lock
+  // releases and the next queued tab becomes leader.
+  await navigator.locks.request('demo:leader', async () => {
+    console.log('I am the leader');
+    while (true) {
+      const data = await fetchLatestData();
+      ch.postMessage({ type: 'DATA_REFRESH', data });
+      await new Promise((r) => setTimeout(r, 5000));
+    }
+  });
+}
+
+runAsLeader();
+```
+
+When the leader tab is closed, the browser releases its lock and the next queued tab's callback fires — automatic leader handoff with no extra code.
+
+## Runnable: shared counter sketch
+
+export const crossTabStateCode = `// Shared counter using localStorage + BroadcastChannel + Web Locks.
+// In-page demo: we write, then read back and log.
+const ch = new BroadcastChannel('demo:counter');
+const KEY = 'demo:counter-value';
+
+// Listen for updates from "other tabs" (same-tab echo in this runner)
+ch.onmessage = (e) => {
+  if (e.data.type === 'COUNTER_UPDATE') {
+    console.log('Broadcast received — counter is now:', e.data.value);
+  }
+};
+
+async function increment() {
+  await navigator.locks.request('demo:counter-lock', async () => {
+    const current = parseInt(localStorage.getItem(KEY) || '0', 10);
+    const next = current + 1;
+    localStorage.setItem(KEY, String(next));
+    // Notify other tabs
+    ch.postMessage({ type: 'COUNTER_UPDATE', value: next });
+    console.log('Incremented to:', next);
+  });
+}
+
+await increment();
+await increment();
+await increment();
+
+// Clean up
+localStorage.removeItem(KEY);
+ch.close();
+console.log('Done. Counter cleaned up.');`;
+
+<StorageRunner client:visible code={crossTabStateCode} />
+
+<Callout title="Key point">
+The lock serialises writes but does not block reads. Reads are safe to do outside the lock as long as your app can tolerate seeing a value that is slightly stale. For strict read-then-write consistency (check-then-act), perform both the read and the write inside the same lock callback.
+</Callout>
+
+export const quizCrossTabState = [
+  {
+    q: 'Why wrap a localStorage write in navigator.locks.request when multiple tabs may write?',
+    options: [
+      'localStorage.setItem is asynchronous and needs awaiting',
+      'To prevent two tabs from writing simultaneously and losing each other\'s update',
+      'Locks are required by spec before calling setItem',
+      'To increase the localStorage quota',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'In the leader-election pattern, what happens when the leader tab is closed?',
+    options: [
+      'The lock is transferred to another tab automatically',
+      "The browser releases the lock, allowing the next queued tab's callback to run",
+      'All other tabs throw a LockError',
+      'The leader must call lock.release() before closing or the lock leaks',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'Which storage API is used as the persistent source of truth in the broadcast-on-write pattern shown above?',
+    options: ['BroadcastChannel', 'Web Locks', 'localStorage', 'sessionStorage'],
+    answer: 2,
+  },
+  {
+    q: 'Does the tab that calls BroadcastChannel.postMessage receive its own message event?',
+    options: [
+      'Yes, always',
+      'No, only other tabs and workers receive it',
+      'Yes, but only if addEventListener is used instead of onmessage',
+      'Yes, but only on the next microtask tick',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="cross-tab-and-files/cross-tab-state" questions={quizCrossTabState} />
+
+<ProgressTracker client:visible id="cross-tab-and-files/cross-tab-state" />

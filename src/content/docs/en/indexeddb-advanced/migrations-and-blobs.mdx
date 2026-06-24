@@ -1,0 +1,211 @@
+---
+title: 'Migrations and Blobs'
+description: 'Versioned schema migrations in onupgradeneeded using oldVersion checks, and storing Blob/File objects directly in IndexedDB without serialisation.'
+sidebar:
+  order: 5
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## Schema versioning in IndexedDB
+
+Every IndexedDB database has an integer **version number**. When you call `indexedDB.open(name, version)` with a version higher than the one currently stored, the browser fires the `upgradeneeded` event before `success`. This is the **only** place you can create or delete object stores and indexes.
+
+```js
+const request = indexedDB.open('my-db', 2);
+
+request.onupgradeneeded = (event) => {
+  const db = event.target.result;
+  const oldVersion = event.oldVersion; // 0 if brand-new, 1 if upgrading from v1
+  // ...create stores based on oldVersion
+};
+```
+
+The key property is `event.oldVersion`: it tells you what version the database was **before** this open call. A brand-new database reports `oldVersion === 0`.
+
+## The migration pattern: cascading `if (oldVersion < N)` checks
+
+Rather than a single `if/else`, use cascading less-than checks so a database at any previous version runs all the upgrades it missed:
+
+```js
+request.onupgradeneeded = (event) => {
+  const db = event.target.result;
+  const { oldVersion } = event;
+
+  if (oldVersion < 1) {
+    // v0 → v1: create the initial 'users' store
+    db.createObjectStore('users', { keyPath: 'id' });
+  }
+
+  if (oldVersion < 2) {
+    // v1 → v2: add a 'files' store for binary data
+    db.createObjectStore('files', { keyPath: 'name' });
+  }
+
+  // if oldVersion < 3: future migration goes here
+};
+```
+
+A user upgrading from v0 runs **both** blocks. A user upgrading from v1 runs only the second block. A user already on v2 runs neither.
+
+## Storing `Blob` and `File` objects
+
+One of IndexedDB's biggest advantages over Web Storage is its ability to store **structured-cloneable** JavaScript values — including `Blob` and `File` objects — **without any serialisation**.
+
+```js
+// Create a Blob in memory
+const blob = new Blob(['Hello, binary world!'], { type: 'text/plain' });
+
+// Store it directly — no JSON.stringify, no base64 encoding
+const tx = db.transaction('files', 'readwrite');
+tx.objectStore('files').put({ name: 'greeting.txt', data: blob });
+```
+
+When you read the record back, you get a real `Blob` with all its methods intact:
+
+```js
+const getReq = db.transaction('files').objectStore('files').get('greeting.txt');
+getReq.onsuccess = async () => {
+  const record = getReq.result;
+  const text = await record.data.text(); // Blob.prototype.text() returns a Promise
+  console.log(text); // 'Hello, binary world!'
+};
+```
+
+The same technique works for `File` objects (which are a subclass of `Blob`), `ArrayBuffer`, `ImageBitmap`, and other structured-cloneable types.
+
+## Runnable: v2 migration + Blob round-trip
+
+The demo below opens `demo-advanced-migrations` at **version 2**. If the database does not exist yet, `onupgradeneeded` runs both migration blocks (oldVersion is 0). It then stores a user record and a Blob, retrieves the Blob, and reads its text content before cleaning up.
+
+export const migrationsCode = `(async function () {
+  // --- helpers to promisify IDB requests ---
+  function req(idbRequest) {
+    return new Promise((resolve, reject) => {
+      idbRequest.onsuccess = () => resolve(idbRequest.result);
+      idbRequest.onerror   = () => reject(idbRequest.error);
+    });
+  }
+
+  function txDone(tx) {
+    return new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror    = () => reject(tx.error);
+      tx.onabort    = () => reject(tx.error);
+    });
+  }
+
+  // --- open (or upgrade) the database ---
+  const db = await new Promise((resolve, reject) => {
+    const openReq = indexedDB.open('demo-advanced-migrations', 2);
+
+    openReq.onupgradeneeded = (event) => {
+      const database = event.target.result;
+      const { oldVersion } = event;
+      console.log('onupgradeneeded — oldVersion:', oldVersion);
+
+      if (oldVersion < 1) {
+        database.createObjectStore('users', { keyPath: 'id' });
+        console.log('  created store: users');
+      }
+
+      if (oldVersion < 2) {
+        database.createObjectStore('files', { keyPath: 'name' });
+        console.log('  created store: files');
+      }
+    };
+
+    openReq.onsuccess = () => resolve(openReq.result);
+    openReq.onerror   = () => reject(openReq.error);
+  });
+
+  // --- write a user record ---
+  const writeTx = db.transaction(['users', 'files'], 'readwrite');
+  const usersStore = writeTx.objectStore('users');
+  const filesStore = writeTx.objectStore('files');
+
+  usersStore.put({ id: 1, username: 'alice' });
+  console.log('Stored user: { id: 1, username: "alice" }');
+
+  // --- create and store a Blob (no serialisation needed!) ---
+  const blob = new Blob(['Hello from a blob!'], { type: 'text/plain' });
+  filesStore.put({ name: 'hello.txt', data: blob });
+  console.log('Stored blob as: { name: "hello.txt", data: <Blob> }');
+
+  await txDone(writeTx);
+
+  // --- retrieve the Blob and read its text ---
+  const readTx = db.transaction('files', 'readonly');
+  const record = await req(readTx.objectStore('files').get('hello.txt'));
+
+  const text = await record.data.text();
+  console.log('Retrieved blob text:', text);
+
+  // --- clean up ---
+  db.close();
+  await new Promise((resolve, reject) => {
+    const del = indexedDB.deleteDatabase('demo-advanced-migrations');
+    del.onsuccess = () => { console.log('Database deleted.'); resolve(); };
+    del.onerror   = () => reject(del.error);
+  });
+})();`;
+
+<StorageRunner client:visible code={migrationsCode} />
+
+<Callout title="Key point">
+Use cascading `if (oldVersion < N)` checks in `onupgradeneeded` so every user — whether upgrading from v1 or starting fresh — runs exactly the migrations they need. Blobs and Files are stored **as-is** in IndexedDB because the structured clone algorithm handles them natively; no base64 encoding or `JSON.stringify` is required.
+</Callout>
+
+## Summary
+
+| Concept | Detail |
+|---|---|
+| `event.oldVersion` | Integer version before this open; `0` for a brand-new database |
+| Cascading `if (oldVersion < N)` | Ensures incremental migrations are never skipped |
+| `Blob` / `File` in IDB | Stored and retrieved without any serialisation |
+| `Blob.prototype.text()` | Returns a `Promise<string>` — use `await` |
+
+export const quizMigrationsAndBlobs = [
+  {
+    q: 'What value does event.oldVersion hold when a user opens an IndexedDB database for the very first time (it has never existed before)?',
+    options: ['1', 'undefined', '0', 'null'],
+    answer: 2,
+  },
+  {
+    q: 'You open a database at version 3. The user currently has version 1. Which migration blocks should run inside onupgradeneeded?',
+    options: [
+      'Only the block for oldVersion < 3',
+      'Blocks for oldVersion < 2 and oldVersion < 3',
+      'All blocks: oldVersion < 1, oldVersion < 2, and oldVersion < 3',
+      'None — migrations only run when there is no existing database',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'How should you store a Blob object in IndexedDB?',
+    options: [
+      'Convert it to base64 with FileReader first, then store the string',
+      'Call JSON.stringify on it before storing',
+      'Pass the Blob directly to put() — the structured clone algorithm handles it',
+      'Blobs cannot be stored in IndexedDB',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'What does Blob.prototype.text() return?',
+    options: [
+      'A string synchronously',
+      'A Promise that resolves to a string',
+      'An ArrayBuffer',
+      'A ReadableStream',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="indexeddb-advanced/migrations-and-blobs" questions={quizMigrationsAndBlobs} />
+
+<ProgressTracker client:visible id="indexeddb-advanced/migrations-and-blobs" />

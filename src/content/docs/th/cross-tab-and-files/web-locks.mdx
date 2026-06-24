@@ -1,0 +1,141 @@
+---
+title: 'Web Locks'
+description: 'ประสานงานข้ามแท็บด้วย navigator.locks — โหมด exclusive และ shared, ifAvailable และ locks.query()'
+sidebar:
+  order: 3
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## ทำไมต้องใช้ lock?
+
+หลายแท็บของแอปเดียวกันสามารถทำงานพร้อมกันและอาจพยายามเขียนลง IndexedDB record หรือไฟล์ OPFS เดียวกันในเวลาเดียวกัน หากไม่มีการประสานงาน การเขียนจะ race กันและ writer สุดท้ายจะชนะโดยไม่มีการแจ้งเตือน (หรือข้อมูลเสียหาย) Web Locks API มี primitive สำหรับ mutual-exclusion ในเบราว์เซอร์โดยไม่ต้องใช้ server
+
+## `navigator.locks.request(name, callback)`
+
+ในการขอ lock ส่งชื่อ string และ async callback เบราว์เซอร์จะถือ lock ตราบเท่าที่ Promise ที่ callback คืนกลับยัง pending แล้วจึงปล่อยโดยอัตโนมัติ
+
+```js
+await navigator.locks.request('demo:my-resource', async (lock) => {
+  // Inside here you hold the lock exclusively.
+  // No other tab can acquire 'demo:my-resource' until this async block resolves.
+  await doWork();
+});
+// Lock released here — next waiter can proceed.
+```
+
+หาก lock ถูกถือโดยแท็บอื่นอยู่ `request` จะ queue callback ของคุณจนกว่า lock จะถูกปล่อย คิวเป็นแบบ FIFO
+
+## โหมด exclusive กับ shared
+
+โหมดเริ่มต้นคือ `exclusive` — มีผู้ถือได้ทีละคนเท่านั้น สำหรับ workload ที่อ่านหนักใช้โหมด `shared` ได้: ผู้ถือ `shared` หลายคนสามารถทับซ้อนกันได้ แต่คำขอ `exclusive` จะรอจนผู้ถือ shared ทั้งหมดเสร็จ (เหมือน read-write lock)
+
+```js
+// Multiple tabs can hold this concurrently
+await navigator.locks.request('demo:db-read', { mode: 'shared' }, async (lock) => {
+  const data = await db.getAll();
+  return data;
+});
+
+// This waits until every shared holder above has finished
+await navigator.locks.request('demo:db-read', { mode: 'exclusive' }, async (lock) => {
+  await db.put({ key: 'x', value: 42 });
+});
+```
+
+## `ifAvailable` — ลอง non-blocking
+
+ส่ง `ifAvailable: true` เพื่อรับ `null` แทนการ queue เมื่อ lock ถูกถืออยู่ มีประโยชน์สำหรับ "ทำงานเฉพาะเมื่อเริ่มได้ทันที มิฉะนั้นข้ามรอบนี้":
+
+```js
+const result = await navigator.locks.request(
+  'demo:background-sync',
+  { ifAvailable: true },
+  async (lock) => {
+    if (!lock) {
+      console.log('Lock busy — skipping this cycle');
+      return null;
+    }
+    // We have the lock
+    return await syncData();
+  }
+);
+```
+
+## `navigator.locks.query()`
+
+`query()` คืน snapshot ของ lock ที่ถือและรออยู่ทั้งหมด — มีประโยชน์สำหรับ debug:
+
+```js
+const state = await navigator.locks.query();
+console.log('Held:', state.held);
+console.log('Pending:', state.pending);
+```
+
+## รันได้: ขอ exclusive lock
+
+export const locksCode = `// Request an exclusive lock named 'demo:lock-lesson'
+console.log('Requesting lock...');
+
+await navigator.locks.request('demo:lock-lesson', async (lock) => {
+  console.log('Lock acquired:', lock.name, '| mode:', lock.mode);
+  // Simulate async work inside the lock
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  console.log('Work done inside lock.');
+});
+
+console.log('Lock released. Querying state...');
+const state = await navigator.locks.query();
+console.log('Held locks after release:', state.held.length);
+// Expected: 0 — the lock was released when the callback resolved.`;
+
+<StorageRunner client:visible code={locksCode} />
+
+<Callout title="ประเด็นสำคัญ">
+Web Locks API ใช้ promise: ไม่ต้องเรียก method "release" อย่างชัดเจน lock จะถูกถือตลอด lifetime ของ async callback และปล่อยโดยอัตโนมัติเมื่อ Promise ที่คืนกลับ settle — แม้จะ reject ก็ตาม ทำให้ cleanup ปลอดภัยและคาดเดาได้
+</Callout>
+
+export const quizWebLocks = [
+  {
+    q: 'เกิดอะไรขึ้นถ้าแท็บ A ถือ exclusive lock ชื่อ "x" และแท็บ B เรียก navigator.locks.request("x", cb) โดยไม่มี option?',
+    options: [
+      'แท็บ B ได้รับ null lock ทันที',
+      'callback ของแท็บ B จะถูก queue จนกว่า lock ของแท็บ A จะถูกปล่อย',
+      'เกิด error ในแท็บ B',
+      'แท็บ A สูญเสีย lock ทันที',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'ในโหมด shared มีกี่แท็บที่ถือ lock เดียวกันพร้อมกันได้?',
+    options: [
+      'แค่หนึ่ง — shared mode ยัง serialise access อยู่',
+      'สอง — reader หนึ่งคนและ writer หนึ่งคน',
+      'ไม่จำกัด — ผู้ถือ shared หลายคนสามารถทับซ้อนกันได้',
+      'ไม่รองรับ shared mode ใน Web Locks',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'ส่ง `ifAvailable: true` และ lock ถูกถืออยู่ callback จะได้รับอะไร?',
+    options: ['lock object ที่มี mode: "shared"', 'null', 'undefined', 'Promise ที่ rejected'],
+    answer: 1,
+  },
+  {
+    q: 'Web Lock ถูกปล่อยเมื่อใด?',
+    options: [
+      'เมื่อเรียก lock.release()',
+      'เมื่อปิดแท็บ',
+      'เมื่อ async callback return (Promise settle)',
+      'หลังจาก timeout 30 วินาที',
+    ],
+    answer: 2,
+  },
+];
+
+<Quiz client:visible id="cross-tab-and-files/web-locks" questions={quizWebLocks} />
+
+<ProgressTracker client:visible id="cross-tab-and-files/web-locks" />

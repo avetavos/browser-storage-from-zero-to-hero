@@ -1,0 +1,95 @@
+---
+title: 'The client-side storage landscape'
+description: 'Cookies, Web Storage, IndexedDB, Cache API, and OPFS at a glance — plus a decision tree for choosing the right store.'
+sidebar:
+  order: 1
+---
+
+import Mermaid from '../../../../components/Mermaid.astro';
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## Five ways to store data in the browser
+
+Modern browsers ship five distinct storage systems. Each solves a different problem, has different capacity limits, and exposes a different API shape. Before diving into any one of them, it helps to understand the full landscape.
+
+**Cookies** are the oldest mechanism. They are small key/value strings (up to 4 KB each) sent automatically on every HTTP request to the matching domain. Their primary job is session management and server communication, not local storage.
+
+**Web Storage** (`localStorage` and `sessionStorage`) is a synchronous key/value API limited to strings. Typical quota is 5–10 MB per origin. `localStorage` persists indefinitely; `sessionStorage` clears when the tab closes. Both block the main thread on every call.
+
+**IndexedDB** is a transactional, asynchronous, object-oriented database built into every browser. It can hold hundreds of megabytes (or more) of structured data, supports indexes and cursors, and never blocks the main thread. It is the right choice for any non-trivial amount of structured local data.
+
+**Cache API** stores HTTP request/response pairs. It was designed for service workers to enable offline-first apps and fine-grained caching strategies. Entries are full `Response` objects, not raw strings.
+
+**Origin Private File System (OPFS)** is a sandboxed file-system API added in modern browsers. It gives origins a private area to create, read, and write files — including via a synchronous interface inside Web Workers — without any permission prompt.
+
+## Decision tree: which storage should I use?
+
+export const decisionTree = `flowchart TD
+  A[What do you need to store?] --> B{Needs to be sent\\nwith HTTP requests?}
+  B -->|Yes| C[Cookies]
+  B -->|No| D{Structured data or\\nlarge volume?}
+  D -->|No - small key/value| E{Must persist\\nacross tabs/sessions?}
+  E -->|Session only| F[sessionStorage]
+  E -->|Persists| G[localStorage]
+  D -->|Yes - structured / large| H{HTTP request/\\nresponse pairs?}
+  H -->|Yes - caching responses| I[Cache API]
+  H -->|No - app data| J{Need file-level access\\nor sync in a Worker?}
+  J -->|Yes| K[OPFS]
+  J -->|No| L[IndexedDB]`;
+
+<Mermaid code={decisionTree} title="Decision tree: choosing the right client-side storage mechanism" />
+
+## What this module covers
+
+This module introduces all five storage systems before dedicated modules explore each one in depth.
+
+| Lesson | What you will learn |
+|---|---|
+| **This page** | The full landscape and a decision tree for choosing the right store |
+| `the-options` | Capacity, sync vs async, persistence, and use cases side-by-side |
+| `same-origin-and-security` | How the same-origin policy partitions storage and why secrets do not belong in Web Storage |
+| `sync-vs-async` | Why synchronous storage blocks the main thread and how async APIs avoid that |
+| `quota-and-persistence` | Using `navigator.storage.estimate()` and `persist()` to understand and control eviction |
+
+## Check your available storage quota
+
+The `navigator.storage.estimate()` API reports how much storage your origin has used and how much the browser is willing to grant. Run the snippet below to see your own numbers.
+
+export const estimateCode = `navigator.storage.estimate().then((estimate) => {
+  const usedMB = (estimate.usage / 1024 / 1024).toFixed(2);
+  const quotaMB = (estimate.quota / 1024 / 1024).toFixed(2);
+  console.log('Usage : ' + usedMB + ' MB');
+  console.log('Quota : ' + quotaMB + ' MB');
+  console.log('Used  : ' + ((estimate.usage / estimate.quota) * 100).toFixed(4) + '%');
+});`;
+
+<StorageRunner client:visible code={estimateCode} />
+
+<Callout title="Key point">
+No single storage API is universally best. Cookies belong to the server handshake. Web Storage handles small UI state. IndexedDB is for structured app data. The Cache API owns network responses. OPFS provides file-level access inside Workers. Knowing the landscape is the first step to picking the right tool for each job.
+</Callout>
+
+export const quizIndex = [
+  {
+    q: 'Which storage mechanism automatically sends its data with every matching HTTP request?',
+    options: ['localStorage', 'Cookies', 'IndexedDB', 'Cache API'],
+    answer: 1,
+  },
+  {
+    q: 'An app needs to cache full HTTP responses for offline use. Which storage API is the best fit?',
+    options: ['localStorage', 'sessionStorage', 'Cache API', 'OPFS'],
+    answer: 2,
+  },
+  {
+    q: 'Which API would you use to store hundreds of megabytes of structured, queryable app data on the client?',
+    options: ['localStorage', 'Cookies', 'sessionStorage', 'IndexedDB'],
+    answer: 3,
+  },
+];
+
+<Quiz client:visible id="intro-storage-landscape/index" questions={quizIndex} />
+
+<ProgressTracker client:visible id="intro-storage-landscape/index" />

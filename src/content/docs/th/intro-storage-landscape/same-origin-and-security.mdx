@@ -1,0 +1,132 @@
+---
+title: 'Same-origin policy และความปลอดภัยของ storage'
+description: "วิธีที่เบราว์เซอร์แบ่ง storage ตาม origin, ความสำคัญของ HTTPS และความเสี่ยง XSS จากการเก็บ secrets ใน client-side storage"
+sidebar:
+  order: 3
+---
+
+import Mermaid from '../../../../components/Mermaid.astro';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## Origin คืออะไร?
+
+**Origin** คือการผสมกันของสามองค์ประกอบ:
+
+1. **Scheme** — `https` หรือ `http`
+2. **Host** — domain หรือ IP address
+3. **Port** — ระบุชัดเจน (`:8080`) หรือ implicit (443 สำหรับ HTTPS, 80 สำหรับ HTTP)
+
+ทั้งสามต้องตรงกันเพื่อให้ URL สองตัวถือว่าเป็น origin เดียวกัน ตารางด้านล่างแสดงตัวอย่างเทียบกับ `https://example.com`:
+
+| URL | Origin เดียวกัน? | เหตุผล |
+|---|---|---|
+| `https://example.com/page` | ใช่ | scheme, host, port เหมือนกัน |
+| `https://example.com:443/x` | ใช่ | Port 443 เป็น implicit สำหรับ HTTPS |
+| `http://example.com` | **ไม่** | scheme ต่างกัน |
+| `https://www.example.com` | **ไม่** | host ต่างกัน (subdomain) |
+| `https://example.com:8080` | **ไม่** | port ต่างกัน |
+| `https://api.example.com` | **ไม่** | host ต่างกัน |
+
+คุณสามารถอ่าน origin ของหน้าปัจจุบันด้วย JavaScript:
+
+```js
+console.log(window.location.origin);
+// เช่น "https://example.com"
+```
+
+## Same-origin policy แยก storage อย่างไร
+
+เบราว์เซอร์บังคับใช้ origin isolation สำหรับทุก client-side store: `localStorage`, `sessionStorage`, IndexedDB, Cache API และ OPFS ล้วนถูกแบ่งตาม origin script ที่รันบน `https://example.com` ไม่สามารถอ่านหรือเขียน storage ของ `https://other.com` ได้ เบราว์เซอร์จะไม่อนุญาตเลย
+
+นี่ไม่ใช่สิ่งที่คุณตั้งค่า มันถูกบังคับใช้ที่ระดับ platform โดยไม่มีทางปิดใช้งาน
+
+export const originDiagram = `flowchart LR
+  subgraph OriginA["Origin A — https://example.com"]
+    direction TB
+    SA1[(localStorage)]
+    SA2[(IndexedDB)]
+    SA3[(Cache API)]
+  end
+  subgraph OriginB["Origin B — https://other.com"]
+    direction TB
+    SB1[(localStorage)]
+    SB2[(IndexedDB)]
+    SB3[(Cache API)]
+  end
+  OriginA -.->|blocked by SOP| OriginB`;
+
+<Mermaid code={originDiagram} title="แต่ละ origin มี storage partition ที่แยกจากกัน — การอ่านข้าม origin ถูกบล็อก" />
+
+## HTTP vs HTTPS: origin ต่างกัน, store ต่างกัน
+
+เนื่องจาก scheme เป็นส่วนหนึ่งของ origin `http://example.com` และ `https://example.com` จึงเป็น **สอง origins ที่แตกต่างกัน** มี storage buckets แยกกันอย่างสมบูรณ์ ข้อมูลที่เขียนลง `localStorage` บน HTTP จะไม่ปรากฏบน HTTPS และในทางกลับกัน
+
+นี่เป็นแหล่งที่มาของความสับสนบ่อยครั้งระหว่างการพัฒนาในเครื่อง: หากคุณทดสอบบน HTTP แล้วเปลี่ยนเป็น HTTPS (หรือกลับกัน) ข้อมูลที่เก็บไว้ก่อนหน้าจะดูเหมือนหายไป แต่จริง ๆ แล้วมันยังอยู่ เพียงแต่ถูกเก็บภายใต้ origin key ที่ต่างกัน
+
+## Cross-origin iframes
+
+หน้าเว็บสามารถฝัง `<iframe>` จาก origin อื่นได้ scripts ของ iframe นั้นรันในบริบทของ origin ของ iframe จึงอ่านและเขียน storage ของ origin นั้น ไม่ใช่ storage ของหน้าหลัก ไม่มีวิธีที่หน้าหลักและ iframe จะแชร์ `localStorage` โดยตรงข้าม origins ที่ต่างกัน
+
+## ความเสี่ยง XSS: อย่าเก็บ secrets ใน Web Storage
+
+Cross-site scripting (XSS) คือการโจมตีที่ JavaScript อันตรายถูก inject และรันบนหน้าของคุณ script ใด ๆ ที่รันบน origin ของคุณ รวมถึง scripts ที่ถูก inject สามารถอ่าน `localStorage` และ `sessionStorage` ทั้งหมดของคุณได้ด้วยการเรียกเพียงครั้งเดียว:
+
+```js
+// script ที่ attacker inject สามารถทำสิ่งนี้ได้:
+const stolen = JSON.stringify(localStorage);
+// จากนั้นส่ง `stolen` ไปยัง server ที่ attacker ควบคุม
+```
+
+ซึ่งหมายความว่าคุณต้อง **ไม่** เก็บ access tokens, refresh tokens, API keys หรือ passwords ใน `localStorage` หรือ `sessionStorage` หาก attacker พบ XSS vector ใด ๆ พวกเขาสามารถดูด secrets ทั้งหมดที่เก็บไว้ได้อย่างเงียบ ๆ
+
+### ใช้ HttpOnly cookies สำหรับ session tokens แทน
+
+Cookies ที่มี flag `HttpOnly` ไม่สามารถอ่านได้ด้วย JavaScript เลย แม้แต่ scripts ที่ถูก inject เบราว์เซอร์จะแนบไปกับ requests แต่ซ่อนจาก `document.cookie` เมื่อรวมกับ `Secure` (HTTPS-only) และ `SameSite=Strict` หรือ `SameSite=Lax` แล้ว HttpOnly cookies เป็นที่ที่เหมาะสมสำหรับ session tokens
+
+```js
+// นี่คือสิ่งที่ server ตั้งค่า — JS ไม่สามารถอ่านได้:
+// Set-Cookie: session=abc123; HttpOnly; Secure; SameSite=Lax
+```
+
+<Callout title="คำเตือนด้านความปลอดภัย">
+อย่าเก็บ access tokens, refresh tokens หรือ credentials ลับใด ๆ ใน `localStorage` หรือ `sessionStorage` JavaScript ที่รันบน origin เดียวกัน รวมถึง XSS payloads สามารถอ่าน store ทั้งหมดได้ ใช้ `HttpOnly` cookies สำหรับ session tokens: มองไม่เห็นด้วย JavaScript และไม่สามารถถูกขโมยผ่าน XSS
+</Callout>
+
+export const quizSameOrigin = [
+  {
+    q: 'สามองค์ประกอบใดที่รวมกันกำหนด browser origin?',
+    options: [
+      'Domain, path และ query string',
+      'Scheme, host และ port',
+      'Protocol, domain และ cookie name',
+      'Host, port และ referrer',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'หน้าเว็บเก็บข้อมูลใน localStorage บน http://example.com เมื่อ site ย้ายไป HTTPS จะเกิดอะไรกับข้อมูลนั้น?',
+    options: [
+      'ข้อมูลถูก migrate โดยอัตโนมัติไปยัง HTTPS origin',
+      'ข้อมูลถูกลบโดยเบราว์เซอร์เมื่อเยี่ยมชม HTTPS ครั้งแรก',
+      'ข้อมูลยังอยู่แต่อยู่ภายใต้ http:// origin ซึ่งมองไม่เห็นจาก https:// origin',
+      'HTTPS และ HTTP แชร์ localStorage partition เดียวกัน',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'ทำไมจึงไม่ควรเก็บ session tokens ใน localStorage?',
+    options: [
+      'localStorage มีขนาดเล็กเกินไปสำหรับ tokens',
+      'localStorage ถูกล้างเมื่อ refresh หน้าทุกครั้ง',
+      'การโจมตี XSS สามารถอ่าน localStorage ทั้งหมดผ่าน JavaScript ได้',
+      'Tokens ที่เก็บใน localStorage จะหมดอายุหลัง 24 ชั่วโมง',
+    ],
+    answer: 2,
+  },
+];
+
+<Quiz client:visible id="intro-storage-landscape/same-origin-and-security" questions={quizSameOrigin} />
+
+<ProgressTracker client:visible id="intro-storage-landscape/same-origin-and-security" />

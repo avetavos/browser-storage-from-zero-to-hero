@@ -1,0 +1,111 @@
+---
+title: 'Web Workers & SharedWorker'
+description: 'Why workers exist, the dedicated vs shared split, and a map of the module.'
+sidebar:
+  order: 1
+---
+
+import Mermaid from '../../../../components/Mermaid.astro';
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## Why run JS off the main thread?
+
+JavaScript is single-threaded. Every script, DOM update, layout calculation, and event handler runs on one thread. When you run a long computation — parsing a large file, computing a hash, processing an image — the entire UI freezes for the duration. Scroll events stop firing, animations stutter, and clicks go unanswered.
+
+Web Workers let you move heavy work to a background thread. The browser creates a separate JS environment with its own event loop. The main thread and the worker communicate by sending messages with `postMessage` and receiving them via `onmessage`. The two threads never share memory by default, so there are no race conditions.
+
+export const overviewDiagram = `flowchart LR
+  MT["Main Thread\n(UI, events)"]
+  DW["Dedicated Worker\n(background JS)"]
+  MT -- "worker.postMessage(data)" --> DW
+  DW -- "self.postMessage(result)" --> MT
+`;
+
+<Mermaid code={overviewDiagram} title="Main thread ↔ Dedicated Worker via postMessage/onmessage" />
+
+## Dedicated vs Shared Worker
+
+| | Dedicated Worker | SharedWorker |
+|---|---|---|
+| **Scope** | One tab / one script | All tabs of the same origin |
+| **Constructor** | `new Worker(url)` | `new SharedWorker(url)` |
+| **Messaging** | Direct: `worker.postMessage(data)` | Via `MessagePort`: `port.postMessage(data)` |
+| **Worker side** | `self.onmessage = fn` | Must handle `onconnect` first, then listen on `event.ports[0]` |
+| **Complexity** | Simple | Moderate — requires port bookkeeping |
+| **Use case** | CPU-heavy task in one tab | Shared cache, cross-tab coordination |
+
+## What this module covers
+
+| Lesson | What you learn |
+|---|---|
+| **index** (this page) | Overview, dedicated vs shared, module map |
+| **web-workers** | Create, message, and terminate a Dedicated Worker |
+| **postmessage-and-transferables** | Structured clone vs zero-copy transferables |
+| **sharedworker** | Connect multiple tabs to one SharedWorker |
+| **worker-patterns** | Error handling, worker pools, and best practices |
+
+## Try it now
+
+The snippet below creates a Dedicated Worker via a Blob URL, sends the number 10, and the worker computes Fibonacci off-thread and posts back the result.
+
+export const introCode = `var workerSrc = 'self.onmessage = function(e) {' +
+  ' var n = e.data;' +
+  ' var a = 0, b = 1, t;' +
+  ' for (var i = 0; i < n; i++) { t = a + b; a = b; b = t; }' +
+  ' self.postMessage(a);' +
+  '};';
+var url = URL.createObjectURL(new Blob([workerSrc], {type: 'application/javascript'}));
+var w = new Worker(url);
+w.onmessage = function(e) {
+  console.log('fibonacci(10) =', e.data);
+  w.terminate();
+  URL.revokeObjectURL(url);
+};
+w.postMessage(10);
+console.log('Worker created — waiting for result...');`;
+
+<StorageRunner client:visible code={introCode} />
+
+<Callout title="Key point">
+Workers run in a separate global scope — no `window`, no `document`. They communicate only via `postMessage`.
+</Callout>
+
+export const quizWorkersIndex = [
+  {
+    q: 'What is the main reason to move work to a Web Worker?',
+    options: [
+      'Faster network requests',
+      'Avoid blocking the main thread',
+      'Access the DOM in parallel',
+      'Reduce memory usage',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'Which worker type is shared across all tabs of the same origin?',
+    options: [
+      'Dedicated Worker',
+      'Service Worker',
+      'SharedWorker',
+      'Broadcast Worker',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'How do the main thread and a worker communicate?',
+    options: [
+      'Shared memory by default',
+      'postMessage and onmessage events',
+      'window.Worker.call()',
+      'Direct function references',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="workers-sharedworker/index" questions={quizWorkersIndex} />
+
+<ProgressTracker client:visible id="workers-sharedworker/index" />

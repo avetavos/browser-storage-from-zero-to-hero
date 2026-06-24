@@ -1,0 +1,154 @@
+---
+title: 'การเปิดฐานข้อมูล'
+description: 'วิธีเปิดฐานข้อมูล IndexedDB ด้วย indexedDB.open(), จัดการกับ onupgradeneeded, onsuccess, และ onerror รวมถึงการจัดการเวอร์ชัน'
+sidebar:
+  order: 2
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## การเปิดฐานข้อมูลด้วย `indexedDB.open()`
+
+ต่างจาก `fetch()` ที่คืนค่าเป็น Promise, `indexedDB.open(name, version)` จะคืนค่าเป็น **`IDBOpenDBRequest`** — ไม่ใช่ Promise การโต้ตอบกับมันทำผ่านการกำหนด callback ให้กับ event handler
+
+```js
+const request = indexedDB.open('my-database', 1);
+```
+
+พารามิเตอร์ทั้งสองคือ:
+
+- **`name`** — สตริงที่ระบุตัวตนของฐานข้อมูลภายใน origin แต่ละ origin มี namespace แยกเป็นอิสระ
+- **`version`** — จำนวนเต็มบวก หากฐานข้อมูลยังไม่มีอยู่จะถูกสร้างที่เวอร์ชันนี้ หากมีอยู่แล้วในเวอร์ชันที่ต่ำกว่าจะเกิดการอัปเกรด
+
+การละเว้น `version` จะใช้ค่าเริ่มต้นเป็นเวอร์ชัน `1` เมื่อสร้างใหม่ หรือเวอร์ชันปัจจุบันหากฐานข้อมูลมีอยู่แล้ว
+
+## Event handler ทั้งสาม
+
+### `onupgradeneeded`
+
+เกิดขึ้นเมื่อสร้างฐานข้อมูลเป็นครั้งแรก **หรือ** เมื่อเวอร์ชันที่ร้องขอสูงกว่าเวอร์ชันที่จัดเก็บไว้ นี่คือที่ที่คุณกำหนด (หรือ migrate) schema — สร้าง object store เพิ่ม index หรือลบ store เก่า
+
+```js
+request.onupgradeneeded = (event) => {
+  const db = event.target.result; // IDBDatabase
+  // สร้าง object store โดยใช้ 'id' เป็น key path
+  db.createObjectStore('notes', { keyPath: 'id' });
+};
+```
+
+`event.target.result` (หรือ `request.result` ภายใน handler) คือ instance ของ `IDBDatabase` การเปลี่ยนแปลง schema ที่ทำที่นี่ถูกห่อหุ้มด้วย upgrade transaction โดยอัตโนมัติ
+
+### `onsuccess`
+
+เกิดขึ้นหลังจาก `onupgradeneeded` เสร็จสิ้น (หรือทันทีหากไม่ต้องการ upgrade) ฐานข้อมูลเปิดแล้วและพร้อมใช้งาน
+
+```js
+request.onsuccess = (event) => {
+  const db = event.target.result; // IDBDatabase
+  console.log('Opened:', db.name, 'at version', db.version);
+};
+```
+
+### `onerror`
+
+เกิดขึ้นเมื่อคำขอเปิดฐานข้อมูลล้มเหลว — เช่น หากเบราว์เซอร์ของผู้ใช้อยู่ในโหมด private ที่มีการบล็อก storage หรือหาก tab อื่นถือ version-change transaction ที่ถูกบล็อก
+
+```js
+request.onerror = (event) => {
+  console.error('Failed to open DB:', event.target.error);
+};
+```
+
+## Event `versionchange`
+
+หลังจากฐานข้อมูลเปิดแล้ว instance ของ `IDBDatabase` ของคุณสามารถรับ event `versionchange` ได้ สิ่งนี้เกิดขึ้นเมื่อ tab อื่น (หรือหน้าเดิมหลัง reload) เรียก `indexedDB.open()` ด้วยหมายเลขเวอร์ชันที่ **สูงกว่า**
+
+```js
+db.onversionchange = () => {
+  db.close(); // ปล่อย connection เพื่อให้การ upgrade ดำเนินต่อได้
+  alert('Database is outdated. Please reload the page.');
+};
+```
+
+หากคุณไม่ปิด connection การ upgrade ในบริบทอื่นจะถูกบล็อกจนกว่าคุณจะปิด
+
+## รูปแบบการเปิดฐานข้อมูลแบบสมบูรณ์
+
+การห่อ API แบบ callback ด้วย `Promise` ทำให้ใช้ร่วมกับ `async/await` ได้:
+
+```js
+function openDatabase(name, version) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(name, version);
+
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('notes')) {
+        db.createObjectStore('notes', { keyPath: 'id' });
+      }
+    };
+
+    request.onsuccess = (event) => {
+      const db = event.target.result;
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
+
+    request.onerror = (event) => {
+      reject(event.target.error);
+    };
+  });
+}
+
+// การใช้งาน
+const db = await openDatabase('my-database', 1);
+console.log('Ready:', db.name, db.version);
+```
+
+## ทดลองรัน: เปิด ตรวจสอบ ปิด และทำความสะอาด
+
+export const openingADbCode = `const db = await new Promise((resolve, reject) => {
+  const req = indexedDB.open('demo-open', 1);
+  req.onupgradeneeded = (e) => {
+    const db = e.target.result;
+    db.createObjectStore('notes', { keyPath: 'id' });
+    console.log('Schema created: notes store');
+  };
+  req.onsuccess = (e) => resolve(e.target.result);
+  req.onerror = (e) => reject(e.target.error);
+});
+console.log('DB name:', db.name, '| version:', db.version);
+db.close();
+indexedDB.deleteDatabase('demo-open');
+console.log('Cleanup done');`;
+
+<StorageRunner client:visible code={openingADbCode} />
+
+<Callout title="onupgradeneeded คือที่เดียวที่แก้ไข schema ได้">
+คุณสามารถเรียก `createObjectStore()`, `deleteObjectStore()` หรือสร้าง index ได้เฉพาะภายใน `onupgradeneeded` handler เท่านั้น การพยายามทำสิ่งเหล่านี้นอก upgrade transaction จะ throw `DOMException` หากต้องการเพิ่ม store ใหม่ ให้เพิ่มหมายเลขเวอร์ชัน — สิ่งนั้นจะ trigger `onupgradeneeded` อีกครั้ง โดยมีหมายเลขเวอร์ชันเก่าและใหม่ให้ใช้งานผ่าน `event.oldVersion` และ `event.newVersion`
+</Callout>
+
+export const quizOpeningADb = [
+  {
+    q: 'indexedDB.open("myDB", 1) คืนค่าอะไร?',
+    options: ['Promise ที่ resolve เป็น IDBDatabase', 'Object ของ IDBOpenDBRequest', 'IDBDatabase โดยตรง', 'DOMException หาก DB ยังไม่มีอยู่'],
+    answer: 1,
+  },
+  {
+    q: 'ใน event handler ใดที่คุณต้องเรียก db.createObjectStore()?',
+    options: ['onsuccess', 'onerror', 'onupgradeneeded', 'onversionchange'],
+    answer: 2,
+  },
+  {
+    q: 'Event ใดที่เกิดขึ้นบน IDBDatabase ที่เปิดอยู่ เมื่อบริบทอื่นร้องขอเวอร์ชันที่สูงกว่าของฐานข้อมูลเดียวกัน?',
+    options: ['onerror', 'onblocked', 'onupgradeneeded', 'onversionchange'],
+    answer: 3,
+  },
+];
+
+<Quiz client:visible id="indexeddb-fundamentals/opening-a-db" questions={quizOpeningADb} />
+
+<ProgressTracker client:visible id="indexeddb-fundamentals/opening-a-db" />

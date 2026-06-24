@@ -1,0 +1,137 @@
+---
+title: 'Quota and persistent storage'
+description: "Use navigator.storage.estimate() to check quota and usage, request persistence with persist(), and understand browser eviction under storage pressure."
+sidebar:
+  order: 5
+---
+
+import Mermaid from '../../../../components/Mermaid.astro';
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## How much storage does the browser give you?
+
+Browsers do not give every origin unlimited storage. Instead they allocate a **quota** — a maximum amount the origin may use — based on available disk space and browser policy. The quota for IndexedDB, Cache API, and OPFS comes from a shared pool called the **"default" storage bucket**.
+
+The `navigator.storage.estimate()` API returns a snapshot of how much of that quota your origin has consumed.
+
+```js
+const { quota, usage } = await navigator.storage.estimate();
+console.log('Quota :', (quota / 1024 / 1024).toFixed(1), 'MB');
+console.log('Usage :', (usage / 1024 / 1024).toFixed(2), 'MB');
+```
+
+The returned `usage` figure covers IndexedDB, Cache API, and OPFS together. It does not include `localStorage` or cookies, which have separate, smaller limits.
+
+## Best-effort vs persistent storage
+
+By default, every origin gets **best-effort** storage. Under low disk space the browser is free to evict best-effort data — silently, without warning — to reclaim room. The eviction order is typically least-recently-used origin first.
+
+You can ask the browser to upgrade your origin to **persistent** storage. Persistent data is never evicted without an explicit user action (clearing site data). To request it:
+
+```js
+const granted = await navigator.storage.persist();
+console.log('Persistent storage granted:', granted); // true or false
+```
+
+To check the current state without requesting:
+
+```js
+const isPersisted = await navigator.storage.persisted();
+console.log('Already persistent:', isPersisted);
+```
+
+### When does the browser grant persistence?
+
+Browsers use engagement heuristics to decide whether to grant the request silently or show a permission prompt. Factors that increase the likelihood of an automatic grant include:
+
+- The site is installed as a PWA (added to Home Screen / installed via browser UI)
+- The user has visited the site frequently
+- The user has bookmarked the site or granted other permissions (push notifications, geolocation)
+- Some browsers (Firefox) always ask the user; Chromium-based browsers may grant silently
+
+## Two storage durability tiers
+
+export const durabilityDiagram = `flowchart TD
+  A[Origin stores data] --> B{Durability tier}
+  B -->|Default| C[Best-effort storage]
+  B -->|After persist granted| D[Persistent storage]
+  C --> E[Browser MAY evict under\\ndisk pressure]
+  E --> F[Data silently deleted]
+  D --> G[Browser will NEVER evict\\nwithout user action]
+  G --> H[Data safe until user\\nclears site data]`;
+
+<Mermaid code={durabilityDiagram} title="Best-effort storage can be evicted silently; persistent storage requires an explicit user action to remove" />
+
+## Runnable: check your quota and persistence state
+
+The snippet below calls both `estimate()` and `persisted()` and logs the results. No demo keys are written — the estimate API needs no cleanup.
+
+export const quotaCode = `async function checkStorage() {
+  // Quota and usage
+  const estimate = await navigator.storage.estimate();
+  const usedMB  = (estimate.usage  / 1024 / 1024).toFixed(3);
+  const quotaMB = (estimate.quota  / 1024 / 1024).toFixed(1);
+  const pct     = ((estimate.usage / estimate.quota) * 100).toFixed(4);
+
+  console.log('--- Storage estimate ---');
+  console.log('Usage : ' + usedMB  + ' MB');
+  console.log('Quota : ' + quotaMB + ' MB');
+  console.log('Used  : ' + pct + '%');
+
+  // Persistence status
+  const persisted = await navigator.storage.persisted();
+  console.log('\\n--- Persistence ---');
+  console.log('Currently persistent:', persisted);
+
+  if (!persisted) {
+    console.log('Tip: call navigator.storage.persist() to request durable storage.');
+  }
+}
+
+checkStorage();`;
+
+<StorageRunner client:visible code={quotaCode} />
+
+<Callout title="Key point">
+Best-effort storage is suitable for caches and non-critical data. For data your app cannot afford to lose — offline documents, user-generated content, saved game state — always call `navigator.storage.persist()` early in your app lifecycle, ideally after the user has demonstrated engagement with your site.
+</Callout>
+
+export const quizQuota = [
+  {
+    q: 'What does navigator.storage.estimate() return?',
+    options: [
+      'The number of keys stored in localStorage',
+      'An object containing quota and usage in bytes for the origin',
+      'A boolean indicating whether persistent storage is granted',
+      'The remaining cookie capacity in kilobytes',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'Under which condition can the browser silently delete best-effort storage data?',
+    options: [
+      'When the user clears browsing history',
+      'When a new service worker is registered',
+      'When disk space is low and the origin has not been granted persistent storage',
+      'When the user has not visited the site for 7 days',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'navigator.storage.persist() returns a Promise. What does the resolved value mean?',
+    options: [
+      'The number of bytes now protected from eviction',
+      'A boolean — true if the browser granted persistent storage, false if not',
+      'The new quota in bytes after the upgrade',
+      'A string describing the persistence policy applied',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="intro-storage-landscape/quota-and-persistence" questions={quizQuota} />
+
+<ProgressTracker client:visible id="intro-storage-landscape/quota-and-persistence" />

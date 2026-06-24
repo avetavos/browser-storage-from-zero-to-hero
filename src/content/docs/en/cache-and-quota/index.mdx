@@ -1,0 +1,124 @@
+---
+title: 'Cache API & Storage Quota'
+description: 'Cache Storage stores Request–Response pairs; the Storage Manager reports and controls quota.'
+sidebar:
+  order: 1
+---
+
+import Mermaid from '../../../../components/Mermaid.astro';
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## What this module is about
+
+This module covers two closely related browser APIs:
+
+- **Cache API** — a storage mechanism for `Request`/`Response` pairs. It is purpose-built for caching HTTP responses and static assets so they can be served offline or without hitting the network.
+- **Storage Manager** — the `navigator.storage` interface that reports how much disk space the current origin is using and how much quota it has been granted. It also lets you request *persistent* storage so that the browser does not evict your data under disk pressure.
+
+### Cache API
+
+The Cache API lives under the global `caches` object. You open a named cache, store `Request`/`Response` pairs in it, and retrieve them later by matching a request URL. The most common use is inside a Service Worker, where the worker intercepts network requests and serves responses from cache when the network is unavailable.
+
+```js
+const cache = await caches.open('my-app-v1');
+await cache.put('/api/data.json', new Response('{"ok":true}'));
+const response = await cache.match('/api/data.json');
+console.log(await response.text()); // {"ok":true}
+```
+
+The Cache API is most commonly used alongside Service Workers for offline and PWA strategies. See the [PWA course](https://avetavos.github.io/pwa-from-zero-to-hero/en/service-workers/) for Service Worker caching patterns.
+
+### Storage Manager
+
+`navigator.storage` gives you quota and eviction information:
+
+```js
+const { usage, quota } = await navigator.storage.estimate();
+console.log(`Using ${usage} of ${quota} bytes`);
+
+const isPersistent = await navigator.storage.persisted();
+console.log('Persistent:', isPersistent);
+```
+
+## Overview diagram
+
+export const overviewDiagram = `flowchart LR
+  Browser -->|caches.open / put / match| CacheAPI[Cache API\nstores Request/Response pairs]
+  CacheAPI -->|served by| SW[Service Workers]
+  Browser -->|estimate / persist / persisted| SM[Storage Manager\nusage · quota · eviction control]`;
+
+<Mermaid code={overviewDiagram} title="Cache API stores Request/Response pairs for Service Workers; Storage Manager reports usage and quota" />
+
+## What this module covers
+
+| Lesson | What you will learn |
+|---|---|
+| **This page** | High-level overview of the Cache API and Storage Manager |
+| `cache-api` | All Cache API methods: open, put, add, addAll, match, delete, keys |
+| `storage-manager` | `estimate()`, `persist()`, and `persisted()` in depth |
+| `eviction-and-persistence` | Best-effort vs persistent storage, when browsers evict data |
+| `cache-vs-indexeddb` | Decision guide: Cache API vs IndexedDB vs localStorage |
+
+## Try it: open a cache and store a response
+
+export const overviewCode = `(async () => {
+  // Open (or create) a named cache
+  const cache = await caches.open('demo-overview-v1');
+
+  // Store a synthetic Response under a URL key
+  await cache.put('/demo/hello', new Response('Hello from Cache API!'));
+
+  // Retrieve it by URL
+  const response = await cache.match('/demo/hello');
+  if (response) {
+    const text = await response.text();
+    console.log('Matched response:', text);
+  } else {
+    console.log('No match found');
+  }
+
+  // Clean up
+  await caches.delete('demo-overview-v1');
+  console.log('Cache deleted. Keys remaining:', await caches.keys());
+})();`;
+
+<StorageRunner client:visible code={overviewCode} />
+
+<Callout title="Key point">
+The Cache API stores `Request`/`Response` pairs — not arbitrary data. It is designed for HTTP-shaped storage: URLs map to responses. For structured application data such as user records or settings objects, use IndexedDB instead.
+</Callout>
+
+export const quizCacheAndQuotaIndex = [
+  {
+    q: 'What does the Cache API store?',
+    options: [
+      'Arbitrary JavaScript objects',
+      'Request/Response pairs',
+      'String key/value pairs',
+      'Binary blobs only',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'Which global object is the entry point for the Cache API?',
+    options: ['window.cache', 'navigator.cache', 'caches', 'CacheStorage.global'],
+    answer: 2,
+  },
+  {
+    q: 'What does navigator.storage.estimate() return?',
+    options: [
+      'The number of open caches',
+      'An object with usage and quota in bytes',
+      'A boolean indicating whether storage is persistent',
+      'The list of all cache names',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="cache-and-quota/index" questions={quizCacheAndQuotaIndex} />
+
+<ProgressTracker client:visible id="cache-and-quota/index" />

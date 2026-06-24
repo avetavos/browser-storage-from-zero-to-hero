@@ -1,0 +1,117 @@
+---
+title: 'Storage options compared'
+description: 'Capacity, sync vs async, persistence, and ideal use cases for cookies, Web Storage, IndexedDB, Cache API, and OPFS side-by-side.'
+sidebar:
+  order: 2
+---
+
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## Cookies
+
+Cookies were introduced in 1994 and remain the only client-side store that participates in the HTTP request cycle. The browser attaches matching cookies to every request automatically — making them the standard mechanism for session tokens and server-side authentication.
+
+- **Capacity:** 4 KB per cookie; browsers limit total cookies per domain to roughly 50 (varies by browser).
+- **API style:** Synchronous. Read via `document.cookie` (returns a semicolon-separated string of all cookies); write by assigning a `Set-Cookie`-formatted string to `document.cookie`.
+- **Persistence:** Configurable. Session cookies expire when the browser is closed. Persistent cookies carry an `Expires` or `Max-Age` attribute.
+- **Primary use case:** Session tokens, user identity, server-side feature flags, and any value the server must see on every request.
+
+## localStorage
+
+`localStorage` is the simplest persistent client-side store. Data survives browser restarts and is shared across every tab and window on the same origin.
+
+- **Capacity:** 5–10 MB per origin (5 MB is the practical safe limit; exact quota varies by browser).
+- **API style:** Synchronous. `localStorage.setItem(key, value)`, `localStorage.getItem(key)`, `localStorage.removeItem(key)`, `localStorage.clear()`.
+- **Persistence:** Indefinite — data remains until the user clears site data or code calls `clear()`.
+- **Primary use case:** User preferences, theme settings, cached UI state, and small persisted values that do not need to be sent to a server.
+
+## sessionStorage
+
+`sessionStorage` shares the same synchronous API as `localStorage` but is scoped to a single browser tab.
+
+- **Capacity:** 5–10 MB per origin (same limits as `localStorage`).
+- **API style:** Synchronous — identical interface to `localStorage`.
+- **Persistence:** Tab-lifetime only. Closing the tab or navigating away from the origin clears the data. Other tabs cannot read it even if they share the same origin.
+- **Primary use case:** Wizard or multi-step form state, per-tab navigation history, temporary data that must not bleed across tabs.
+
+## IndexedDB
+
+IndexedDB is a full transactional database inside the browser. It stores structured JavaScript objects (not just strings), supports secondary indexes, and exposes a Promise-friendly async API (via the native event model or libraries like `idb`).
+
+- **Capacity:** Browsers grant quota dynamically. In practice, origins can store hundreds of megabytes to several gigabytes depending on available disk and browser policy.
+- **API style:** Asynchronous. All operations are non-blocking: `IDBObjectStore.put()`, `IDBObjectStore.get()`, cursor iteration, and so on — all return `IDBRequest` objects (wrappable in Promises).
+- **Persistence:** Persistent by default (best-effort). Can be upgraded to durable storage via `navigator.storage.persist()`.
+- **Primary use case:** Offline apps, large datasets, structured records that need querying, draft storage, local-first applications.
+
+## Cache API
+
+The Cache API stores `Request`/`Response` pairs. It was designed for service workers so that network responses can be intercepted, cached, and served while the device is offline.
+
+- **Capacity:** Shares the same quota pool as IndexedDB and OPFS (the "bucket" storage). Typically hundreds of megabytes available.
+- **API style:** Asynchronous. `caches.open(name)` returns a `Promise<Cache>`. Then `cache.put(request, response)`, `cache.match(request)`, `cache.delete(request)`.
+- **Persistence:** Best-effort (can be evicted under storage pressure) unless the origin has been granted persistent storage.
+- **Primary use case:** Precaching app shells for service workers, runtime caching of API responses, offline-first PWAs.
+
+## Origin Private File System (OPFS)
+
+OPFS gives every origin a sandboxed, private area of the device file system — no permission prompt required. Unlike the public File System Access API, OPFS files are never visible in the user's file picker.
+
+- **Capacity:** Shares the same quota pool as IndexedDB and Cache API.
+- **API style:** Mostly asynchronous (`FileSystemDirectoryHandle`, `FileSystemFileHandle`), with a high-performance **synchronous** interface (`createSyncAccessHandle()`) available exclusively inside Web Workers.
+- **Persistence:** Best-effort by default; can be made persistent.
+- **Primary use case:** SQLite-in-WASM, large binary assets, media files, any use case that benefits from file-level random access or a synchronous I/O path in a Worker.
+
+## Side-by-side summary
+
+| | Cookies | localStorage | sessionStorage | IndexedDB | Cache API | OPFS |
+|---|---|---|---|---|---|---|
+| **Typical capacity** | 4 KB | 5–10 MB | 5–10 MB | Hundreds of MB | Hundreds of MB | Hundreds of MB |
+| **API style** | Sync | Sync | Sync | Async | Async | Async (+ sync in Worker) |
+| **Sent with HTTP?** | Yes | No | No | No | No | No |
+| **Persists across tabs** | Yes | Yes | No | Yes | Yes | Yes |
+| **Persists across restarts** | Configurable | Yes | No | Yes | Yes | Yes |
+| **Can be evicted?** | No (expires) | No | No | Yes (best-effort) | Yes (best-effort) | Yes (best-effort) |
+| **Primary use case** | Auth / server | UI state | Per-tab state | Structured app data | Network caching | File / WASM I/O |
+
+<Callout title="Key point">
+The three synchronous stores — cookies, `localStorage`, and `sessionStorage` — are capped in capacity and block the main thread. For anything larger than a few megabytes or accessed frequently, IndexedDB, the Cache API, or OPFS will serve you far better without risking UI jank.
+</Callout>
+
+export const quizTheOptions = [
+  {
+    q: 'Which storage type is automatically included in HTTP requests sent to the matching domain?',
+    options: ['localStorage', 'sessionStorage', 'Cookies', 'IndexedDB'],
+    answer: 2,
+  },
+  {
+    q: 'A user closes a browser tab. Which stores still hold their data?',
+    options: [
+      'sessionStorage and localStorage',
+      'Only sessionStorage',
+      'localStorage, IndexedDB, and Cache API',
+      'All stores retain data',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'Which two storage APIs share the same synchronous read/write interface?',
+    options: [
+      'localStorage and IndexedDB',
+      'localStorage and sessionStorage',
+      'sessionStorage and Cache API',
+      'Cookies and IndexedDB',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'An app needs to store 200 MB of structured records that must survive browser restarts. Which API is the best fit?',
+    options: ['localStorage', 'sessionStorage', 'Cookies', 'IndexedDB'],
+    answer: 3,
+  },
+];
+
+<Quiz client:visible id="intro-storage-landscape/the-options" questions={quizTheOptions} />
+
+<ProgressTracker client:visible id="intro-storage-landscape/the-options" />

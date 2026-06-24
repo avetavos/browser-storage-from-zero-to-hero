@@ -1,0 +1,102 @@
+---
+title: 'Dedicated Web Workers'
+description: 'สร้าง Worker จาก Blob URL ส่งข้อความด้วย postMessage รับผลลัพธ์ด้วย onmessage และยกเลิกการทำงานอย่างถูกต้อง'
+sidebar:
+  order: 2
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## การสร้าง Worker
+
+`new Worker(url)` รับ URL ที่ชี้ไปยังไฟล์ JavaScript เบราว์เซอร์จะดาวน์โหลดไฟล์นั้นและรันในเธรดพื้นหลังแยกต่างหาก ในบทเรียนเหล่านี้แทนที่จะต้อง host ไฟล์แยก เราจะสร้าง URL แบบ on-the-fly จาก Blob ซึ่งทำให้ทุกอย่างอยู่ในที่เดียวและรันได้ทันที
+
+```js
+// worker.js (separate file)
+self.onmessage = function(e) {
+  const result = heavyCompute(e.data);
+  self.postMessage(result);
+};
+
+// main.js
+const worker = new Worker('/worker.js');
+worker.onmessage = function(e) { console.log('result:', e.data); };
+worker.postMessage(inputData);
+```
+
+## API หลัก 4 ตัว
+
+- `worker.postMessage(data)` — ส่งข้อมูล**ไปยัง** worker จาก main thread
+- `worker.onmessage = fn` — รับข้อมูล**จาก** worker บน main thread
+- `self.onmessage = fn` — (ภายใน worker) รับข้อมูลจาก main thread
+- `self.postMessage(data)` — (ภายใน worker) ส่งผลลัพธ์กลับไปยัง main thread
+- `worker.terminate()` — หยุด worker ทันทีจาก main thread โดย worker จะไม่ได้รับการแจ้งเตือนใดๆ
+
+## Inline worker ผ่าน Blob URL
+
+แทนที่จะใช้ไฟล์แยก คุณสามารถกำหนด worker source เป็น string ห่อด้วย `Blob` แล้วแปลงเป็น object URL ด้วย `URL.createObjectURL` URL ที่ได้จะมีรูปแบบ `blob:https://example.com/uuid` และทำงานเหมือน URL ของไฟล์ที่ host ไว้จริงๆ เมื่อไม่ต้องการใช้ worker แล้ว ให้เรียก `URL.revokeObjectURL(url)` เพื่อคืน memory
+
+## รันได้: คำนวณแบบ off-thread
+
+Worker ด้านล่างจะรวมจำนวนเต็มตั้งแต่ 1 ถึง N ด้วย N = 1,000,000 ซึ่งเป็น loop ที่ใช้เวลาพอสมควร หากรันบน main thread โดยตรงจะทำให้ UI ค้างชั่วขณะ — แต่นี่รันอยู่บน background thread แทน
+
+export const webWorkersCode = `var workerSrc = 'self.onmessage = function(e) {' +
+  ' var n = e.data, sum = 0;' +
+  ' for (var i = 1; i <= n; i++) sum += i;' +
+  ' self.postMessage(sum);' +
+  '};';
+var url = URL.createObjectURL(new Blob([workerSrc], {type: 'application/javascript'}));
+var w = new Worker(url);
+w.onmessage = function(e) {
+  console.log('Sum 1..1000000 =', e.data);
+  w.terminate();
+  URL.revokeObjectURL(url);
+};
+w.postMessage(1000000);
+console.log('Worker started — result arrives asynchronously');`;
+
+<StorageRunner client:visible code={webWorkersCode} />
+
+<Callout title="ประเด็นสำคัญ">
+Workers ถูก isolate — ไม่สามารถเข้าถึง `window`, `document` หรือ DOM API ใดๆ ได้ เหมาะอย่างยิ่งสำหรับงาน CPU-intensive เช่น การประมวลผลภาพ การเข้ารหัส หรือการแปลงข้อมูลขนาดใหญ่
+</Callout>
+
+export const quizWebWorkers = [
+  {
+    q: 'identifier ใดที่อ้างถึง global scope ภายใน Web Worker?',
+    options: [
+      'window',
+      'document',
+      'self',
+      'WorkerGlobalScope',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'worker.terminate() ทำอะไร?',
+    options: [
+      'หยุด worker ชั่วคราวจนกว่าจะ resume',
+      'ส่งข้อความ termination ที่ worker สามารถรับได้',
+      'หยุด worker ทันทีจาก main thread',
+      'Throw error ถ้า worker กำลังคำนวณอยู่',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'เหตุใดในบทเรียนนี้จึงใช้ URL.createObjectURL(new Blob([src]))?',
+    options: [
+      'เพื่อบีบอัด worker source code',
+      'เพื่อสร้าง inline worker URL โดยไม่ต้องใช้ไฟล์แยก',
+      'เพื่อเข้ารหัส worker source',
+      'เพื่อ cache worker ไว้ใน IndexedDB',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="workers-sharedworker/web-workers" questions={quizWebWorkers} />
+
+<ProgressTracker client:visible id="workers-sharedworker/web-workers" />

@@ -1,0 +1,102 @@
+---
+title: 'Dedicated Web Workers'
+description: "Create a Worker from a Blob URL, send messages with postMessage, receive results with onmessage, and terminate cleanly."
+sidebar:
+  order: 2
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## Creating a worker
+
+`new Worker(url)` takes a URL pointing to a JavaScript file. The browser downloads that file and runs it in an isolated background thread. In these lessons, instead of hosting a separate file, we generate the URL on the fly from a Blob — this keeps everything self-contained and runnable inline.
+
+```js
+// worker.js (separate file)
+self.onmessage = function(e) {
+  const result = heavyCompute(e.data);
+  self.postMessage(result);
+};
+
+// main.js
+const worker = new Worker('/worker.js');
+worker.onmessage = function(e) { console.log('result:', e.data); };
+worker.postMessage(inputData);
+```
+
+## The four key APIs
+
+- `worker.postMessage(data)` — send data **to** the worker from the main thread
+- `worker.onmessage = fn` — receive data **from** the worker on the main thread
+- `self.onmessage = fn` — (inside the worker) receive data from the main thread
+- `self.postMessage(data)` — (inside the worker) send a result back to the main thread
+- `worker.terminate()` — immediately stop the worker from the main thread; the worker gets no warning
+
+## Inline worker via Blob URL
+
+Instead of a separate file, you can define the worker source as a string, wrap it in a `Blob`, and convert that to an object URL with `URL.createObjectURL`. The resulting URL looks like `blob:https://example.com/uuid` and behaves exactly like a hosted file URL. After the worker is no longer needed, call `URL.revokeObjectURL(url)` to free the memory.
+
+## Runnable: computing off-thread
+
+The worker below sums all integers from 1 to N. With N = 1 000 000, this is a non-trivial loop that would briefly block the main thread if run inline — here it runs in a background thread instead.
+
+export const webWorkersCode = `var workerSrc = 'self.onmessage = function(e) {' +
+  ' var n = e.data, sum = 0;' +
+  ' for (var i = 1; i <= n; i++) sum += i;' +
+  ' self.postMessage(sum);' +
+  '};';
+var url = URL.createObjectURL(new Blob([workerSrc], {type: 'application/javascript'}));
+var w = new Worker(url);
+w.onmessage = function(e) {
+  console.log('Sum 1..1000000 =', e.data);
+  w.terminate();
+  URL.revokeObjectURL(url);
+};
+w.postMessage(1000000);
+console.log('Worker started — result arrives asynchronously');`;
+
+<StorageRunner client:visible code={webWorkersCode} />
+
+<Callout title="Key point">
+Workers are isolated — they cannot access `window`, `document`, or any DOM APIs. They are perfect for CPU-intensive tasks like image processing, cryptography, or large data transformations.
+</Callout>
+
+export const quizWebWorkers = [
+  {
+    q: 'Which identifier refers to the global scope inside a Web Worker?',
+    options: [
+      'window',
+      'document',
+      'self',
+      'WorkerGlobalScope',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'What does worker.terminate() do?',
+    options: [
+      'Pauses the worker until resumed',
+      'Sends a termination message the worker can intercept',
+      'Immediately stops the worker from the main thread',
+      'Throws if the worker is currently computing',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'Why do we use URL.createObjectURL(new Blob([src])) in these lessons?',
+    options: [
+      'To compress the worker source code',
+      'To create an inline worker URL without a separate file',
+      'To encrypt the worker source',
+      'To cache the worker in IndexedDB',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="workers-sharedworker/web-workers" questions={quizWebWorkers} />
+
+<ProgressTracker client:visible id="workers-sharedworker/web-workers" />

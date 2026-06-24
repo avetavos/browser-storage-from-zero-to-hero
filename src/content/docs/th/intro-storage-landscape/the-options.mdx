@@ -1,0 +1,117 @@
+---
+title: 'เปรียบเทียบตัวเลือก storage'
+description: 'ความจุ, sync vs async, persistence และ use case ที่เหมาะสมของ cookies, Web Storage, IndexedDB, Cache API และ OPFS แบบเคียงกัน'
+sidebar:
+  order: 2
+---
+
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## Cookies
+
+Cookies ถูกนำมาใช้ตั้งแต่ปี 1994 และยังคงเป็น client-side store เพียงอย่างเดียวที่มีส่วนร่วมใน HTTP request cycle เบราว์เซอร์จะแนบ cookies ที่ตรงกันไปกับทุก request โดยอัตโนมัติ ทำให้เป็นกลไกมาตรฐานสำหรับ session tokens และการยืนยันตัวตนฝั่ง server
+
+- **ความจุ:** 4 KB ต่อ cookie เบราว์เซอร์จำกัด cookies รวมต่อ domain ไว้ที่ประมาณ 50 รายการ (แตกต่างกันตามเบราว์เซอร์)
+- **รูปแบบ API:** Synchronous อ่านผ่าน `document.cookie` (คืนค่าเป็น string ที่คั่นด้วย semicolon) เขียนโดยการกำหนดค่า string ในรูปแบบ `Set-Cookie` ให้กับ `document.cookie`
+- **Persistence:** ปรับแต่งได้ Session cookies หมดอายุเมื่อปิดเบราว์เซอร์ Persistent cookies มี attribute `Expires` หรือ `Max-Age`
+- **Use case หลัก:** Session tokens, identity ผู้ใช้, server-side feature flags และค่าใดก็ตามที่ server ต้องเห็นในทุก request
+
+## localStorage
+
+`localStorage` เป็น persistent client-side store ที่ใช้งานง่ายที่สุด ข้อมูลจะคงอยู่แม้ปิดเบราว์เซอร์และแชร์ร่วมกันระหว่างทุก tab และ window บน origin เดียวกัน
+
+- **ความจุ:** 5–10 MB ต่อ origin (5 MB เป็น limit ที่ปลอดภัยในทางปฏิบัติ ขึ้นกับเบราว์เซอร์)
+- **รูปแบบ API:** Synchronous — `localStorage.setItem(key, value)`, `localStorage.getItem(key)`, `localStorage.removeItem(key)`, `localStorage.clear()`
+- **Persistence:** ไม่มีวันหมดอายุ ข้อมูลคงอยู่จนกว่าผู้ใช้จะล้าง site data หรือโค้ดเรียก `clear()`
+- **Use case หลัก:** User preferences, theme settings, cached UI state และค่าเล็กน้อยที่ไม่ต้องส่งไปยัง server
+
+## sessionStorage
+
+`sessionStorage` ใช้ synchronous API เดียวกับ `localStorage` แต่ scope อยู่กับ browser tab เดียว
+
+- **ความจุ:** 5–10 MB ต่อ origin (limit เดียวกับ `localStorage`)
+- **รูปแบบ API:** Synchronous — interface เหมือนกันทุกประการกับ `localStorage`
+- **Persistence:** อยู่ได้เพียงตลอดอายุ tab เมื่อปิด tab หรือออกจาก origin ข้อมูลจะถูกล้าง tab อื่นไม่สามารถอ่านได้แม้จะใช้ origin เดียวกัน
+- **Use case หลัก:** สถานะ wizard หรือแบบฟอร์มหลายขั้นตอน, navigation history ต่อ tab, ข้อมูลชั่วคราวที่ไม่ควรแพร่กระจายข้าม tabs
+
+## IndexedDB
+
+IndexedDB เป็นฐานข้อมูล transactional เต็มรูปแบบภายในเบราว์เซอร์ เก็บ JavaScript objects ที่มีโครงสร้างได้ (ไม่ใช่แค่ strings) รองรับ secondary indexes และมี Promise-friendly async API (ผ่าน native event model หรือ libraries เช่น `idb`)
+
+- **ความจุ:** เบราว์เซอร์จัดสรร quota แบบ dynamic ในทางปฏิบัติ origins สามารถเก็บข้อมูลได้ตั้งแต่หลายร้อย megabytes ถึงหลาย gigabytes ขึ้นอยู่กับ disk ที่เหลือและนโยบายเบราว์เซอร์
+- **รูปแบบ API:** Asynchronous ทุก operation ไม่ block: `IDBObjectStore.put()`, `IDBObjectStore.get()`, cursor iteration ล้วน return `IDBRequest` objects (สามารถ wrap เป็น Promises ได้)
+- **Persistence:** Persistent โดย default (best-effort) สามารถอัปเกรดเป็น durable storage ได้ด้วย `navigator.storage.persist()`
+- **Use case หลัก:** Offline apps, datasets ขนาดใหญ่, records ที่ต้องการ query, draft storage, local-first applications
+
+## Cache API
+
+Cache API เก็บคู่ `Request`/`Response` ออกแบบมาสำหรับ service workers เพื่อให้ network responses สามารถ intercept, cache และ serve ได้ขณะที่อุปกรณ์ offline
+
+- **ความจุ:** แชร์ quota pool เดียวกับ IndexedDB และ OPFS ("bucket" storage) โดยทั่วไปมีหลายร้อย megabytes
+- **รูปแบบ API:** Asynchronous — `caches.open(name)` คืน `Promise<Cache>` จากนั้น `cache.put(request, response)`, `cache.match(request)`, `cache.delete(request)`
+- **Persistence:** Best-effort (อาจถูก evict ภายใต้ storage pressure) เว้นแต่ origin จะได้รับ persistent storage
+- **Use case หลัก:** Precaching app shells สำหรับ service workers, runtime caching ของ API responses, offline-first PWAs
+
+## Origin Private File System (OPFS)
+
+OPFS มอบพื้นที่ file system แบบ sandboxed และส่วนตัวของอุปกรณ์แก่แต่ละ origin โดยไม่ต้องขอ permission ต่างจาก public File System Access API ตรงที่ไฟล์ OPFS ไม่ปรากฏใน file picker ของผู้ใช้
+
+- **ความจุ:** แชร์ quota pool เดียวกับ IndexedDB และ Cache API
+- **รูปแบบ API:** ส่วนใหญ่ asynchronous (`FileSystemDirectoryHandle`, `FileSystemFileHandle`) พร้อม **synchronous** interface ประสิทธิภาพสูง (`createSyncAccessHandle()`) ที่ใช้ได้เฉพาะใน Web Workers
+- **Persistence:** Best-effort โดย default สามารถทำให้ persistent ได้
+- **Use case หลัก:** SQLite-in-WASM, large binary assets, media files, use cases ที่ต้องการ file-level random access หรือ synchronous I/O path ใน Worker
+
+## สรุปแบบเคียงกัน
+
+| | Cookies | localStorage | sessionStorage | IndexedDB | Cache API | OPFS |
+|---|---|---|---|---|---|---|
+| **ความจุโดยประมาณ** | 4 KB | 5–10 MB | 5–10 MB | หลายร้อย MB | หลายร้อย MB | หลายร้อย MB |
+| **รูปแบบ API** | Sync | Sync | Sync | Async | Async | Async (+ sync ใน Worker) |
+| **ส่งพร้อม HTTP?** | ใช่ | ไม่ | ไม่ | ไม่ | ไม่ | ไม่ |
+| **คงอยู่ข้าม tabs** | ใช่ | ใช่ | ไม่ | ใช่ | ใช่ | ใช่ |
+| **คงอยู่ข้าม restarts** | ปรับแต่งได้ | ใช่ | ไม่ | ใช่ | ใช่ | ใช่ |
+| **อาจถูก evict?** | ไม่ (หมดอายุ) | ไม่ | ไม่ | ใช่ (best-effort) | ใช่ (best-effort) | ใช่ (best-effort) |
+| **Use case หลัก** | Auth / server | UI state | Per-tab state | Structured app data | Network caching | File / WASM I/O |
+
+<Callout title="ประเด็นสำคัญ">
+storage แบบ synchronous ทั้งสาม ได้แก่ cookies, `localStorage` และ `sessionStorage` มีความจุจำกัดและ block main thread สำหรับข้อมูลที่ใหญ่กว่าสองสามเมกะไบต์หรือเข้าถึงบ่อยครั้ง IndexedDB, Cache API หรือ OPFS จะให้บริการได้ดีกว่ามากโดยไม่เสี่ยงต่อ UI jank
+</Callout>
+
+export const quizTheOptions = [
+  {
+    q: 'storage ประเภทใดที่ถูกรวมเข้ากับ HTTP requests ที่ส่งไปยัง domain ที่ตรงกันโดยอัตโนมัติ?',
+    options: ['localStorage', 'sessionStorage', 'Cookies', 'IndexedDB'],
+    answer: 2,
+  },
+  {
+    q: 'ผู้ใช้ปิด browser tab หนึ่ง storage ใดยังคงเก็บข้อมูลไว้?',
+    options: [
+      'sessionStorage และ localStorage',
+      'เฉพาะ sessionStorage เท่านั้น',
+      'localStorage, IndexedDB และ Cache API',
+      'ทุก store เก็บข้อมูลไว้',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'storage API สองตัวใดที่ใช้ synchronous read/write interface เดียวกัน?',
+    options: [
+      'localStorage และ IndexedDB',
+      'localStorage และ sessionStorage',
+      'sessionStorage และ Cache API',
+      'Cookies และ IndexedDB',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'แอปต้องการเก็บ records ที่มีโครงสร้างขนาด 200 MB และต้องคงอยู่หลัง browser restart API ใดเหมาะสมที่สุด?',
+    options: ['localStorage', 'sessionStorage', 'Cookies', 'IndexedDB'],
+    answer: 3,
+  },
+];
+
+<Quiz client:visible id="intro-storage-landscape/the-options" questions={quizTheOptions} />
+
+<ProgressTracker client:visible id="intro-storage-landscape/the-options" />

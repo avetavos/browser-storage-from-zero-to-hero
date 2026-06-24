@@ -1,0 +1,179 @@
+---
+title: 'Cookie Store API'
+description: 'API แบบ async ของ cookieStore.get/set/delete และ change event พร้อม fallback ตรวจสอบความรองรับ'
+sidebar:
+  order: 5
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## ปัญหาของ document.cookie
+
+`document.cookie` เป็น synchronous API ที่ออกแบบในช่วงกลางทศวรรษ 1990 มีจุดที่น่าหงุดหงิดสามอย่าง:
+
+1. **ต้อง parse เอง** — การอ่านคุกกี้ตามชื่อต้องแยกสตริงและวนลูป
+2. **การเขียนใช้ string** — ต้องสร้าง cookie string ด้วยตัวเอง
+3. **ไม่มี change event** — ไม่มีวิธีสังเกตเมื่อแท็บอื่นหรือ server เปลี่ยนคุกกี้
+
+**Cookie Store API** แก้ปัญหาทั้งสามด้วย interface ที่สะอาดแบบ Promise-based
+
+## การรองรับของเบราว์เซอร์
+
+Cookie Store API มีใน Chrome และ Edge (เบราว์เซอร์ที่ใช้ Chromium) แต่ Firefox ยังไม่รองรับ ควรตรวจสอบการรองรับก่อนใช้เสมอ
+
+## cookieStore.get — อ่านคุกกี้ชิ้นเดียว
+
+คืน Promise ที่ resolve เป็นออบเจกต์ `CookieListItem` หรือ `null` ถ้าคุกกี้ไม่มีอยู่:
+
+```js
+const cookie = await cookieStore.get('theme');
+if (cookie) {
+  console.log(cookie.name);    // 'theme'
+  console.log(cookie.value);   // 'dark'
+}
+```
+
+ออบเจกต์ที่คืนยังมี property `domain`, `path`, `expires`, `secure`, `sameSite`, และ `httpOnly` ด้วย
+
+## cookieStore.set — เขียนคุกกี้
+
+รับคู่ name/value เป็นสตริง หรือออบเจกต์ options:
+
+```js
+// รูปแบบสั้น
+await cookieStore.set('theme', 'dark');
+
+// รูปแบบ options — แนะนำสำหรับควบคุม attribute
+await cookieStore.set({
+  name: 'theme',
+  value: 'dark',
+  maxAge: 86400,
+  sameSite: 'lax',
+});
+```
+
+คืน Promise ที่ resolve เมื่อคุกกี้ถูกเขียนแล้ว
+
+## cookieStore.delete — ลบคุกกี้
+
+```js
+await cookieStore.delete('theme');
+```
+
+คืน Promise ที่ resolve เมื่อคุกกี้ถูกลบ เทียบเท่ากับการตั้ง `Max-Age=0`
+
+## cookieStore.getAll — อ่านคุกกี้ทั้งหมด
+
+```js
+const allCookies = await cookieStore.getAll();
+allCookies.forEach(c => console.log(c.name, c.value));
+```
+
+ต่างจาก `document.cookie` ตรงที่คืน array ของออบเจกต์จริงๆ — ไม่ต้อง parse สตริง
+
+## Change event
+
+Cookie Store API ช่วยให้ฟัง cookie change แบบ reactive ได้:
+
+```js
+cookieStore.addEventListener('change', event => {
+  event.changed.forEach(c => {
+    console.log('Cookie changed:', c.name, '=', c.value);
+  });
+  event.deleted.forEach(c => {
+    console.log('Cookie deleted:', c.name);
+  });
+});
+```
+
+`event.changed` เป็น array ของคุกกี้ที่ถูกตั้งค่าหรืออัปเดต `event.deleted` เป็น array ของคุกกี้ที่ถูกลบ ทำงานข้ามแท็บสำหรับคุกกี้ที่ไม่ได้จำกัดขอบเขตไว้ที่แท็บเดียว
+
+## รูปแบบ feature-detect
+
+เนื่องจากการรองรับเบราว์เซอร์ยังไม่ครบ ควร feature-detect และ fallback ไปใช้ `document.cookie` เสมอ:
+
+```js
+async function getTheme() {
+  if ('cookieStore' in window) {
+    const c = await cookieStore.get('theme');
+    return c ? c.value : null;
+  } else {
+    // fallback document.cookie
+    var pairs = document.cookie.split('; ');
+    for (var i = 0; i < pairs.length; i++) {
+      var p = pairs[i].split('=');
+      if (p[0] === 'theme') return decodeURIComponent(p[1]);
+    }
+    return null;
+  }
+}
+```
+
+## Demo ที่รันได้: cookieStore พร้อม fallback
+
+export const cookieStoreCode = `async function run() {
+  if ('cookieStore' in window) {
+    // Modern async API
+    await cookieStore.set({ name: 'demo_modern', value: 'hello', maxAge: 60 });
+    var c = await cookieStore.get('demo_modern');
+    console.log('cookieStore.get:', c ? c.value : null);
+    await cookieStore.delete('demo_modern');
+    var after = await cookieStore.get('demo_modern');
+    console.log('After delete:', after ? after.value : null);
+    console.log('Browser supports cookieStore API');
+  } else {
+    // Fallback to document.cookie
+    document.cookie = 'demo_modern=hello; Max-Age=60; SameSite=Lax';
+    var pairs = document.cookie.split('; ');
+    var val = null;
+    for (var i = 0; i < pairs.length; i++) {
+      var p = pairs[i].split('=');
+      if (p[0] === 'demo_modern') val = decodeURIComponent(p[1]);
+    }
+    console.log('document.cookie fallback:', val);
+    document.cookie = 'demo_modern=; Max-Age=0; SameSite=Lax';
+    console.log('Cookie Store API not available in this browser - used fallback');
+  }
+}
+run();`;
+
+<StorageRunner client:visible code={cookieStoreCode} />
+
+<Callout title="ใช้ Cookie Store API เมื่อรองรับ แต่ให้มี fallback เสมอ">
+Cookie Store API ทำให้โค้ดคุกกี้อ่านง่ายขึ้นมาก — async/await แทน string parsing, ออบเจกต์แทนสตริงคั่นด้วยเซมิโคลอน, และ reactive change event จนกว่า Firefox จะรองรับ ควร wrap การใช้งานด้วย feature-detect (`'cookieStore' in window`) และ fallback ไปใช้ `document.cookie` สำหรับความเข้ากันได้ข้ามเบราว์เซอร์อย่างเต็มรูปแบบ
+</Callout>
+
+export const quizCookieStoreApi = [
+  {
+    q: 'cookieStore.get(name) คืนค่าอะไรเมื่อคุกกี้มีอยู่?',
+    options: [
+      'ค่าคุกกี้เป็นสตริงธรรมดา',
+      'Promise ที่ resolve เป็นออบเจกต์ CookieListItem',
+      'ออบเจกต์ CookieListItem แบบ synchronous',
+      'Promise ที่ resolve เป็นสตริง name=value',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'เบราว์เซอร์ใดที่ยังไม่รองรับ Cookie Store API?',
+    options: ['Chrome', 'Edge', 'Firefox', 'Chrome บน Android'],
+    answer: 2,
+  },
+  {
+    q: 'วิธีฟัง cookie change ด้วย Cookie Store API คือ?',
+    options: [
+      'window.addEventListener("cookiechange", handler)',
+      'cookieStore.addEventListener("change", handler)',
+      'document.cookie.onchange = handler',
+      'cookieStore.watch(handler)',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="cookies/cookie-store-api" questions={quizCookieStoreApi} />
+
+<ProgressTracker client:visible id="cookies/cookie-store-api" />

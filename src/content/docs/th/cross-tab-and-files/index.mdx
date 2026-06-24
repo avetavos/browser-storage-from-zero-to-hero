@@ -1,0 +1,108 @@
+---
+title: 'Cross-Tab & Files'
+description: 'ประสานงานข้ามแท็บและบันทึกไฟล์ด้วย BroadcastChannel, Web Locks และ File System Access / OPFS APIs'
+sidebar:
+  order: 1
+---
+
+import Mermaid from '../../../../components/Mermaid.astro';
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## ประสานงานข้ามแท็บและบันทึกไฟล์
+
+แอปพลิเคชันเว็บสมัยใหม่มักทำงานในหลายแท็บพร้อมกัน เมื่อแท็บหนึ่งอัปเดตข้อมูล แท็บอื่นจะรู้ได้อย่างไร? เมื่อแอปต้องเขียนไฟล์ขนาดใหญ่จะหลีกเลี่ยงการเขียนทับงานของแท็บอื่นได้อย่างไร? โมดูลนี้จะตอบคำถามทั้งสองข้อ
+
+เบราว์เซอร์มี API สี่ตัวที่ทำงานร่วมกัน:
+
+- **BroadcastChannel** — รับ-ส่งข้อความแบบ publish/subscribe ระหว่างทุกแท็บ (และ worker) บน origin เดียวกัน
+- **`storage` event** — เกิดขึ้นในแท็บอื่นเมื่อมีการเขียน `localStorage`; กลไกการแจ้งเตือนดั้งเดิมก่อน BroadcastChannel
+- **Web Locks** — primitive สำหรับ mutual-exclusion ที่ทำให้การเข้าถึง resource ทำงานเป็น serial ป้องกัน race condition
+- **File System Access / OPFS** — อ่านและเขียนไฟล์จริง (หรือ sandbox ส่วนตัวของ origin) ด้วย API แบบ async
+
+## วิธีที่แท็บสื่อสารกัน
+
+export const tabsDiagram = `flowchart LR
+  subgraph Origin["Same origin (scheme + host + port)"]
+    TabA["Tab A\\n(writer)"] -->|postMessage| BC["BroadcastChannel\\n'app-updates'"]
+    BC -->|onmessage| TabB["Tab B\\n(listener)"]
+    BC -->|onmessage| TabC["Tab C\\n(listener)"]
+    TabA -->|setItem| LS[(localStorage)]
+    LS -->|storage event| TabB
+    LS -->|storage event| TabC
+  end`;
+
+<Mermaid code={tabsDiagram} title="BroadcastChannel และ storage event ส่งข้อความไปยังทุกแท็บอื่นบน origin เดียวกัน" />
+
+## เนื้อหาของโมดูลนี้
+
+| บทเรียน | สิ่งที่จะเรียนรู้ |
+|---|---|
+| **หน้านี้** | API ทั้งสี่สำหรับ cross-tab และไฟล์ และเวลาที่ควรใช้แต่ละตัว |
+| `broadcastchannel` | `new BroadcastChannel(name)`, `postMessage`, `onmessage`, `close`; เทียบกับ `storage` event |
+| `web-locks` | `navigator.locks.request`, โหมด exclusive กับ shared, `ifAvailable`, `locks.query()` |
+| `cross-tab-state` | รวม BroadcastChannel + localStorage/IndexedDB สำหรับ shared state; leader election ด้วย Web Locks |
+| `file-system-access-opfs` | `showOpenFilePicker` / `showSaveFilePicker` (ต้องใช้ gesture) และ OPFS `navigator.storage.getDirectory()` |
+
+## เปรียบเทียบด่วน
+
+| API | การส่งข้อมูล | ต้อง gesture | ทำงานใน workers | เก็บถาวร |
+|---|---|---|---|---|
+| BroadcastChannel | แท็บอื่น | ไม่ | ใช่ | ไม่ |
+| `storage` event | แท็บอื่น | ไม่ | ไม่ | ไม่ |
+| Web Locks | แท็บเดียวกัน | ไม่ | ใช่ | ไม่ |
+| File System Access | — | ใช่ (picker) | ไม่ | ใช่ |
+| OPFS | — | ไม่ | ใช่ | ใช่ |
+
+## ตัวอย่างข้อความ cross-tab แรก
+
+โค้ดด้านล่างสร้าง BroadcastChannel แล้ว post และรับข้อความในหน้าเดียวกัน ในแอปจริง sender และ receiver อยู่คนละแท็บ
+
+export const ctIndexCode = `// Both sender and receiver use the same channel name.
+const ch = new BroadcastChannel('demo:intro');
+
+// Listen for messages (in this demo: same-tab echo)
+ch.onmessage = (e) => {
+  console.log('Received:', JSON.stringify(e.data));
+  ch.close();
+};
+
+// Send a message — in another tab this would arrive via onmessage there
+ch.postMessage({ type: 'PING', ts: Date.now() });
+console.log('Message posted. Waiting for echo...');
+// NOTE: cross-tab delivery requires a real second tab open on the same origin.`;
+
+<StorageRunner client:visible code={ctIndexCode} />
+
+<Callout title="ประเด็นสำคัญ">
+ข้อความ BroadcastChannel จะ **ไม่** ส่งกลับไปยังแท็บที่เรียก `postMessage` — จะส่งไปยังแท็บและ worker อื่นเท่านั้น ตัวอย่างข้างต้นรับข้อความได้เพราะ sender และ receiver อยู่ใน script เดียวกัน ในโค้ด production ทั้งสองอยู่คนละแท็บ
+</Callout>
+
+export const quizCrossTabIndex = [
+  {
+    q: 'API ใดส่งข้อความไปยังทุกแท็บอื่นบน origin เดียวกัน โดยไม่ต้องใช้ user gesture?',
+    options: ['Web Locks', 'BroadcastChannel', 'showOpenFilePicker', 'IndexedDB'],
+    answer: 1,
+  },
+  {
+    q: '`storage` event เกิดขึ้นเมื่อ localStorage ถูกเขียน แท็บใดจะได้รับมัน?',
+    options: [
+      'แท็บที่เขียนค่า',
+      'ทุกแท็บอื่นบน origin เดียวกัน',
+      'ทุกแท็บรวมถึงแท็บที่เขียน',
+      'เฉพาะแท็บที่เปิดล่าสุด',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'API ใดต้องใช้ user gesture (เช่น คลิกปุ่ม) ก่อนจึงจะแสดง file picker ได้?',
+    options: ['BroadcastChannel', 'Web Locks', 'File System Access showOpenFilePicker', 'OPFS getDirectory'],
+    answer: 2,
+  },
+];
+
+<Quiz client:visible id="cross-tab-and-files/index" questions={quizCrossTabIndex} />
+
+<ProgressTracker client:visible id="cross-tab-and-files/index" />

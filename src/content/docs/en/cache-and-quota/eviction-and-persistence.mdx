@@ -1,0 +1,119 @@
+---
+title: 'Eviction and Persistence'
+description: 'Best-effort vs persistent storage, when browsers evict data, and how persist() protects it.'
+sidebar:
+  order: 4
+---
+
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## Two storage modes
+
+Every origin's storage falls into one of two modes at any given time:
+
+- **Best-effort** — the default mode. The browser *may* delete data from the origin without any user action if the device is running low on disk space.
+- **Persistent** — the browser will *not* automatically evict the origin's data. Data is only removed when the user explicitly clears it (via browser settings or your own code).
+
+Most web applications run in best-effort mode, which is fine for non-critical caches and temporary data. If your app depends on cached data being available offline — for example, a PWA that must work with no connectivity — you should request persistent storage.
+
+## When does eviction happen?
+
+Eviction is a browser-level decision triggered by storage pressure. The exact algorithm varies by browser, but the general process is:
+
+1. The device runs low on available disk space.
+2. The browser decides it needs to reclaim storage.
+3. It walks origins in roughly **least-recently-used (LRU) order** — origins that have not been visited recently are candidates first.
+4. Best-effort origins are cleared; persistent origins are left alone.
+
+Eviction affects *all* storage for the origin simultaneously: Cache API, IndexedDB, and other quota-counted mechanisms are cleared together. You do not get to choose which data is kept.
+
+## How `persist()` protects data
+
+Calling `navigator.storage.persist()` sends a request to the browser asking it to move your origin into persistent mode. The browser may or may not grant this request:
+
+```js
+const granted = await navigator.storage.persist();
+if (granted) {
+  console.log('Storage is persistent — data is safe');
+} else {
+  console.log('Best-effort only — browser may evict under pressure');
+}
+```
+
+### What influences the browser's decision?
+
+Browsers use heuristics to decide whether to grant persistence. Common factors include:
+
+- Whether the user has **installed the PWA** to their home screen or desktop.
+- The user's **site engagement score** — how frequently and recently they visit the site.
+- Whether the user has explicitly **granted a permission prompt** (some browsers show one).
+- Whether the origin has already been **granted notifications** or other powerful permissions.
+
+There is no API to force the browser to return `true`. If it returns `false`, you can still use storage — it just may be evicted under pressure.
+
+## Checking current state
+
+Use `navigator.storage.persisted()` at app startup to check whether the origin is already persistent before deciding whether to request it or show a user-facing prompt:
+
+```js
+const isAlreadyPersistent = await navigator.storage.persisted();
+
+if (!isAlreadyPersistent) {
+  // Optionally explain why you need it, then request
+  const granted = await navigator.storage.persist();
+  if (!granted) {
+    // Show a degraded-experience warning
+    console.warn('Could not get persistent storage. Cached data may be lost.');
+  }
+}
+```
+
+## Practical guidance
+
+- **Do not assume** `persist()` will return `true` — always handle the `false` case gracefully.
+- Call `persisted()` first to avoid redundant prompts if the browser already granted persistence.
+- For apps where offline capability is critical, store enough diagnostic information in localStorage (which is harder to evict than Cache API in practice) to detect data loss on next load.
+- Inform users when the app is running in best-effort mode so they understand the risk.
+
+<Callout title="Key point">
+Persistent storage is a browser guarantee, not a JavaScript lock. Calling `persist()` *requests* protection — the browser may decline. The user retains final control and can always clear all storage via their browser settings regardless of persistence state.
+</Callout>
+
+export const quizEvictionAndPersistence = [
+  {
+    q: 'What is the default storage mode for a new web origin?',
+    options: [
+      'Persistent — data is never evicted automatically',
+      'Best-effort — the browser may evict data under storage pressure',
+      'Locked — no storage is allowed until the user grants permission',
+      'Temporary — data is cleared after every browser session',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'When the browser evicts a best-effort origin due to storage pressure, what is cleared?',
+    options: [
+      'Only the Cache API data for that origin',
+      'Only IndexedDB data for that origin',
+      'All quota-counted storage for the origin (Cache API, IndexedDB, etc.)',
+      'Only data older than 30 days',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'What does navigator.storage.persist() return if the browser denies the request?',
+    options: [
+      'It throws a DOMException',
+      'false',
+      'undefined',
+      'A rejection with reason "denied"',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="cache-and-quota/eviction-and-persistence" questions={quizEvictionAndPersistence} />
+
+<ProgressTracker client:visible id="cache-and-quota/eviction-and-persistence" />

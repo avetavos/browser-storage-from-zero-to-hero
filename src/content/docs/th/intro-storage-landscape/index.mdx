@@ -1,0 +1,95 @@
+---
+title: 'ภาพรวมของ client-side storage'
+description: 'Cookies, Web Storage, IndexedDB, Cache API และ OPFS ในภาพรวม พร้อม decision tree สำหรับการเลือกใช้'
+sidebar:
+  order: 1
+---
+
+import Mermaid from '../../../../components/Mermaid.astro';
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## วิธีเก็บข้อมูลใน browser ทั้ง 5 แบบ
+
+เบราว์เซอร์สมัยใหม่มีระบบ storage ที่แตกต่างกันถึง 5 ระบบ แต่ละระบบแก้ปัญหาที่ต่างกัน มีขีดจำกัดด้านความจุที่ต่างกัน และมีรูปแบบ API ที่ต่างกัน ก่อนจะเจาะลึกแต่ละระบบ การเข้าใจภาพรวมทั้งหมดจะเป็นประโยชน์อย่างมาก
+
+**Cookies** เป็นกลไกที่เก่าแก่ที่สุด เป็น key/value strings ขนาดเล็ก (สูงสุด 4 KB ต่อชิ้น) ที่ถูกส่งโดยอัตโนมัติพร้อมทุก HTTP request ไปยัง domain ที่ตรงกัน หน้าที่หลักของมันคือการจัดการ session และการสื่อสารกับ server ไม่ใช่การเก็บข้อมูลในเครื่อง
+
+**Web Storage** (`localStorage` และ `sessionStorage`) เป็น synchronous key/value API ที่รองรับเฉพาะ strings มี quota โดยทั่วไปอยู่ที่ 5–10 MB ต่อ origin `localStorage` เก็บข้อมูลไว้ตลอดไป ส่วน `sessionStorage` จะล้างข้อมูลเมื่อ tab ถูกปิด ทั้งคู่ block main thread ทุกครั้งที่เรียกใช้
+
+**IndexedDB** เป็นฐานข้อมูลแบบ transactional, asynchronous, object-oriented ที่มีในทุกเบราว์เซอร์ รองรับข้อมูล structured ได้หลายร้อย megabytes (หรือมากกว่า) รองรับ indexes และ cursors และไม่ block main thread เหมาะสำหรับข้อมูล structured ในเครื่องปริมาณมาก
+
+**Cache API** เก็บ HTTP request/response pairs ออกแบบมาสำหรับ service workers เพื่อรองรับ offline-first apps และกลยุทธ์ caching ที่ละเอียด entries คือ `Response` objects เต็มรูปแบบ ไม่ใช่แค่ strings
+
+**Origin Private File System (OPFS)** เป็น sandboxed file-system API ที่เพิ่มเข้ามาในเบราว์เซอร์สมัยใหม่ ให้ origin มีพื้นที่ส่วนตัวในการสร้าง อ่าน และเขียนไฟล์ รวมถึงผ่าน synchronous interface ใน Web Workers โดยไม่ต้องขอ permission
+
+## Decision tree: เลือก storage แบบไหน?
+
+export const decisionTree = `flowchart TD
+  A[What do you need to store?] --> B{Needs to be sent\\nwith HTTP requests?}
+  B -->|Yes| C[Cookies]
+  B -->|No| D{Structured data or\\nlarge volume?}
+  D -->|No - small key/value| E{Must persist\\nacross tabs/sessions?}
+  E -->|Session only| F[sessionStorage]
+  E -->|Persists| G[localStorage]
+  D -->|Yes - structured / large| H{HTTP request/\\nresponse pairs?}
+  H -->|Yes - caching responses| I[Cache API]
+  H -->|No - app data| J{Need file-level access\\nor sync in a Worker?}
+  J -->|Yes| K[OPFS]
+  J -->|No| L[IndexedDB]`;
+
+<Mermaid code={decisionTree} title="Decision tree: การเลือก client-side storage ที่เหมาะสม" />
+
+## โมดูลนี้ครอบคลุมอะไรบ้าง
+
+โมดูลนี้แนะนำระบบ storage ทั้ง 5 ก่อนที่โมดูลเฉพาะทางจะเจาะลึกแต่ละระบบ
+
+| บทเรียน | สิ่งที่จะได้เรียนรู้ |
+|---|---|
+| **หน้านี้** | ภาพรวมทั้งหมดและ decision tree สำหรับเลือก storage ที่เหมาะสม |
+| `the-options` | ความจุ, sync vs async, persistence และ use cases แบบเคียงกัน |
+| `same-origin-and-security` | วิธีที่ same-origin policy แบ่ง storage และเหตุใด secrets จึงไม่ควรอยู่ใน Web Storage |
+| `sync-vs-async` | เหตุใด synchronous storage ถึง block main thread และ async APIs หลีกเลี่ยงปัญหานี้อย่างไร |
+| `quota-and-persistence` | การใช้ `navigator.storage.estimate()` และ `persist()` เพื่อเข้าใจและควบคุมการ eviction |
+
+## ตรวจสอบ storage quota ที่มีอยู่
+
+`navigator.storage.estimate()` รายงานว่า origin ของคุณใช้ storage ไปเท่าไหร่ และเบราว์เซอร์พร้อมจะให้เท่าไหร่ รันโค้ดด้านล่างเพื่อดูตัวเลขของคุณเอง
+
+export const estimateCode = `navigator.storage.estimate().then((estimate) => {
+  const usedMB = (estimate.usage / 1024 / 1024).toFixed(2);
+  const quotaMB = (estimate.quota / 1024 / 1024).toFixed(2);
+  console.log('Usage : ' + usedMB + ' MB');
+  console.log('Quota : ' + quotaMB + ' MB');
+  console.log('Used  : ' + ((estimate.usage / estimate.quota) * 100).toFixed(4) + '%');
+});`;
+
+<StorageRunner client:visible code={estimateCode} />
+
+<Callout title="ประเด็นสำคัญ">
+ไม่มี storage API ใดที่ดีที่สุดในทุกสถานการณ์ Cookies เป็นส่วนของ server handshake Web Storage จัดการ UI state ขนาดเล็ก IndexedDB สำหรับข้อมูล app แบบ structured Cache API ดูแล network responses OPFS ให้การเข้าถึงระดับไฟล์ใน Workers การเข้าใจภาพรวมคือก้าวแรกของการเลือกเครื่องมือที่เหมาะสมกับแต่ละงาน
+</Callout>
+
+export const quizIndex = [
+  {
+    q: 'กลไก storage ใดที่ส่งข้อมูลโดยอัตโนมัติพร้อมทุก HTTP request ที่ตรงกัน?',
+    options: ['localStorage', 'Cookies', 'IndexedDB', 'Cache API'],
+    answer: 1,
+  },
+  {
+    q: 'แอปต้องการแคช HTTP responses เต็มรูปแบบเพื่อใช้แบบ offline storage API ใดเหมาะสมที่สุด?',
+    options: ['localStorage', 'sessionStorage', 'Cache API', 'OPFS'],
+    answer: 2,
+  },
+  {
+    q: 'คุณจะใช้ API ใดในการเก็บข้อมูล structured ที่สามารถ query ได้ขนาดหลายร้อย megabytes บน client?',
+    options: ['localStorage', 'Cookies', 'sessionStorage', 'IndexedDB'],
+    answer: 3,
+  },
+];
+
+<Quiz client:visible id="intro-storage-landscape/index" questions={quizIndex} />
+
+<ProgressTracker client:visible id="intro-storage-landscape/index" />

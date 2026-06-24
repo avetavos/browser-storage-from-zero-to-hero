@@ -1,0 +1,158 @@
+---
+title: Object Stores and Keys
+description: Learn how to create object stores with keyPath and autoIncrement options, and understand the difference between in-line and out-of-line keys.
+sidebar:
+  order: 3
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## What Is an Object Store?
+
+An **object store** is IndexedDB's equivalent of a database table. Each record in an object store is a JavaScript object — but unlike a SQL table, there is no schema enforcement. You can store objects with different shapes in the same store. The only structural rule is how the **key** is determined.
+
+Think of it this way:
+
+- A SQL table row has a fixed set of columns.
+- An object store record is any JS object you hand it, plus a key that uniquely identifies it.
+
+## Creating an Object Store
+
+You create object stores by calling `db.createObjectStore(name, options)` on the database instance. This method **must** be called inside the `onupgradeneeded` event handler — it is only valid during a version upgrade.
+
+```js
+const request = indexedDB.open('my-db', 1);
+
+request.onupgradeneeded = (event) => {
+  const db = event.target.result;
+  db.createObjectStore('contacts', { keyPath: 'id' });
+};
+```
+
+The first argument is the store name. The second argument is an options object controlling how keys work.
+
+## keyPath: In-Line Keys
+
+When you set `keyPath`, the store uses a **property on the stored object** as its key. This is called an **in-line key** because the key lives inside the object itself.
+
+```js
+// Every object you store MUST have an `id` property
+db.createObjectStore('contacts', { keyPath: 'id' });
+
+// Valid record:
+store.add({ id: 1, name: 'Alice', email: 'alice@example.com' });
+
+// Invalid — no `id` field, will throw:
+store.add({ name: 'Bob' });
+```
+
+If you set `autoIncrement: true` alongside `keyPath`, the browser generates the key automatically and writes it into the object at the specified path:
+
+```js
+db.createObjectStore('contacts', { keyPath: 'id', autoIncrement: true });
+
+// `id` will be filled in automatically:
+store.add({ name: 'Alice' }); // stored as { id: 1, name: 'Alice' }
+```
+
+## Out-of-Line Keys
+
+When you omit `keyPath` (or set it to `null`), the key is **separate from the object**. This is called an **out-of-line key**. You supply it manually as the second argument to `add()` or `put()`.
+
+```js
+db.createObjectStore('raw-blobs', { keyPath: null });
+
+// You provide the key explicitly:
+store.add({ data: '...' }, 'blob-001');
+```
+
+Combine with `autoIncrement: true` to let the browser generate integer keys without touching the stored object:
+
+```js
+db.createObjectStore('logs', { autoIncrement: true });
+
+// No key needed — browser assigns 1, 2, 3, ...
+store.add({ level: 'info', message: 'App started' });
+```
+
+## Key Mode Comparison
+
+| Mode | keyPath | autoIncrement | Key source |
+|---|---|---|---|
+| In-line (explicit) | `'id'` | `false` | Object's `id` field |
+| In-line (auto) | `'id'` | `true` | Auto-generated, stored in `id` |
+| Out-of-line (manual) | (none) | `false` | Caller provides key |
+| Out-of-line (auto) | (none) | `true` | Auto-generated, not in object |
+
+## Try It: Creating Two Object Stores
+
+The example below opens a database at version 1 and creates two stores:
+
+- `contacts` — in-line key using the `id` property
+- `logs` — out-of-line auto-incrementing key
+
+Run it to see both store names printed to the console.
+
+export const objectStoresCode = `
+const db = await new Promise((resolve, reject) => {
+  const req = indexedDB.open('demo-stores', 1);
+  req.onupgradeneeded = (e) => {
+    const d = e.target.result;
+    d.createObjectStore('contacts', { keyPath: 'id' });
+    d.createObjectStore('logs', { autoIncrement: true });
+    console.log('Stores created');
+  };
+  req.onsuccess = (e) => resolve(e.target.result);
+  req.onerror = (e) => reject(e.target.error);
+});
+console.log('Object stores:', Array.from(db.objectStoreNames).join(', '));
+db.close();
+indexedDB.deleteDatabase('demo-stores');
+console.log('Cleanup done');
+`.trim();
+
+<StorageRunner client:visible code={objectStoresCode} />
+
+<Callout title="Only valid inside onupgradeneeded">
+`createObjectStore()` throws a `DOMException` if called outside of an `onupgradeneeded` handler. Object stores are part of the database schema, and schema changes are only allowed during a version upgrade. If you need a new store, increment the version number when opening the database.
+</Callout>
+
+export const quizObjectStores = [
+  {
+    q: "What option do you pass to createObjectStore to use a property on the stored object as its key?",
+    options: [
+      "autoIncrement",
+      "keyPath",
+      "primaryKey",
+      "inlineKey"
+    ],
+    answer: 1
+  },
+  {
+    q: "When is createObjectStore() allowed to be called?",
+    options: [
+      "Any time after the database is open",
+      "Only inside an onsuccess handler",
+      "Only inside an onupgradeneeded handler",
+      "Only before the database is opened"
+    ],
+    answer: 2
+  },
+  {
+    q: "You create a store with { autoIncrement: true } and no keyPath. Where is the generated key stored?",
+    options: [
+      "In the object's `id` property",
+      "In a separate key field named `_key`",
+      "It is not stored inside the object — it is out-of-line",
+      "The key is discarded after insertion"
+    ],
+    answer: 2
+  }
+];
+
+<Quiz client:visible id="indexeddb-fundamentals/object-stores-and-keys" questions={quizObjectStores} />
+
+<ProgressTracker client:visible id="indexeddb-fundamentals/object-stores-and-keys" />

@@ -1,0 +1,144 @@
+---
+title: 'The Web Storage API'
+description: 'setItem, getItem, removeItem, clear, key(i) และ length — API ครบทั้งชุด'
+sidebar:
+  order: 3
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## API ครบทั้งชุด
+
+ทั้ง `localStorage` และ `sessionStorage` ต่างก็ implement interface `Storage` แบบเดียวกัน ทุก method และ property ด้านล่างนี้ใช้ได้กับทั้งคู่ — แค่สลับชื่อ object เท่านั้น
+
+### `setItem(key, value)`
+
+เก็บค่า string ภายใต้ key ที่เป็น string หาก key นั้นมีอยู่แล้ว ค่าจะถูก **เขียนทับ** (ไม่มี method "update" แยกต่างหาก)
+
+```js
+localStorage.setItem('demo:theme', 'dark');
+localStorage.setItem('demo:theme', 'light'); // overwrites — now 'light'
+```
+
+### `getItem(key)`
+
+คืนค่า string ที่เก็บไว้สำหรับ key ที่ระบุ หรือ **`null`** (ไม่ใช่ `undefined`) หากไม่มี key นั้นอยู่
+
+```js
+const theme = localStorage.getItem('demo:theme');  // 'light'
+const missing = localStorage.getItem('demo:nope'); // null
+```
+
+ควรตรวจสอบกัน `null` เสมอก่อนนำค่าที่คืนมาไปใช้
+
+### `removeItem(key)`
+
+ลบ key/value pair หนึ่งคู่ การเรียกกับ key ที่ไม่มีอยู่จะไม่เกิดอะไรขึ้น (no-op) — ไม่มีการโยน error
+
+```js
+localStorage.removeItem('demo:theme');
+console.log(localStorage.getItem('demo:theme')); // null
+```
+
+### `clear()`
+
+ลบ key/value pair **ทั้งหมด** ใน store สำหรับ origin ปัจจุบัน ใช้อย่างระมัดระวังกับ `localStorage` — มันจะล้างทุก key ที่ถูกตั้งโดยทุกสคริปต์บน origin นั้น
+
+```js
+localStorage.clear();
+console.log(localStorage.length); // 0
+```
+
+### `key(index)`
+
+คืนชื่อ key ที่ index ตัวเลขที่ระบุ (เริ่มที่ 0) หรือ `null` หาก index อยู่นอกช่วง ลำดับไม่รับประกันว่าจะเป็นลำดับการ insert — ให้ถือว่าขึ้นอยู่กับ implementation
+
+```js
+localStorage.setItem('demo:a', '1');
+localStorage.setItem('demo:b', '2');
+console.log(localStorage.key(0)); // 'demo:a' or 'demo:b' — order varies
+```
+
+### `length`
+
+property แบบอ่านอย่างเดียวที่คืนจำนวน key/value pair ที่เก็บอยู่ในปัจจุบัน ใช้มันเพื่อวนซ้ำทุก key:
+
+```js
+for (let i = 0; i < localStorage.length; i++) {
+  const k = localStorage.key(i);
+  console.log(k, localStorage.getItem(k));
+}
+```
+
+## รันได้: API ครบชุดในการทำงานจริง
+
+export const apiCode = `localStorage.setItem('demo:user', 'Ada');
+console.log('get:', localStorage.getItem('demo:user'));
+console.log('length:', localStorage.length);
+localStorage.removeItem('demo:user');
+console.log('after remove:', localStorage.getItem('demo:user'));`;
+
+<StorageRunner client:visible code={apiCode} />
+
+## การอ่าน key ที่ไม่มีอยู่จะคืนค่า null
+
+นี่เป็นหนึ่งในบั๊กที่พบบ่อยที่สุดกับ Web Storage: การสับสนระหว่าง `null` กับ value ที่เก็บไว้
+
+```js
+// Nothing stored yet
+const val = localStorage.getItem('demo:nonexistent');
+console.log(val);        // null
+console.log(val === null); // true — use === null check, not falsy !val
+```
+
+ระวัง: string `"null"` เป็นค่าที่เก็บได้อย่างถูกต้องและเป็น truthy ให้ใช้ `=== null` เสมอแทน `!val` เพื่อแยกแยะระหว่าง "ไม่มี key" กับ "มี key อยู่แต่ค่าว่างหรือเป็น falsy"
+
+## การวนซ้ำทุก key
+
+```js
+localStorage.setItem('demo:one', '1');
+localStorage.setItem('demo:two', '2');
+
+for (let i = 0; i < localStorage.length; i++) {
+  const key = localStorage.key(i);
+  console.log(key, '->', localStorage.getItem(key));
+}
+
+// Clean up
+localStorage.removeItem('demo:one');
+localStorage.removeItem('demo:two');
+```
+
+<Callout title="ประเด็นสำคัญ">
+ไม่มี method "update" — `setItem` จะเขียนทับค่าใด ๆ ที่มีอยู่สำหรับ key นั้น key ที่ไม่มีอยู่จะอ่านกลับมาเป็น `null` เสมอ ไม่ใช่ `undefined` ให้ตรวจสอบ `=== null` เพื่อแยกแยะ key ที่ไม่มีอยู่ออกจาก empty string ที่เก็บไว้
+</Callout>
+
+export const quizTheApi = [
+  {
+    q: 'localStorage.getItem("missing-key") คืนค่าอะไรเมื่อ key นั้นไม่เคยถูกตั้งค่ามาก่อน?',
+    options: ['undefined', 'null', '""', 'มันโยน ReferenceError'],
+    answer: 1,
+  },
+  {
+    q: 'คุณเรียก localStorage.setItem("x", "first") แล้วตามด้วย localStorage.setItem("x", "second") ค่าที่เก็บไว้คืออะไร?',
+    options: ['"first"', '"second"', '"first,second"', 'มันโยน error เพราะ key มีอยู่แล้ว'],
+    answer: 1,
+  },
+  {
+    q: 'localStorage.key(index) คืนค่าอะไรเมื่อ index อยู่นอกช่วง?',
+    options: ['undefined', 'null', 'มันโยน RangeError', '""'],
+    answer: 1,
+  },
+  {
+    q: 'method ใดที่ลบ key/value pair ทั้งหมดใน localStorage สำหรับ origin ปัจจุบัน?',
+    options: ['localStorage.removeAll()', 'localStorage.clear()', 'localStorage.reset()', 'localStorage.delete()'],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="web-storage/the-api" questions={quizTheApi} />
+
+<ProgressTracker client:visible id="web-storage/the-api" />

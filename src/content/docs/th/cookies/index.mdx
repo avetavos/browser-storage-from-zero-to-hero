@@ -1,0 +1,115 @@
+---
+title: 'คุกกี้'
+description: 'คุกกี้คืออะไรและเมื่อไหร่ควรใช้แทน Web Storage'
+sidebar:
+  order: 1
+---
+
+import Mermaid from '../../../../components/Mermaid.astro';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## คุกกี้คืออะไร?
+
+คุกกี้คือสตริงขนาดเล็ก — แต่ละชิ้นมีขนาดไม่เกินประมาณ 4 KB — ที่เบราว์เซอร์จัดเก็บแยกตามโดเมนและ**ส่งไปพร้อมกับ HTTP request ทุกครั้งโดยอัตโนมัติ** นี่คือสิ่งที่ทำให้คุกกี้แตกต่างจากกลไกจัดเก็บข้อมูลอื่นๆ ในเบราว์เซอร์ทั้งหมด
+
+เมื่อ server ส่ง `Set-Cookie` response header มา เบราว์เซอร์จะเก็บคุกกี้นั้นและส่งกลับไปใน request ถัดๆ ไปที่ตรงกับโดเมนนั้น (ขึ้นอยู่กับ attribute ของคุกกี้ เช่น `Path`, `Domain`, `Secure`, และ `SameSite`)
+
+เมื่อ JavaScript เรียก `document.cookie = 'name=value'` มันจะตั้งค่าคุกกี้ฝั่ง client — แต่เบราว์เซอร์จะยังคงส่งคุกกี้นั้นไปยัง server ใน request ถัดไปอีกด้วย
+
+## คุกกี้ที่ตั้งฝั่ง client vs ฝั่ง server
+
+มีสองวิธีที่คุกกี้จะถูกเก็บไว้ใน cookie jar ของเบราว์เซอร์:
+
+**ตั้งโดย server (ผ่าน `Set-Cookie` header):**
+
+```http
+HTTP/1.1 200 OK
+Set-Cookie: session=abc123; HttpOnly; Secure; SameSite=Strict
+```
+
+Server เป็นผู้ควบคุมค่าและ attribute ของคุกกี้ คุกกี้ที่มี `HttpOnly` จะมองไม่เห็นจาก JavaScript เลย — `document.cookie` จะไม่แสดงมันออกมาไม่ว่ากรณีใด
+
+**ตั้งโดย client (ผ่าน `document.cookie`):**
+
+```js
+document.cookie = 'theme=dark; Max-Age=86400; SameSite=Lax';
+```
+
+JavaScript สามารถตั้งค่า อ่าน และลบคุกกี้ที่ไม่ได้ทำเครื่องหมาย `HttpOnly` ได้
+
+## การทำงานของคุกกี้
+
+export const cookieFlowDiagram = `flowchart LR
+  Browser -->|HTTP Request + Cookie header| Server
+  Server -->|HTTP Response + Set-Cookie header| Browser
+  Browser -->|stores| CookieJar[(Cookie Jar)]
+  CookieJar -->|sent on every matching request| Server`;
+
+<Mermaid code={cookieFlowDiagram} title="คุกกี้ถูกเก็บใน cookie jar ของเบราว์เซอร์และถูกส่งโดยอัตโนมัติใน HTTP request ทุกครั้งที่ตรงเงื่อนไข" />
+
+## คุกกี้ vs Web Storage: เลือกใช้เมื่อไหร่
+
+คำถามสำคัญที่สุดคือ: **server จำเป็นต้องรับค่านี้หรือเปล่า?**
+
+| กรณีการใช้งาน | ตัวเลือกที่ดีที่สุด | เหตุผล |
+|---|---|---|
+| Auth token / session ID | Cookie (HttpOnly + Secure) | Server ต้องการมัน; HttpOnly ป้องกันการขโมยผ่าน XSS |
+| CSRF token | Cookie | Server ตั้งค่า; JS อ่านเพื่อใส่ใน request body |
+| ค่าความชอบของผู้ใช้ (ธีม, ภาษา) | Web Storage | ใช้ฝั่ง client เท่านั้น; ไม่จำเป็นต้องส่งไป server ทุก request |
+| ตะกร้าสินค้า (client-only) | Web Storage หรือ IndexedDB | ข้อมูลมากกว่า รูปแบบสมบูรณ์กว่า; ไม่มีภาระทางเครือข่าย |
+| Feature flags จาก server | Cookie | Server ปรับ response ได้ก่อน JS โหลด |
+
+กฎพื้นฐาน: **ใช้คุกกี้สำหรับทุกสิ่งที่ server ต้องรับ; ใช้ Web Storage สำหรับ UI state ที่เป็น client-only**
+
+## เนื้อหาในโมดูลนี้
+
+| บทเรียน | สิ่งที่คุณจะเรียนรู้ |
+|---|---|
+| **หน้านี้** | คุกกี้คืออะไร, การทำงานของคุกกี้, และคุกกี้ vs Web Storage |
+| `what-are-cookies` | รูปแบบ name=value, ขีดจำกัดขนาด, ขีดจำกัดจำนวน, การส่งอัตโนมัติใน request |
+| `reading-writing` | ข้อแปลกของ `document.cookie`, helper get/set/delete, demo ที่รันได้ |
+| `attributes-and-samesite` | Expires, Max-Age, Path, Domain, Secure, HttpOnly, SameSite |
+| `cookie-store-api` | API แบบ async ของ `cookieStore` และ fallback ตรวจสอบความรองรับ |
+
+<Callout title="คุกกี้ vs Web Storage">
+เลือกใช้คุกกี้เมื่อ **server** ต้องการค่านั้น — authentication token, session ID, ค่าความชอบที่ server อ่าน ส่วน `localStorage` หรือ `sessionStorage` เหมาะสำหรับค่าที่เป็น **client-only** — UI state, cached JSON, feature toggle ที่ไม่จำเป็นต้องส่งถึง server การส่งข้อมูลที่ไม่จำเป็นไปกับทุก request สิ้นเปลืองแบนด์วิธและอาจเปิดเผยข้อมูลสำคัญได้
+</Callout>
+
+export const quizCookiesIndex = [
+  {
+    q: 'อะไรคือความแตกต่างหลักระหว่างคุกกี้และ Web Storage (localStorage/sessionStorage)?',
+    options: [
+      'คุกกี้เก็บข้อมูลได้มากกว่า Web Storage',
+      'คุกกี้ถูกส่งโดยอัตโนมัติพร้อม HTTP request; Web Storage ไม่เกี่ยวกับเครือข่ายเลย',
+      'Web Storage ถูกแชร์ข้ามโดเมน; คุกกี้ไม่ได้',
+      'คุกกี้เข้ารหัสเสมอ; Web Storage ไม่ได้',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'กลไกจัดเก็บข้อมูลใดดีที่สุดสำหรับ authentication session token ที่ server ต้องตรวจสอบ?',
+    options: [
+      'localStorage',
+      'sessionStorage',
+      'Cookie ที่มี attribute HttpOnly + Secure',
+      'IndexedDB',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'ควรใช้กลไกใดในการเก็บธีม UI ของผู้ใช้ที่ต้องการแค่ JavaScript ฝั่ง client เท่านั้น?',
+    options: [
+      'Session cookie',
+      'Persistent cookie',
+      'localStorage',
+      'Cookie ที่มี SameSite=None',
+    ],
+    answer: 2,
+  },
+];
+
+<Quiz client:visible id="cookies/index" questions={quizCookiesIndex} />
+
+<ProgressTracker client:visible id="cookies/index" />

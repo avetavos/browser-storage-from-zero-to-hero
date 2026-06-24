@@ -1,0 +1,137 @@
+---
+title: 'JSON and Objects'
+description: 'Store objects with JSON.stringify and read them back with JSON.parse.'
+sidebar:
+  order: 4
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## Everything is a string
+
+Web Storage only stores strings. If you pass anything else to `setItem`, the browser converts it to a string silently:
+
+```js
+localStorage.setItem('demo:num', 42);
+console.log(localStorage.getItem('demo:num')); // "42" — a string, not a number
+typeof localStorage.getItem('demo:num');       // "string"
+
+localStorage.setItem('demo:bool', true);
+console.log(localStorage.getItem('demo:bool')); // "true" — a string, not a boolean
+
+localStorage.setItem('demo:obj', { key: 'value' });
+console.log(localStorage.getItem('demo:obj')); // "[object Object]" — useless!
+```
+
+This means you **cannot** store objects, arrays, numbers, or booleans directly and expect to read them back in their original type.
+
+## Storing objects with JSON.stringify
+
+The standard pattern is to serialise with `JSON.stringify` on write and deserialise with `JSON.parse` on read:
+
+```js
+const user = { name: 'Ada', age: 36, admin: false };
+
+// Write
+localStorage.setItem('demo:user', JSON.stringify(user));
+
+// Read back
+const raw = localStorage.getItem('demo:user');
+const restored = raw !== null ? JSON.parse(raw) : null;
+console.log(restored.name);  // 'Ada'
+console.log(restored.age);   // 36  (number, not string)
+console.log(restored.admin); // false (boolean, not string)
+```
+
+`JSON.stringify` handles nested objects, arrays, numbers, booleans, and `null`. It does **not** preserve:
+
+- `undefined` values (they are omitted)
+- Functions (they are omitted)
+- `Date` objects (converted to ISO string — `new Date(str)` to restore)
+- `Map`, `Set`, `RegExp`, `BigInt` (not JSON-serialisable without custom replacer)
+
+## A tiny typed helper
+
+Rather than repeating the stringify/parse pattern everywhere, a small helper keeps it clean:
+
+```js
+function storageGet(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw !== null ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;  // Guard against corrupt/non-JSON values
+  }
+}
+
+function storageSet(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+```
+
+The `try/catch` around `JSON.parse` is important: if the stored value was written by old code (plain string), a third-party script, or was manually edited in DevTools, it may not be valid JSON and `JSON.parse` will throw.
+
+## Runnable: objects round-trip
+
+export const jsonCode = `const settings = { theme: 'dark', fontSize: 16, notifications: true };
+
+// Write as JSON
+localStorage.setItem('demo:settings', JSON.stringify(settings));
+
+// Read back and parse
+const raw = localStorage.getItem('demo:settings');
+const restored = raw !== null ? JSON.parse(raw) : null;
+
+console.log('theme:', restored.theme);            // 'dark' (string)
+console.log('fontSize:', restored.fontSize);      // 16 (number)
+console.log('notifications:', restored.notifications); // true (boolean)
+console.log('types match:', typeof restored.fontSize === 'number'); // true
+
+// Storing a raw number — notice it comes back as string
+localStorage.setItem('demo:count', 99);
+console.log('raw number type:', typeof localStorage.getItem('demo:count')); // "string"
+
+// Clean up
+localStorage.removeItem('demo:settings');
+localStorage.removeItem('demo:count');`;
+
+<StorageRunner client:visible code={jsonCode} />
+
+<Callout title="Key point">
+Use `JSON.stringify` on write and `JSON.parse` on read to preserve object structure and primitive types. Always guard the read with a `null` check (key may be absent) and wrap `JSON.parse` in a `try/catch` (value may not be valid JSON).
+</Callout>
+
+export const quizJsonAndObjects = [
+  {
+    q: 'You store a JavaScript object with localStorage.setItem("x", myObj) without stringifying. What is read back?',
+    options: ['The original object', '"[object Object]"', 'null', 'It throws a TypeError'],
+    answer: 1,
+  },
+  {
+    q: 'Which method converts a JavaScript value to a JSON string for storage?',
+    options: ['JSON.parse', 'JSON.stringify', 'String()', 'Object.toString()'],
+    answer: 1,
+  },
+  {
+    q: 'After storing a number with localStorage.setItem("n", 42) (no JSON.stringify), what is typeof localStorage.getItem("n")?',
+    options: ['"number"', '"string"', '"object"', '"undefined"'],
+    answer: 1,
+  },
+  {
+    q: 'Why should you wrap JSON.parse in a try/catch when reading from localStorage?',
+    options: [
+      'JSON.parse is asynchronous',
+      'The stored value may not be valid JSON (old code, manual edits, etc.)',
+      'localStorage.getItem can throw',
+      'JSON.parse requires a second argument',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="web-storage/json-and-objects" questions={quizJsonAndObjects} />
+
+<ProgressTracker client:visible id="web-storage/json-and-objects" />

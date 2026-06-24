@@ -1,0 +1,167 @@
+---
+title: 'Worker Patterns'
+description: 'Request/response ด้วย message ID, wrapper RPC ขนาดเล็ก, การจัดการ error ด้วย onerror, และเมื่อใดควรใช้ worker'
+sidebar:
+  order: 5
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## รูปแบบ request/response
+
+Worker ทำงานแบบ asynchronous และอาจจัดการงานหลายอย่างพร้อมกัน เพื่อจับคู่ response กับ request ที่ถูกต้อง ให้แนบ `id` ที่ไม่ซ้ำกันไปกับแต่ละข้อความ:
+
+```js
+// main.js
+let nextId = 0;
+const pending = {};
+worker.onmessage = (e) => {
+  const { id, result } = e.data;
+  if (pending[id]) { pending[id](result); delete pending[id]; }
+};
+function ask(payload) {
+  return new Promise((resolve) => {
+    const id = ++nextId;
+    pending[id] = resolve;
+    worker.postMessage({ id, payload });
+  });
+}
+// worker.js
+self.onmessage = (e) => {
+  const { id, payload } = e.data;
+  self.postMessage({ id, result: process(payload) });
+};
+```
+
+## RPC wrapper ขนาดเล็ก
+
+การห่อ pattern ข้างต้นไว้ใน helper ขนาดเล็กทำให้การเรียก worker รู้สึกเหมือนการเรียก async function ทั่วไป
+
+```js
+function createRpc(worker) {
+  let seq = 0;
+  const map = {};
+  worker.onmessage = (e) => {
+    const cb = map[e.data.id];
+    if (cb) { cb(e.data.result); delete map[e.data.id]; }
+  };
+  return {
+    call(method, args) {
+      return new Promise((res) => {
+        const id = ++seq;
+        map[id] = res;
+        worker.postMessage({ id, method, args });
+      });
+    }
+  };
+}
+```
+
+## การจัดการ error ด้วย onerror
+
+error ที่ไม่ถูก catch ภายใน worker จะยิง `worker.onerror` ในเธรดหลัก — ไม่ใช่ `window.onerror` ควรแนบ handler เสมอ:
+
+```js
+worker.onerror = (event) => {
+  console.error('Worker error:', event.message, 'at', event.filename, ':', event.lineno);
+  event.preventDefault(); // suppress browser console error
+};
+```
+
+นอกจากนี้ยังสามารถแนบ `self.onerror` ภายใน worker เองเพื่อดัก async error ก่อนที่มันจะ bubble ขึ้นไปยังเธรดหลักได้
+
+## เมื่อใดควรใช้ worker
+
+| ควรใช้ worker | ไม่ควรใช้ worker |
+|---|---|
+| Loop ที่ใช้ CPU หนัก (crypto, image processing, compression) | การอ่าน/เขียน DOM อย่างง่าย |
+| การ parse JSON หรือ binary data ขนาดใหญ่ | งานสั้น < 5 ms |
+| การประมวลผลข้อมูล real-time (audio, video) | งานที่ต้องการเข้าถึง DOM โดยตรง |
+| การรักษา UI ให้อยู่ที่ 60 fps ระหว่างงานหนัก | การ fetch async อย่างง่ายครั้งเดียว (ใช้ `fetch` โดยตรง) |
+
+## ตัวอย่างที่รันได้: request/response ด้วย message ID
+
+export const rpcCode = `var workerSrc = 'self.onmessage = function(e) {' +
+  ' var id = e.data.id, n = e.data.n;' +
+  ' var r = 1; for (var i = 2; i <= n; i++) r *= i;' +
+  ' self.postMessage({ id: id, result: r });' +
+  '};';
+var url = URL.createObjectURL(new Blob([workerSrc], {type:'application/javascript'}));
+var w = new Worker(url);
+var pending = {};
+w.onerror = function(e) { console.error('Worker error:', e.message); };
+w.onmessage = function(e) {
+  var cb = pending[e.data.id];
+  if (cb) { cb(e.data.result); delete pending[e.data.id]; }
+};
+var seq = 0;
+function ask(n) {
+  return new Promise(function(resolve) {
+    var id = ++seq;
+    pending[id] = resolve;
+    w.postMessage({ id: id, n: n });
+  });
+}
+ask(5).then(function(r) { console.log('5! =', r); });
+ask(10).then(function(r) { console.log('10! =', r); });
+ask(15).then(function(r) {
+  console.log('15! =', r);
+  w.terminate();
+  URL.revokeObjectURL(url);
+});`;
+
+<StorageRunner client:visible code={rpcCode} />
+
+<Callout title="ประเด็นสำคัญ">
+ควร handle `worker.onerror` เสมอ หากไม่มี handler การ crash ของ worker จะล้มเหลวแบบเงียบใน production ใช้ message ID เพื่อติดตามคู่ request/response เมื่อ worker จัดการงานหลายอย่างพร้อมกัน
+</Callout>
+
+export const quizWorkerPatterns = [
+  {
+    q: 'ทำไมจึงต้องใส่ `id` ที่ไม่ซ้ำกันในแต่ละ worker message?',
+    options: [
+      'Worker ต้องการสิ่งนี้เพื่อ compile',
+      'เพื่อจับคู่ async response กลับไปยัง request ที่ถูกต้อง',
+      'เพื่อป้องกัน memory leak',
+      'เพื่อเข้ารหัส message payload',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'error ที่ไม่ถูก catch ภายใน Web Worker จะยิงที่ไหน?',
+    options: [
+      'window.onerror บนเธรดหลัก',
+      'worker.onerror บนเธรดหลัก',
+      'self.onerror ภายใน worker เท่านั้น',
+      'error จะถูกละเลยแบบเงียบ',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'งานใดเป็น use case ที่เหมาะสมสำหรับ Web Worker?',
+    options: [
+      'การอ่าน event การคลิกปุ่ม',
+      'การอัปเดต DOM หลังจาก fetch',
+      'การบีบอัดรูปภาพขนาด 50 MB ก่อนอัปโหลด',
+      'การทำ GET request อย่างง่าย',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'ใน pattern RPC ขนาดเล็ก object `map` เก็บอะไร?',
+    options: [
+      'source code ของ worker',
+      'Pending resolve callbacks ที่เป็น key โดย message id',
+      'Error จาก onerror',
+      'Transferable buffers',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="workers-sharedworker/worker-patterns" questions={quizWorkerPatterns} />
+
+<ProgressTracker client:visible id="workers-sharedworker/worker-patterns" />

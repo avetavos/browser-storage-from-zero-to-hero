@@ -1,0 +1,114 @@
+---
+title: 'Cache API vs IndexedDB vs localStorage'
+description: 'คู่มือการตัดสินใจ: ควรใช้ storage mechanism ใดและเมื่อใด'
+sidebar:
+  order: 5
+---
+
+import Mermaid from '../../../../components/Mermaid.astro';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## เลือก storage mechanism ที่เหมาะสม
+
+เบราว์เซอร์มี storage API หลักสามตัวสำหรับข้อมูลถาวร แต่ละตัวมีวัตถุประสงค์ต่างกันและเสริมกัน — สิ่งสำคัญคือต้องเลือกให้ถูกกรณี
+
+| Storage | เหมาะสำหรับ | ประเภทข้อมูล | Async? | ขนาดโดยประมาณ |
+|---|---|---|---|---|
+| **Cache API** | HTTP response, static asset | Request/Response | ใช่ | ขนาดใหญ่ (GB ได้) |
+| **IndexedDB** | ข้อมูลแอปที่มีโครงสร้าง, ข้อมูลออฟไลน์ | JS object, blob | ใช่ | ขนาดใหญ่ (GB ได้) |
+| **localStorage** | สตริง config ขนาดเล็ก, preferences | สตริงเท่านั้น | ไม่ (synchronous) | ~5 MB |
+
+## Cache API
+
+Cache API จัดเก็บคู่ `Request`/`Response` มีรูปแบบเหมือน HTTP — key คือ URL และ value คือ Response เหมาะสำหรับ:
+
+- Pre-caching static asset (HTML, CSS, JS, รูปภาพ) เพื่อใช้ออฟไลน์
+- Runtime caching ของ API response ภายใน Service Worker
+- ให้บริการเนื้อหา stale ขณะดึงข้อมูลใหม่ในพื้นหลัง
+
+Cache API มีประโยชน์สูงสุดเมื่อใช้ร่วมกับ Service Worker ดูรูปแบบการแคชด้วย Service Worker ได้ที่ [PWA course](https://avetavos.github.io/pwa-from-zero-to-hero/en/service-workers/)
+
+## IndexedDB
+
+IndexedDB จัดเก็บ JavaScript value ใด ๆ (object, array, blob, typed array) ใน object store พร้อม index ที่เลือกได้ เหมาะสำหรับ:
+
+- ข้อมูลแอปออฟไลน์: ข้อมูลผู้ใช้, ข้อความ, เอกสาร
+- Blob ขนาดใหญ่: เสียง, วิดีโอ, รูปภาพที่เป็นส่วนหนึ่งของโมเดลข้อมูลแอป
+- ข้อมูลที่ต้องการ query, เรียงลำดับ หรือกรองฝั่ง client
+
+## localStorage
+
+`localStorage` จัดเก็บคู่ key/value ที่เป็นสตริงแบบ synchronous โดยบล็อก main thread ทุกครั้งที่อ่านหรือเขียน เหมาะสำหรับ:
+
+- Preference ขนาดเล็ก: เลือก theme, ภาษา, token เดียว
+- ค่าที่อ่านทุกครั้งที่โหลดหน้า โดยยอมรับการเข้าถึงแบบ synchronous
+- ข้อมูลที่มีขนาดไม่กี่ kilobyte
+
+ห้ามจัดเก็บออบเจกต์ขนาดใหญ่หรือเขียนบ่อยใน `localStorage` เนื่องจากจะทำให้ rendering หยุดชะงัก
+
+## แผนภาพการตัดสินใจ
+
+export const decisionDiagram = `flowchart TD
+  Q[What do you need to store?]
+  Q --> A{HTTP responses\nor assets?}
+  A -->|Yes| CacheAPI[Cache API\ncaches.open / put / match]
+  A -->|No| B{Structured\napp data?}
+  B -->|Yes| IDB[IndexedDB\nobject stores + indexes]
+  B -->|No| C{Tiny string\npreference?}
+  C -->|Yes| LS[localStorage\nsetItem / getItem]
+  C -->|No| IDB`;
+
+<Mermaid code={decisionDiagram} title="การตัดสินใจเลือก storage: HTTP response → Cache API, ข้อมูลที่มีโครงสร้าง → IndexedDB, สตริงขนาดเล็ก → localStorage" />
+
+<Callout title="จุดสำคัญ">
+ใช้ Cache API สำหรับทุกสิ่งที่มีรูปแบบเหมือน HTTP response (URL + headers + body) ใช้ IndexedDB สำหรับ record ของแอปพลิเคชันและ blob ที่ต้องการ query หรืออัปเดต ใช้ localStorage เฉพาะสำหรับ string preference ขนาดเล็กที่ต้องอ่านแบบ synchronous เมื่อเริ่มต้น สำหรับกลยุทธ์ offline ใน PWA มักใช้ Cache API และ IndexedDB ร่วมกัน — asset ใน Cache API และข้อมูลแอปใน IndexedDB
+</Callout>
+
+export const quizCacheVsIndexeddb = [
+  {
+    q: 'Storage API ใดออกแบบมาเพื่อ cache HTTP response และ static asset โดยเฉพาะ?',
+    options: [
+      'Cache API',
+      'IndexedDB',
+      'localStorage',
+      'sessionStorage',
+    ],
+    answer: 0,
+  },
+  {
+    q: 'Storage API ใดบล็อก main thread ทุกครั้งที่อ่านและเขียน?',
+    options: [
+      'Cache API',
+      'IndexedDB',
+      'localStorage',
+      'ทั้งสามตัวบล็อก main thread',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'คุณต้องการจัดเก็บ array ข้อความผู้ใช้ขนาดใหญ่เพื่อการใช้งานออฟไลน์ พร้อมความสามารถในการ query ตามวันที่ ควรใช้ API ใด?',
+    options: [
+      'localStorage — เป็น API ที่ง่ายที่สุด',
+      'IndexedDB — รองรับข้อมูลที่มีโครงสร้างและ index',
+      'Cache API — รองรับข้อมูลขนาดใหญ่',
+      'sessionStorage — เชื่อถือได้มากกว่า localStorage',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'คุณจะเลือก storage API ใดเพื่อ cache JS และ CSS bundle สำหรับ PWA ที่ต้องทำงานออฟไลน์?',
+    options: [
+      'Cache API ร่วมกับ Service Worker',
+      'IndexedDB',
+      'localStorage',
+      'sessionStorage',
+    ],
+    answer: 0,
+  },
+];
+
+<Quiz client:visible id="cache-and-quota/cache-vs-indexeddb" questions={quizCacheVsIndexeddb} />
+
+<ProgressTracker client:visible id="cache-and-quota/cache-vs-indexeddb" />

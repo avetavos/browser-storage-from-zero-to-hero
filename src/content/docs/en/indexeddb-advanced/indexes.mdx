@@ -1,0 +1,195 @@
+---
+title: 'Creating and Querying Indexes'
+description: 'Use createIndex() in onupgradeneeded to index any field, then query with index.get() and index.getAll().'
+sidebar:
+  order: 2
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## Why indexes?
+
+Every IndexedDB object store is keyed by its primary key (the `keyPath` or an auto-incremented id). That is efficient for lookups **by primary key**, but if you want to query by a different field — for example, find all contacts by their `name` — you need an **index**.
+
+An index is a secondary sorted structure that maps a chosen field's value back to the record's primary key. Once created, you can call `get()` or `getAll()` on the index exactly as you would on the store itself.
+
+## Creating an index with `createIndex()`
+
+Indexes **must** be created (or deleted) inside the `onupgradeneeded` callback. You cannot add an index to an existing store outside of an upgrade transaction.
+
+```js
+const request = indexedDB.open('mydb', 1);
+
+request.onupgradeneeded = (event) => {
+  const db = event.target.result;
+
+  // Create the object store
+  const store = db.createObjectStore('contacts', { keyPath: 'id' });
+
+  // Create an index on the 'name' field
+  store.createIndex('by_name', 'name', { unique: false });
+};
+```
+
+### `createIndex(name, keyPath, options)` parameters
+
+| Parameter | Purpose |
+|-----------|---------|
+| `name` | The index name you will use to retrieve it later with `store.index(name)` |
+| `keyPath` | The property path on each record to index (e.g. `'name'`, `'address.city'`) |
+| `unique` | If `true`, the store rejects records whose indexed value duplicates an existing one |
+| `multiEntry` | If `true` and the indexed property is an array, each array element gets its own entry in the index |
+
+## Opening the index and querying
+
+After the upgrade, open the index from a normal read/write transaction with `store.index('by_name')`, then call `get(value)` for a single record or `getAll(value)` for all matching records.
+
+```js
+const tx = db.transaction('contacts', 'readonly');
+const store = tx.objectStore('contacts');
+const nameIndex = store.index('by_name');
+
+// Single match
+const getReq = nameIndex.get('Alice');
+getReq.onsuccess = () => console.log(getReq.result); // { id: 1, name: 'Alice', ... }
+
+// All records (no filter → returns every record sorted by index key)
+const getAllReq = nameIndex.getAll();
+getAllReq.onsuccess = () => console.log(getAllReq.result);
+```
+
+Passing a value to `getAll(value)` filters to records whose indexed field equals that value. Passing no argument (or `undefined`) returns every record in the store, ordered by the index key.
+
+## The `unique` flag
+
+```js
+// Enforce unique emails
+store.createIndex('by_email', 'email', { unique: true });
+```
+
+With `unique: true`, any `add()` or `put()` that would create a duplicate indexed value throws a `ConstraintError`. Use this for fields like email addresses or usernames where duplicates are not allowed.
+
+## The `multiEntry` flag
+
+```js
+// Record: { id: 1, tags: ['js', 'idb', 'storage'] }
+store.createIndex('by_tag', 'tags', { multiEntry: true });
+```
+
+With `multiEntry: true`, an array-valued field produces one index entry per element. You can then call `index.getAll('idb')` and the record above will be returned even though the value of `tags` is an array.
+
+## Runnable: create an index and query it
+
+export const indexesCode = `(async function () {
+  // Helper: wrap an IDBRequest in a Promise
+  function req(r) {
+    return new Promise((resolve, reject) => {
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+    });
+  }
+
+  // 1. Open the database (version 1)
+  const db = await new Promise((resolve, reject) => {
+    const openReq = indexedDB.open('demo-advanced-indexes', 1);
+
+    openReq.onupgradeneeded = (event) => {
+      const database = event.target.result;
+      const store = database.createObjectStore('contacts', { keyPath: 'id' });
+      store.createIndex('by_name', 'name', { unique: false });
+      console.log('Store and index created.');
+    };
+
+    openReq.onsuccess = () => resolve(openReq.result);
+    openReq.onerror = () => reject(openReq.error);
+  });
+
+  // 2. Add two records
+  const writeTx = db.transaction('contacts', 'readwrite');
+  const writeStore = writeTx.objectStore('contacts');
+  await req(writeStore.put({ id: 1, name: 'Alice', email: 'alice@example.com' }));
+  await req(writeStore.put({ id: 2, name: 'Bob',   email: 'bob@example.com' }));
+  await new Promise((resolve, reject) => {
+    writeTx.oncomplete = resolve;
+    writeTx.onerror = () => reject(writeTx.error);
+  });
+  console.log('Records inserted.');
+
+  // 3. Query using the index
+  const readTx = db.transaction('contacts', 'readonly');
+  const readStore = readTx.objectStore('contacts');
+  const nameIndex = readStore.index('by_name');
+
+  // Single lookup
+  const alice = await req(nameIndex.get('Alice'));
+  console.log('Alice email:', alice.email);
+
+  // Get all records (sorted by name)
+  const all = await req(nameIndex.getAll());
+  console.log('All contacts by name:', all.map(function(c) { return c.name; }).join(', '));
+
+  // 4. Clean up
+  db.close();
+  await new Promise((resolve, reject) => {
+    const delReq = indexedDB.deleteDatabase('demo-advanced-indexes');
+    delReq.onsuccess = resolve;
+    delReq.onerror = () => reject(delReq.error);
+  });
+  console.log('Database deleted — cleanup done.');
+})();`;
+
+<StorageRunner client:visible code={indexesCode} />
+
+<Callout title="Key point">
+Indexes are created once in `onupgradeneeded` and never again. Use `{ unique: true }` to enforce uniqueness on a field and `{ multiEntry: true }` when the indexed property holds an array. Retrieve an index at query time with `store.index('indexName')`, then call `.get(value)` for one record or `.getAll(value)` for all matching records.
+</Callout>
+
+export const quizIndexes = [
+  {
+    q: 'Where must you call objectStore.createIndex() to successfully add an index?',
+    options: [
+      'Inside any readwrite transaction',
+      'Inside the onupgradeneeded callback only',
+      'Inside the onsuccess callback of indexedDB.open()',
+      'At any point before the first read',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'What does setting { unique: true } on an index do?',
+    options: [
+      'It speeds up getAll() calls',
+      'It allows only one index per object store',
+      'It rejects any record whose indexed value duplicates an existing one',
+      'It makes index.get() return only the first matching record',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'You call nameIndex.getAll() with no arguments. What is returned?',
+    options: [
+      'Only the first record in the store',
+      'An empty array — you must always pass a value',
+      'All records in the store, ordered by the indexed field',
+      'All records in insertion order',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'A record has the field tags: ["js", "idb"]. Which createIndex option makes both "js" and "idb" individually searchable via index.getAll("js")?',
+    options: [
+      '{ unique: true }',
+      '{ multiEntry: true }',
+      '{ arrayIndex: true }',
+      '{ expand: true }',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="indexeddb-advanced/indexes" questions={quizIndexes} />
+
+<ProgressTracker client:visible id="indexeddb-advanced/indexes" />

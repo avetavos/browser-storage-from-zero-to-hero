@@ -1,0 +1,137 @@
+---
+title: 'What Is IndexedDB?'
+description: 'A transactional, async, object database built into the browser — built for large structured data and offline apps.'
+sidebar:
+  order: 1
+---
+
+import Mermaid from '../../../../components/Mermaid.astro';
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## What is IndexedDB?
+
+IndexedDB is a low-level API built into every modern browser that lets you store large amounts of structured data client-side — including files and blobs. Unlike `localStorage` and `sessionStorage`, IndexedDB is:
+
+- **Asynchronous** — all operations are non-blocking and event- or Promise-based
+- **Transactional** — reads and writes happen inside transactions, so your data stays consistent even if something goes wrong mid-operation
+- **Object-oriented** — you store JavaScript objects directly, not just strings
+- **Indexed** — you can define indexes on object properties and query by them efficiently
+- **Large quota** — browsers typically allow hundreds of megabytes to gigabytes (storage is negotiated with the browser, not capped at 5–10 MB)
+
+## IndexedDB vs Web Storage
+
+| Feature | localStorage / sessionStorage | IndexedDB |
+|---|---|---|
+| API style | Synchronous | Asynchronous (events / Promises) |
+| Value types | Strings only | Structured objects, blobs, files |
+| Storage quota | ~5–10 MB | Hundreds of MB to GB |
+| Querying | Key lookup only | Key + indexes on any property |
+| Transactions | None | Full ACID transactions |
+| Use from workers | sessionStorage: no; localStorage: limited | Yes — fully usable in Web Workers |
+
+The rule of thumb: use Web Storage for small, simple config/preferences. Reach for IndexedDB when you need to store structured records, large data, support offline, or query beyond a single key.
+
+## Structure of an IndexedDB database
+
+Every IndexedDB database has a name and a version number. Inside a database you create one or more **object stores** — roughly analogous to tables. Each object store holds **records**, and each record is a JavaScript object identified by a **key**.
+
+export const idbDiagram = `flowchart LR
+  DB["Database\n(name + version)"]
+  OS1["Object Store\n'users'"]
+  OS2["Object Store\n'posts'"]
+  R1["Record\n{id:1, name:'Ada'}"]
+  R2["Record\n{id:2, name:'Alan'}"]
+  R3["Record\n{id:1, title:'Hello'}"]
+  DB --> OS1
+  DB --> OS2
+  OS1 --> R1
+  OS1 --> R2
+  OS2 --> R3`;
+
+<Mermaid code={idbDiagram} title="IndexedDB structure: database → object stores → records" />
+
+## When to use IndexedDB
+
+Use IndexedDB when any of the following apply:
+
+- You need to store **more than a few kilobytes** of data per origin
+- Your data is **structured** (objects with multiple fields) and you want to query or sort it
+- You are building an **offline-first or PWA** experience and need to cache network responses or sync queues
+- You need to store **binary data** (images, audio, PDF blobs)
+- You want to share storage access from a **Web Worker or Service Worker**
+
+Stick with `localStorage` for simple flags, theme preferences, or small serialised objects where synchronous access is convenient and the data fits comfortably in a few KB.
+
+## Module overview
+
+This module walks through IndexedDB from scratch in five lessons:
+
+| Order | Lesson | What you will learn |
+|---|---|---|
+| 1 | What Is IndexedDB? (this lesson) | Concepts, structure, and when to use it |
+| 2 | Opening a Database | `indexedDB.open`, versioning, `onupgradeneeded` |
+| 3 | Object Stores and Keys | Creating stores, key paths, auto-increment |
+| 4 | Transactions | Read-only vs read-write, error handling, aborting |
+| 5 | CRUD Operations | `add`, `put`, `get`, `getAll`, `delete`, cursors |
+
+## Runnable: verifying IndexedDB is available
+
+The snippet below opens a database, confirms the name, then deletes it to leave no trace.
+
+export const idbCheckCode = `const result = await new Promise((resolve, reject) => {
+  const req = indexedDB.open('demo-check', 1);
+  req.onsuccess = () => {
+    resolve(req.result.name);
+    req.result.close();
+  };
+  req.onerror = () => reject(req.error);
+});
+console.log('Opened DB:', result);
+indexedDB.deleteDatabase('demo-check');
+console.log('Cleanup done');`;
+
+<StorageRunner client:visible code={idbCheckCode} />
+
+<Callout title="IndexedDB is always async">
+Every IndexedDB operation — opening, reading, writing, deleting — returns a request object whose result arrives in a callback (`onsuccess`, `onerror`). Wrapping these in Promises (or using a library like `idb`) makes the code far easier to reason about. All examples in this module use the Promise wrapper pattern shown above.
+</Callout>
+
+export const quizIndexeddbFundamentals = [
+  {
+    q: 'Which of the following is a key difference between IndexedDB and localStorage?',
+    options: [
+      'IndexedDB is synchronous; localStorage is asynchronous',
+      'IndexedDB stores only strings; localStorage stores objects',
+      'IndexedDB supports transactions and stores structured objects; localStorage stores only strings synchronously',
+      'IndexedDB has a smaller storage quota than localStorage',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'What is an object store in IndexedDB?',
+    options: [
+      'A JavaScript object held in memory',
+      'A named container inside a database that holds records, similar to a table',
+      'A key-value store that only accepts string values',
+      'A cache entry managed by the Service Worker',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'Which scenario is the best fit for IndexedDB rather than localStorage?',
+    options: [
+      'Saving a user\'s preferred colour theme',
+      'Storing a boolean flag for whether a tooltip has been dismissed',
+      'Caching hundreds of product records with images for offline browsing',
+      'Persisting a small JSON config object of under 1 KB',
+    ],
+    answer: 2,
+  },
+];
+
+<Quiz client:visible id="indexeddb-fundamentals/index" questions={quizIndexeddbFundamentals} />
+
+<ProgressTracker client:visible id="indexeddb-fundamentals/index" />

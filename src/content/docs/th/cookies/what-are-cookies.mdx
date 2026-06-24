@@ -1,0 +1,104 @@
+---
+title: 'คุกกี้คืออะไร'
+description: 'คู่ name=value, ขีดจำกัดขนาด, จำนวน, และการส่งอัตโนมัติใน request'
+sidebar:
+  order: 2
+---
+
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## รูปแบบของคุกกี้
+
+คุกกี้คือสตริงธรรมดาในรูปแบบ `name=value` ทุกอย่างหลังเครื่องหมาย `=` ตัวแรกในแต่ละ attribute คือค่า ทั้งชื่อและค่าเป็นสตริง — ไม่มีตัวเลข บูลีน หรือออบเจกต์ในระดับคุกกี้
+
+```http
+Set-Cookie: session=abc123
+Set-Cookie: theme=dark
+Set-Cookie: user_id=42
+```
+
+คุกกี้หลายตัวสำหรับโดเมนเดียวกันถูกเก็บแยกกัน เมื่อเบราว์เซอร์ส่งไป จะรวมอยู่ใน `Cookie` request header เดียว:
+
+```http
+Cookie: session=abc123; theme=dark; user_id=42
+```
+
+สังเกตว่า `Cookie` request header เป็นแค่รายการคู่ `name=value` คั่นด้วยเซมิโคลอน — ไม่มี attribute ไม่มี metadata ส่วน attribute เช่น `HttpOnly` และ `Secure` อยู่ใน `Set-Cookie` response header เท่านั้น
+
+## ขีดจำกัดขนาด
+
+คุกกี้แต่ละชิ้น (ชื่อ + ค่า + attribute รวมกัน) มีขีดจำกัดที่ประมาณ **4 KB** ซึ่งเป็นขีดจำกัดของเบราว์เซอร์ การตั้งค่าคุกกี้ที่ใหญ่กว่า 4 KB จะล้มเหลวแบบเงียบๆ — เบราว์เซอร์ไม่ throw error แต่คุกกี้จะไม่ถูกเก็บ
+
+ด้วยเหตุนี้ คุกกี้จึงไม่เหมาะสำหรับเก็บ JSON payload ภาพที่เข้ารหัส base64 หรือข้อมูลที่มีโครงสร้างขนาดใหญ่ ควรใช้ `localStorage` หรือ IndexedDB แทน
+
+## ขีดจำกัดจำนวนต่อโดเมน
+
+เบราว์เซอร์ยังมี**ขีดจำกัดจำนวนคุกกี้ต่อโดเมน** โดยทั่วไปอยู่ที่ประมาณ **50 คุกกี้** ต่อโดเมน (จำนวนแน่นอนแตกต่างกันตามเบราว์เซอร์) เมื่อเกินขีดจำกัด เบราว์เซอร์อาจลบคุกกี้เก่าออกอย่างเงียบๆ เพื่อเพิ่มที่ว่างสำหรับคุกกี้ใหม่
+
+ในทางปฏิบัติ คุณแทบจะไม่เจอขีดจำกัดนี้ในแอปที่ออกแบบดี หากพบว่าต้องการคุกกี้จำนวนมาก นั่นมักเป็นสัญญาณว่าข้อมูลบางส่วนควรอยู่ใน `localStorage` หรือ IndexedDB แทน
+
+## การส่งอัตโนมัติใน request — ความแตกต่างหลักจาก Web Storage
+
+นี่คือคุณสมบัติที่สำคัญที่สุดของคุกกี้และเหตุผลที่มันมีอยู่:
+
+**ทุกครั้งที่เบราว์เซอร์ทำ HTTP request เบราว์เซอร์จะแนบคุกกี้ที่ตรงเงื่อนไขทั้งหมดไปใน `Cookie` request header โดยอัตโนมัติ**
+
+"ตรงเงื่อนไข" หมายความว่า attribute `Domain`, `Path`, `Secure`, และ `SameSite` ของคุกกี้อนุญาตให้ส่งไปยัง URL ของ request นั้น
+
+```http
+GET /api/user HTTP/1.1
+Host: example.com
+Cookie: session=abc123; theme=dark
+```
+
+Server ได้รับคุกกี้โดยไม่ต้องผ่าน JavaScript นี่คือสิ่งที่ทำให้คุกกี้เป็นตัวเลือกที่ถูกต้องสำหรับ session management — server สามารถตรวจสอบ request ก่อนที่ JavaScript จะทำงาน
+
+**Web Storage ไม่เคยสัมผัสเครือข่ายเลย** ค่าใน `localStorage` และ `sessionStorage` อยู่ในเบราว์เซอร์ JavaScript ต้องอ่านค่าและรวมไว้ใน `fetch` หรือ `XMLHttpRequest` เองอย่างชัดเจน เบราว์เซอร์จะไม่ส่งค่า Web Storage โดยอัตโนมัติ
+
+## เปรียบเทียบพฤติกรรมการส่งข้อมูล
+
+| | Cookies | localStorage | sessionStorage |
+|---|---|---|---|
+| ส่งพร้อม HTTP request | ใช่ — อัตโนมัติ | ไม่ | ไม่ |
+| Server อ่านได้ | ใช่ (ถ้าไม่ถูกตัดออก) | ไม่ | ไม่ |
+| JavaScript อ่านได้ | ใช่ (ถ้าไม่ใช่ HttpOnly) | ใช่ | ใช่ |
+| ขนาดสูงสุดต่อรายการ | ~4 KB | ~5 MB รวม | ~5 MB รวม |
+| ควบคุมวันหมดอายุ | ใช่ (Expires / Max-Age) | ไม่หมดอายุ | อายุตามแท็บ |
+
+<Callout title="การส่งอัตโนมัติทางเครือข่ายคือจุดแตกต่างหลัก">
+คุกกี้และ Web Storage ใช้แทนกันไม่ได้ ความแตกต่างสำคัญคือคุกกี้**ถูกส่งโดยอัตโนมัติใน HTTP request ทุกครั้ง**ที่ตรงกับโดเมน — ค่าของ Web Storage อยู่ในเบราว์เซอร์และไม่ออกไปไหนเว้นแต่โค้ดของคุณจะส่งเอง ใช้คุกกี้เมื่อ server ต้องการค่า; ใช้ Web Storage เมื่อค่าเป็น client-side เท่านั้น
+</Callout>
+
+export const quizWhatAreCookies = [
+  {
+    q: 'ขนาดสูงสุดโดยประมาณของคุกกี้หนึ่งชิ้นคือเท่าไหร่?',
+    options: ['1 KB', '4 KB', '5 MB', '10 MB'],
+    answer: 1,
+  },
+  {
+    q: 'เบราว์เซอร์ส่งคุกกี้หลายชิ้นไปยัง server อย่างไร?',
+    options: [
+      'ใน Cookie header แยกกัน ทีละชิ้น',
+      'เป็น JSON array ใน Cookie header เดียว',
+      'เป็นรายการคู่ name=value คั่นด้วยเซมิโคลอนใน Cookie header เดียว',
+      'คุกกี้ไม่เคยถูกส่ง — server ต้องเรียก API เพื่ออ่าน',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'เบราว์เซอร์ส่งคุกกี้ไปยัง server เมื่อใด?',
+    options: [
+      'เฉพาะเมื่อ JavaScript เรียก document.cookie',
+      'เฉพาะใน POST request',
+      'โดยอัตโนมัติใน HTTP request ทุกครั้งที่ตรงเงื่อนไข',
+      'เฉพาะ request แรกหลังจาก login',
+    ],
+    answer: 2,
+  },
+];
+
+<Quiz client:visible id="cookies/what-are-cookies" questions={quizWhatAreCookies} />
+
+<ProgressTracker client:visible id="cookies/what-are-cookies" />

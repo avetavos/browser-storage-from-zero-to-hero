@@ -1,0 +1,166 @@
+---
+title: 'CRUD Operations'
+description: 'add, put, get, getAll, delete, and count — every read/write method you need for IndexedDB object stores.'
+sidebar:
+  order: 5
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## The CRUD method reference
+
+Every data operation in IndexedDB goes through an `IDBObjectStore`. You obtain a store from a transaction, then call one of these six methods:
+
+| Method | Mode needed | Description |
+|---|---|---|
+| `add(value)` | readwrite | Adds a new record; throws `ConstraintError` if the key already exists |
+| `put(value)` | readwrite | Adds or overwrites (upsert); never throws on duplicate key |
+| `get(key)` | readonly | Returns one record, or `undefined` if the key is absent |
+| `getAll()` | readonly | Returns an array of all records in the store |
+| `delete(key)` | readwrite | Removes the record with the given key; no-op if absent |
+| `count()` | readonly | Returns the total number of records |
+
+Every method returns an `IDBRequest`. The result is available inside the request's `onsuccess` callback as `request.result`.
+
+## `add` vs `put`
+
+`add(value)` is strictly for **new** records. If a record with the same key path value already exists, the request fires `onerror` with a `ConstraintError` — the record is not written.
+
+`put(value)` is an **upsert**: it writes the record whether or not the key already exists. Use `put` when you want "create or update" semantics without checking first.
+
+```js
+const tx = db.transaction(['products'], 'readwrite');
+const store = tx.objectStore('products');
+
+// add — safe only when id 1 does not exist yet
+store.add({ id: 1, name: 'Apple', price: 1.5 });
+
+// put — always safe; overwrites if id 1 is already there
+store.put({ id: 1, name: 'Apple', price: 1.99 });
+```
+
+## `get` returns `undefined`, not `null`
+
+This is different from Web Storage, where a missing key returns `null`. With IndexedDB, `get(key)` resolves to **`undefined`** when no record matches. Always check `=== undefined`, not `!result`, to distinguish a missing record from a record that stores a falsy value.
+
+```js
+const tx = db.transaction(['products'], 'readonly');
+const store = tx.objectStore('products');
+const req = store.get(999);
+
+req.onsuccess = () => {
+  console.log(req.result); // undefined — key 999 does not exist
+};
+```
+
+## Wrapping IDBRequest in a Promise
+
+Raw `IDBRequest` callbacks are verbose. A tiny helper makes every store method `await`-able:
+
+```js
+function promisifyReq(r) {
+  return new Promise((res, rej) => {
+    r.onsuccess = () => res(r.result);
+    r.onerror  = () => rej(r.error);
+  });
+}
+
+// Now you can await any store method
+const apple = await promisifyReq(store.get(1));
+```
+
+## Runnable: complete CRUD demo
+
+export const crudCode = `function promisifyReq(r) {
+  return new Promise((res, rej) => {
+    r.onsuccess = () => res(r.result);
+    r.onerror   = () => rej(r.error);
+  });
+}
+
+const db = await new Promise((resolve, reject) => {
+  const req = indexedDB.open('demo-crud', 1);
+  req.onupgradeneeded = (e) => {
+    e.target.result.createObjectStore('products', { keyPath: 'id' });
+  };
+  req.onsuccess = (e) => resolve(e.target.result);
+  req.onerror   = (e) => reject(e.target.error);
+});
+
+// --- add two records ---
+const txW = db.transaction(['products'], 'readwrite');
+const sw  = txW.objectStore('products');
+await promisifyReq(sw.add({ id: 1, name: 'Apple',  price: 1.5 }));
+await promisifyReq(sw.add({ id: 2, name: 'Banana', price: 0.8 }));
+await new Promise(r => { txW.oncomplete = r; });
+console.log('Added 2 records');
+
+// --- get one record ---
+const txR  = db.transaction(['products'], 'readonly');
+const sr   = txR.objectStore('products');
+const apple = await promisifyReq(sr.get(1));
+console.log('get(1):', JSON.stringify(apple));
+
+// --- getAll ---
+const all = await promisifyReq(sr.getAll());
+console.log('getAll:', JSON.stringify(all));
+
+// --- delete one record ---
+const txD = db.transaction(['products'], 'readwrite');
+const sd  = txD.objectStore('products');
+await promisifyReq(sd.delete(2));
+await new Promise(r => { txD.oncomplete = r; });
+console.log('Deleted id=2');
+
+// --- count remaining ---
+const txC = db.transaction(['products'], 'readonly');
+const sc  = txC.objectStore('products');
+const n   = await promisifyReq(sc.count());
+console.log('Count:', n);
+
+db.close();
+indexedDB.deleteDatabase('demo-crud');
+console.log('Cleanup done');`;
+
+<StorageRunner client:visible code={crudCode} />
+
+<Callout title="add vs put — and undefined vs null">
+Use `add` when you want a hard guarantee that you are creating a new record; it throws on a duplicate key. Use `put` when you want upsert behaviour and do not care whether the record already exists.
+
+`get(key)` resolves to `undefined` — not `null` — when the key is absent. This is the opposite of `localStorage.getItem`, which returns `null`. Always check `result === undefined` to detect a missing record.
+</Callout>
+
+export const quizCrud = [
+  {
+    q: 'You call store.add({ id: 1, name: "Apple" }) when a record with id 1 already exists. What happens?',
+    options: [
+      'The existing record is silently overwritten',
+      'The request fires onerror with a ConstraintError',
+      'The new record is inserted with an auto-generated key',
+      'The method returns null',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'What does store.get(999) resolve to when no record has key 999?',
+    options: ['null', 'false', 'undefined', 'It throws a NotFoundError'],
+    answer: 2,
+  },
+  {
+    q: 'Which transaction mode is required to call store.delete(key)?',
+    options: ['readonly', 'readwrite', 'readwriteflush', 'Any mode works'],
+    answer: 1,
+  },
+  {
+    q: 'You want to update a record if it exists, or insert it if it does not — in one call. Which method do you use?',
+    options: ['add', 'update', 'put', 'set'],
+    answer: 2,
+  },
+];
+
+<Quiz client:visible id="indexeddb-fundamentals/crud" questions={quizCrud} />
+
+<ProgressTracker client:visible id="indexeddb-fundamentals/crud" />

@@ -1,0 +1,196 @@
+---
+title: 'The idb Library: Promise-Based IndexedDB'
+description: 'Use the idb wrapper to open databases, put, get, and getAll with clean async/await syntax — no callbacks required.'
+sidebar:
+  order: 4
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## Why a wrapper library?
+
+The raw IndexedDB API is entirely callback-driven. Every operation — opening a database, writing a record, reading it back — requires you to listen for `onsuccess` and `onerror` events and nest the next operation inside the previous callback. Real-world code becomes a pyramid of nested handlers.
+
+The [`idb`](https://github.com/jakearchibald/idb) library by Jake Archibald is a tiny (~1 KB gzipped) wrapper that mirrors the full IndexedDB API but returns **Promises** for every operation. That means you can use `async/await` throughout, the same way you would with `fetch` or any modern API.
+
+## Opening a database with `openDB`
+
+```js
+import { openDB } from 'https://esm.sh/idb@8';
+
+const db = await openDB('my-database', 1, {
+  upgrade(db) {
+    db.createObjectStore('tasks', { keyPath: 'id' });
+  },
+});
+```
+
+`openDB` takes three arguments:
+
+| Argument | Type | Purpose |
+|---|---|---|
+| `name` | string | Database name (scoped to origin) |
+| `version` | number | Schema version — increment to trigger upgrades |
+| `{ upgrade(db) }` | object | Callback that runs when the DB is created or the version increases |
+
+The `upgrade` callback is the only place where you can create or delete object stores. It is skipped entirely on subsequent opens when the version has not changed.
+
+## Writing records with `db.put`
+
+```js
+await db.put('tasks', { id: 1, title: 'Buy groceries', done: false });
+await db.put('tasks', { id: 2, title: 'Write tests', done: true });
+```
+
+`db.put(storeName, value)` inserts the value if the key does not exist, or **replaces** it if it does. The key is inferred from the `keyPath` you defined when creating the store (`'id'` in the example above).
+
+## Reading records with `db.get` and `db.getAll`
+
+```js
+const task = await db.get('tasks', 1);
+// { id: 1, title: 'Buy groceries', done: false }
+
+const allTasks = await db.getAll('tasks');
+// [ { id: 1, ... }, { id: 2, ... } ]
+```
+
+- `db.get(storeName, key)` returns a single record (or `undefined` when the key is absent).
+- `db.getAll(storeName)` returns an array of all records in the store.
+
+## Deleting records with `db.delete`
+
+```js
+await db.delete('tasks', 1);
+const remaining = await db.getAll('tasks');
+console.log(remaining.length); // 1
+```
+
+`db.delete(storeName, key)` removes the record for that key. Calling it on a key that does not exist is a no-op.
+
+## Runnable: idb in action
+
+export const idbLibraryCode = `(async function() {
+  const { openDB } = await import('https://esm.sh/idb@8');
+
+  // Open (or create) the database
+  const db = await openDB('demo-advanced-idb', 1, {
+    upgrade(db) {
+      db.createObjectStore('tasks', { keyPath: 'id' });
+    },
+  });
+
+  // Write two records
+  await db.put('tasks', { id: 1, title: 'Buy groceries', done: false });
+  await db.put('tasks', { id: 2, title: 'Write tests', done: true });
+  console.log('Two tasks written.');
+
+  // Read one record by key
+  const task1 = await db.get('tasks', 1);
+  console.log('db.get(1):', JSON.stringify(task1));
+
+  // Read all records
+  const all = await db.getAll('tasks');
+  console.log('db.getAll():', JSON.stringify(all));
+  console.log('Count before delete:', all.length);
+
+  // Delete one record
+  await db.delete('tasks', 1);
+  const afterDelete = await db.getAll('tasks');
+  console.log('Count after delete:', afterDelete.length);
+
+  // Cleanup
+  db.close();
+  indexedDB.deleteDatabase('demo-advanced-idb');
+  console.log('Done — database cleaned up.');
+})();`;
+
+<StorageRunner client:visible code={idbLibraryCode} />
+
+<Callout title="Key point">
+`idb` wraps every IndexedDB operation in a Promise, letting you use `async/await` instead of nested event callbacks. The `upgrade` callback inside `openDB` is the sole place to create or modify object stores — it only runs when the version number increases.
+</Callout>
+
+## Comparing raw IndexedDB vs idb
+
+The same "open database and write a record" operation looks like this with raw IndexedDB:
+
+```js
+// Raw IndexedDB — callback style
+const request = indexedDB.open('my-db', 1);
+request.onupgradeneeded = (e) => {
+  e.target.result.createObjectStore('tasks', { keyPath: 'id' });
+};
+request.onsuccess = (e) => {
+  const db = e.target.result;
+  const tx = db.transaction('tasks', 'readwrite');
+  const store = tx.objectStore('tasks');
+  const putReq = store.put({ id: 1, title: 'Buy groceries', done: false });
+  putReq.onsuccess = () => console.log('Saved');
+};
+request.onerror = (e) => console.error(e.target.error);
+```
+
+And with `idb`:
+
+```js
+// idb — async/await style
+const db = await openDB('my-db', 1, {
+  upgrade(db) {
+    db.createObjectStore('tasks', { keyPath: 'id' });
+  },
+});
+await db.put('tasks', { id: 1, title: 'Buy groceries', done: false });
+console.log('Saved');
+```
+
+Both do exactly the same thing. The `idb` version is shorter, easier to read, and errors surface as rejected Promises that you can catch with a standard `try/catch`.
+
+export const quizIdbLibrary = [
+  {
+    q: 'What is the third argument to openDB() used for?',
+    options: [
+      'Specifying the storage quota for the database',
+      'Providing an upgrade callback that runs when the database is created or the version increases',
+      'Setting the default transaction mode for all operations',
+      'Listing the object store names to open',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'What does db.put(storeName, value) do when the key already exists in the store?',
+    options: [
+      'Throws an error because the key is already present',
+      'Creates a second record with the same key',
+      'Replaces the existing record with the new value',
+      'Returns false without modifying the store',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'Which idb method returns ALL records in an object store as an array?',
+    options: [
+      'db.get(storeName)',
+      'db.getAll(storeName)',
+      'db.getAll(storeName, key)',
+      'db.list(storeName)',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'What is the primary advantage of the idb library over the raw IndexedDB API?',
+    options: [
+      'It stores data in a faster format than raw IndexedDB',
+      'It synchronously reads and writes data without async code',
+      'It wraps every operation in a Promise, enabling async/await instead of nested callbacks',
+      'It increases the storage quota available to the origin',
+    ],
+    answer: 2,
+  },
+];
+
+<Quiz client:visible id="indexeddb-advanced/idb-library" questions={quizIdbLibrary} />
+
+<ProgressTracker client:visible id="indexeddb-advanced/idb-library" />

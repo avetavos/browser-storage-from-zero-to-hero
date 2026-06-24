@@ -1,0 +1,107 @@
+---
+title: 'Eviction และ Persistence'
+description: 'Best-effort vs persistent storage และวิธีที่ persist() ปกป้องข้อมูล'
+sidebar:
+  order: 4
+---
+
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## สองโหมดของ storage
+
+storage ของทุก origin อยู่ในหนึ่งในสองโหมด:
+
+- **Best-effort** — โหมดเริ่มต้น เบราว์เซอร์ *อาจ* ลบข้อมูลจาก origin โดยไม่มีการแจ้งเตือนหากอุปกรณ์มีพื้นที่ดิสก์ไม่เพียงพอ
+- **Persistent** — เบราว์เซอร์จะ *ไม่* ลบข้อมูลของ origin โดยอัตโนมัติ ข้อมูลจะถูกลบเมื่อผู้ใช้ดำเนินการด้วยตัวเองเท่านั้น
+
+แอปพลิเคชันเว็บส่วนใหญ่ทำงานในโหมด best-effort ซึ่งเพียงพอสำหรับ cache ที่ไม่สำคัญ หากแอปของคุณต้องพึ่งพาข้อมูล cache เพื่อการทำงานออฟไลน์ คุณควรร้องขอ persistent storage
+
+## เมื่อใดที่เกิด eviction?
+
+Eviction เป็นการตัดสินใจของเบราว์เซอร์ที่เกิดจาก storage pressure กระบวนการทั่วไปคือ:
+
+1. อุปกรณ์มีพื้นที่ว่างน้อยลง
+2. เบราว์เซอร์ตัดสินใจว่าต้องคืน storage
+3. เดินผ่าน origin ตามลำดับ **least-recently-used (LRU)** โดยประมาณ — origin ที่ไม่ได้เข้าชมมานานเป็นผู้สมัครก่อน
+4. origin แบบ best-effort ถูกล้าง; origin แบบ persistent ถูกปล่อยไว้
+
+Eviction ส่งผลต่อ *storage ทั้งหมด* ของ origin พร้อมกัน: Cache API, IndexedDB และกลไกอื่น ๆ ที่นับ quota ถูกล้างพร้อมกัน
+
+## วิธีที่ `persist()` ปกป้องข้อมูล
+
+การเรียก `navigator.storage.persist()` ส่งคำขอไปยังเบราว์เซอร์เพื่อย้าย origin ไปยังโหมด persistent เบราว์เซอร์อาจอนุมัติหรือไม่อนุมัติ:
+
+```js
+const granted = await navigator.storage.persist();
+if (granted) {
+  console.log('Storage is persistent — data is safe');
+} else {
+  console.log('Best-effort only — browser may evict under pressure');
+}
+```
+
+ปัจจัยที่มีอิทธิพลต่อการตัดสินใจของเบราว์เซอร์ ได้แก่ การที่ผู้ใช้ติดตั้ง PWA ไว้ที่ home screen คะแนน engagement ของ site และการที่ผู้ใช้ได้ให้สิทธิ์ permission อื่น ๆ ไว้แล้ว
+
+## การตรวจสอบสถานะปัจจุบัน
+
+ใช้ `navigator.storage.persisted()` เมื่อเริ่มต้นแอป:
+
+```js
+const isAlreadyPersistent = await navigator.storage.persisted();
+
+if (!isAlreadyPersistent) {
+  const granted = await navigator.storage.persist();
+  if (!granted) {
+    console.warn('Could not get persistent storage. Cached data may be lost.');
+  }
+}
+```
+
+## คำแนะนำในทางปฏิบัติ
+
+- **อย่าสมมติ** ว่า `persist()` จะคืนค่า `true` เสมอ — จัดการกรณี `false` ให้เหมาะสม
+- เรียก `persisted()` ก่อนเพื่อหลีกเลี่ยงการแจ้งเตือนซ้ำซ้อน
+- สำหรับแอปที่ต้องทำงานออฟไลน์ ควรเก็บข้อมูล diagnostic ไว้ใน localStorage เพื่อตรวจจับการสูญเสียข้อมูลเมื่อโหลดหน้าครั้งถัดไป
+
+<Callout title="จุดสำคัญ">
+Persistent storage เป็นการรับประกันของเบราว์เซอร์ ไม่ใช่ JavaScript lock การเรียก `persist()` เป็นการ *ร้องขอ* การป้องกัน เบราว์เซอร์อาจปฏิเสธ ผู้ใช้ยังคงควบคุมขั้นสุดท้ายและสามารถล้าง storage ทั้งหมดผ่านการตั้งค่าเบราว์เซอร์ได้ตลอดเวลา
+</Callout>
+
+export const quizEvictionAndPersistence = [
+  {
+    q: 'โหมด storage เริ่มต้นของ web origin ใหม่คืออะไร?',
+    options: [
+      'Persistent — ข้อมูลจะไม่ถูกลบโดยอัตโนมัติ',
+      'Best-effort — เบราว์เซอร์อาจ evict ข้อมูลภายใต้ storage pressure',
+      'Locked — ไม่อนุญาตให้ใช้ storage จนกว่าผู้ใช้จะให้สิทธิ์',
+      'Temporary — ข้อมูลถูกล้างหลังทุก browser session',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'เมื่อเบราว์เซอร์ evict origin แบบ best-effort เนื่องจาก storage pressure อะไรถูกล้าง?',
+    options: [
+      'เฉพาะข้อมูล Cache API ของ origin นั้น',
+      'เฉพาะข้อมูล IndexedDB ของ origin นั้น',
+      'storage ทั้งหมดที่นับ quota ของ origin (Cache API, IndexedDB ฯลฯ)',
+      'เฉพาะข้อมูลที่เก่ากว่า 30 วัน',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'navigator.storage.persist() คืนค่าอะไรถ้าเบราว์เซอร์ปฏิเสธคำขอ?',
+    options: [
+      'throw DOMException',
+      'false',
+      'undefined',
+      'rejection ที่มี reason "denied"',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="cache-and-quota/eviction-and-persistence" questions={quizEvictionAndPersistence} />
+
+<ProgressTracker client:visible id="cache-and-quota/eviction-and-persistence" />

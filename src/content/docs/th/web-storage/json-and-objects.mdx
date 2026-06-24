@@ -1,0 +1,137 @@
+---
+title: 'JSON and Objects'
+description: 'เก็บ object ด้วย JSON.stringify และอ่านกลับมาด้วย JSON.parse'
+sidebar:
+  order: 4
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## ทุกอย่างคือ string
+
+Web Storage เก็บได้เฉพาะ string เท่านั้น หากคุณส่งอย่างอื่นเข้าไปให้ `setItem` เบราว์เซอร์จะแปลงมันเป็น string ให้อย่างเงียบ ๆ:
+
+```js
+localStorage.setItem('demo:num', 42);
+console.log(localStorage.getItem('demo:num')); // "42" — a string, not a number
+typeof localStorage.getItem('demo:num');       // "string"
+
+localStorage.setItem('demo:bool', true);
+console.log(localStorage.getItem('demo:bool')); // "true" — a string, not a boolean
+
+localStorage.setItem('demo:obj', { key: 'value' });
+console.log(localStorage.getItem('demo:obj')); // "[object Object]" — useless!
+```
+
+นี่หมายความว่าคุณ **ไม่สามารถ** เก็บ object, array, number หรือ boolean ได้โดยตรงแล้วคาดหวังว่าจะอ่านกลับมาในชนิดเดิม
+
+## การเก็บ object ด้วย JSON.stringify
+
+แพตเทิร์นมาตรฐานคือ serialise ด้วย `JSON.stringify` ตอนเขียน และ deserialise ด้วย `JSON.parse` ตอนอ่าน:
+
+```js
+const user = { name: 'Ada', age: 36, admin: false };
+
+// Write
+localStorage.setItem('demo:user', JSON.stringify(user));
+
+// Read back
+const raw = localStorage.getItem('demo:user');
+const restored = raw !== null ? JSON.parse(raw) : null;
+console.log(restored.name);  // 'Ada'
+console.log(restored.age);   // 36  (number, not string)
+console.log(restored.admin); // false (boolean, not string)
+```
+
+`JSON.stringify` รองรับ object ซ้อน, array, number, boolean และ `null` ได้ แต่มัน **ไม่** เก็บรักษาสิ่งเหล่านี้:
+
+- ค่า `undefined` (จะถูกละทิ้ง)
+- Function (จะถูกละทิ้ง)
+- object `Date` (ถูกแปลงเป็น ISO string — ใช้ `new Date(str)` เพื่อกู้คืน)
+- `Map`, `Set`, `RegExp`, `BigInt` (ไม่สามารถ serialise เป็น JSON ได้หากไม่มี replacer ที่กำหนดเอง)
+
+## helper แบบ typed ขนาดจิ๋ว
+
+แทนที่จะเขียนแพตเทิร์น stringify/parse ซ้ำไปทุกที่ helper เล็ก ๆ ตัวหนึ่งจะช่วยให้โค้ดสะอาด:
+
+```js
+function storageGet(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw !== null ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;  // Guard against corrupt/non-JSON values
+  }
+}
+
+function storageSet(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+```
+
+`try/catch` รอบ ๆ `JSON.parse` เป็นเรื่องสำคัญ: หากค่าที่เก็บไว้ถูกเขียนโดยโค้ดเก่า (plain string), สคริปต์จาก third-party หรือถูกแก้ไขด้วยมือใน DevTools มันอาจไม่ใช่ JSON ที่ถูกต้อง และ `JSON.parse` จะโยน error
+
+## รันได้: object round-trip
+
+export const jsonCode = `const settings = { theme: 'dark', fontSize: 16, notifications: true };
+
+// Write as JSON
+localStorage.setItem('demo:settings', JSON.stringify(settings));
+
+// Read back and parse
+const raw = localStorage.getItem('demo:settings');
+const restored = raw !== null ? JSON.parse(raw) : null;
+
+console.log('theme:', restored.theme);            // 'dark' (string)
+console.log('fontSize:', restored.fontSize);      // 16 (number)
+console.log('notifications:', restored.notifications); // true (boolean)
+console.log('types match:', typeof restored.fontSize === 'number'); // true
+
+// Storing a raw number — notice it comes back as string
+localStorage.setItem('demo:count', 99);
+console.log('raw number type:', typeof localStorage.getItem('demo:count')); // "string"
+
+// Clean up
+localStorage.removeItem('demo:settings');
+localStorage.removeItem('demo:count');`;
+
+<StorageRunner client:visible code={jsonCode} />
+
+<Callout title="ประเด็นสำคัญ">
+ใช้ `JSON.stringify` ตอนเขียน และ `JSON.parse` ตอนอ่าน เพื่อเก็บรักษาโครงสร้างของ object และชนิด primitive ให้ตรวจสอบกัน `null` เสมอตอนอ่าน (key อาจไม่มีอยู่) และครอบ `JSON.parse` ด้วย `try/catch` (ค่าอาจไม่ใช่ JSON ที่ถูกต้อง)
+</Callout>
+
+export const quizJsonAndObjects = [
+  {
+    q: 'คุณเก็บ object ของ JavaScript ด้วย localStorage.setItem("x", myObj) โดยไม่ stringify อ่านกลับมาจะได้อะไร?',
+    options: ['object เดิม', '"[object Object]"', 'null', 'มันโยน TypeError'],
+    answer: 1,
+  },
+  {
+    q: 'method ใดที่แปลงค่า JavaScript ให้เป็น JSON string เพื่อเก็บ?',
+    options: ['JSON.parse', 'JSON.stringify', 'String()', 'Object.toString()'],
+    answer: 1,
+  },
+  {
+    q: 'หลังจากเก็บ number ด้วย localStorage.setItem("n", 42) (ไม่ใช้ JSON.stringify) typeof localStorage.getItem("n") คืออะไร?',
+    options: ['"number"', '"string"', '"object"', '"undefined"'],
+    answer: 1,
+  },
+  {
+    q: 'ทำไมคุณจึงควรครอบ JSON.parse ด้วย try/catch เมื่ออ่านจาก localStorage?',
+    options: [
+      'JSON.parse ทำงานแบบ asynchronous',
+      'ค่าที่เก็บไว้อาจไม่ใช่ JSON ที่ถูกต้อง (โค้ดเก่า, การแก้ไขด้วยมือ ฯลฯ)',
+      'localStorage.getItem สามารถโยน error ได้',
+      'JSON.parse ต้องการอาร์กิวเมนต์ตัวที่สอง',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="web-storage/json-and-objects" questions={quizJsonAndObjects} />
+
+<ProgressTracker client:visible id="web-storage/json-and-objects" />

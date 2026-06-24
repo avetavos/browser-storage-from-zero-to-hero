@@ -1,5 +1,107 @@
 ---
-title: localStorage & sessionStorage
-description: The Web Storage API — simple key/value persistence in the browser.
+title: 'localStorage & sessionStorage'
+description: 'What Web Storage is, how it works, and what this module covers.'
+sidebar:
+  order: 1
 ---
-Coming soon.
+
+import Mermaid from '../../../../components/Mermaid.astro';
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## What is Web Storage?
+
+The Web Storage API gives every web origin two synchronous key/value stores built into the browser: `localStorage` and `sessionStorage`. Both share the same simple interface — you call `setItem`, `getItem`, `removeItem`, and `clear` — and both store all values as strings. There is no schema, no indexing, and no async overhead.
+
+Web Storage is **origin-scoped**: a page at `https://example.com` cannot read the storage of `https://other.com`. This is enforced by the browser's same-origin policy, not by any code you write.
+
+The key difference between the two stores is **lifetime and tab scope**:
+
+- `localStorage` — data persists indefinitely (until explicitly deleted) and is shared across every tab and window open on the same origin.
+- `sessionStorage` — data lasts only for the life of a single browser tab (or window). Closing the tab clears it, and other tabs cannot see it.
+
+## localStorage vs sessionStorage at a glance
+
+export const overviewDiagram = `flowchart LR
+  subgraph LS[localStorage]
+    direction LR
+    LA[Tab A sets item] -->|writes| LStore[(origin-wide store)]
+    LB[Tab B gets item] -->|reads same data| LStore
+    LR[Browser restart] -->|data survives| LStore
+  end
+  subgraph SS[sessionStorage]
+    direction LR
+    SA[Tab A sets item] -->|writes| SStoreA[(Tab A store)]
+    SB[Tab B] -->|own empty store| SStoreB[(Tab B store)]
+    SC[Tab A closes] -->|store cleared| SStoreA
+  end`;
+
+<Mermaid code={overviewDiagram} title="localStorage persists and is shared across tabs; sessionStorage is per-tab and clears on close" />
+
+## What this module covers
+
+This module walks you through everything you need to use Web Storage with confidence:
+
+| Lesson | What you will learn |
+|---|---|
+| **This page** | What Web Storage is and how the two stores differ at a high level |
+| `local-vs-session` | Lifetime, tab scope, and origin rules in depth |
+| `the-api` | The full `setItem` / `getItem` / `removeItem` / `clear` / `key(i)` / `length` API |
+| `json-and-objects` | Storing and retrieving objects with `JSON.stringify` / `JSON.parse` |
+| `storage-event-and-limits` | The cross-tab `storage` event, the ~5 MB quota, and the sync-blocking caveat |
+
+## Your first runnable example
+
+The snippet below writes a value to `localStorage`, reads it back, and then cleans up so it does not pollute your browser's storage across page loads.
+
+export const firstRunCode = `// Write
+localStorage.setItem('demo:greeting', 'Hello, Web Storage!');
+
+// Read back
+const value = localStorage.getItem('demo:greeting');
+console.log('Stored value:', value);
+
+// sessionStorage is independent — each tab has its own
+sessionStorage.setItem('demo:tab-id', 'tab-001');
+console.log('Tab value:', sessionStorage.getItem('demo:tab-id'));
+
+// Clean up — always remove demo: keys after running
+localStorage.removeItem('demo:greeting');
+sessionStorage.removeItem('demo:tab-id');
+console.log('After cleanup localStorage:', localStorage.getItem('demo:greeting'));
+console.log('After cleanup sessionStorage:', sessionStorage.getItem('demo:tab-id'));`;
+
+<StorageRunner client:visible code={firstRunCode} />
+
+<Callout title="Key point">
+Web Storage stores **strings only**, runs **synchronously**, and is scoped to the **origin** (`scheme + host + port`). It is perfect for small, simple values such as user preferences, UI state, and lightweight session data — not for large blobs or structured queries.
+</Callout>
+
+export const quizWebStorageIndex = [
+  {
+    q: 'Which Web Storage store survives a browser restart?',
+    options: ['sessionStorage', 'localStorage', 'Both survive', 'Neither survives'],
+    answer: 1,
+  },
+  {
+    q: 'What data type does Web Storage use to store all values?',
+    options: ['JSON', 'ArrayBuffer', 'String', 'Number'],
+    answer: 2,
+  },
+  {
+    q: 'Can a page at https://app.example.com read the localStorage of https://api.example.com?',
+    options: [
+      'Yes, because they share the same domain',
+      'No, they are different origins (different subdomains)',
+      'Yes, if the server sets CORS headers',
+      'Only sessionStorage is origin-scoped',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="web-storage/index" questions={quizWebStorageIndex} />
+
+<ProgressTracker client:visible id="web-storage/index" />

@@ -1,0 +1,272 @@
+---
+title: 'Going Beyond CRUD'
+description: 'An overview of advanced IndexedDB features — indexes, cursors, ranges, the idb library, migrations, and blobs.'
+sidebar:
+  order: 1
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Mermaid from '../../../../components/Mermaid.astro';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## Module overview
+
+Basic IndexedDB CRUD — `put`, `get`, `delete` — gets you a long way, but real applications need more. This module covers the advanced layer that sits on top of the core API.
+
+| Lesson | What you will learn |
+|---|---|
+| **1. This overview** | How indexes, cursors, key ranges, the idb library, migrations, and blobs fit together |
+| **2. Indexes** | Creating and querying secondary indexes; `index.get` vs `index.getAll` |
+| **3. Cursors & key ranges** | Walking ordered results; `IDBKeyRange.bound`, `lowerBound`, `upperBound` |
+| **4. The idb library** | Promise-based wrapper; why you should almost always use it in production |
+| **5. Migrations** | `onupgradeneeded` patterns for safe schema evolution across versions |
+| **6. Blobs & files** | Storing binary data — images, audio, PDFs — directly in an object store |
+
+---
+
+## What is an index?
+
+An **object store** is like a table keyed on a primary key (usually `id`). An **index** is a secondary sorted view of the same records keyed on a different property — for example `email` or `createdAt`.
+
+Without an index, finding all records where `email === 'ada@example.com'` requires opening a cursor over every record (a full scan). With an index on `email`, the engine jumps straight to the matching entries in O(log n).
+
+```js
+// Creating a store with an index during onupgradeneeded
+const store = db.createObjectStore('users', { keyPath: 'id' });
+store.createIndex('by_email', 'email', { unique: true });
+store.createIndex('by_age',   'age',   { unique: false });
+```
+
+Once the index exists you query it inside any transaction:
+
+```js
+const tx    = db.transaction('users', 'readonly');
+const index = tx.objectStore('users').index('by_email');
+const user  = await index.get('ada@example.com');
+```
+
+---
+
+## Cursors let you walk results
+
+A **cursor** iterates records in index order. You open it on either the object store (primary key order) or an index (secondary key order), then call `cursor.continue()` to advance:
+
+```js
+const tx     = db.transaction('users', 'readonly');
+const index  = tx.objectStore('users').index('by_age');
+const range  = IDBKeyRange.bound(18, 65); // ages 18–65 inclusive
+let   cursor = await index.openCursor(range);
+
+while (cursor) {
+  console.log(cursor.value.name, cursor.value.age);
+  cursor = await cursor.continue();
+}
+```
+
+Key ranges — `bound`, `lowerBound`, `upperBound`, `only` — can be passed to both `openCursor` and `getAll` to filter without a full scan.
+
+---
+
+## The idb library
+
+The raw IndexedDB API is callback/event-driven and verbose. Jake Archibald's **idb** library wraps it in clean Promises with no runtime overhead:
+
+```js
+import { openDB } from 'idb';
+
+const db = await openDB('my-app', 1, {
+  upgrade(db) {
+    const store = db.createObjectStore('users', { keyPath: 'id' });
+    store.createIndex('by_email', 'email', { unique: true });
+  },
+});
+
+await db.put('users', { id: 1, name: 'Ada', email: 'ada@example.com', age: 36 });
+const user = await db.getFromIndex('users', 'by_email', 'ada@example.com');
+```
+
+The module's later lessons use both raw IDB (to understand the primitives) and idb (for realistic production patterns).
+
+---
+
+## Migrations with onupgradeneeded
+
+Every time you increment the version number passed to `indexedDB.open`, the browser fires `onupgradeneeded` before the database opens. This is the **only** place where you can create or delete object stores and indexes.
+
+```js
+const db = await openDB('app', 3, {
+  upgrade(db, oldVersion) {
+    if (oldVersion < 1) {
+      db.createObjectStore('users', { keyPath: 'id' });
+    }
+    if (oldVersion < 2) {
+      db.transaction.objectStore('users')
+        .createIndex('by_email', 'email', { unique: true });
+    }
+    if (oldVersion < 3) {
+      db.createObjectStore('files', { keyPath: 'name' });
+    }
+  },
+});
+```
+
+Chained `if (oldVersion < N)` blocks let users upgrade from any older version in a single pass — the key migration pattern covered in depth in lesson 5.
+
+---
+
+## Blobs and files
+
+IndexedDB stores structured-cloneable values, which includes `Blob`, `File`, `ArrayBuffer`, and `ImageData`. There is no need to base64-encode binary data the way you would for `localStorage`:
+
+```js
+const response = await fetch('/avatar.png');
+const blob     = await response.blob();
+
+await db.put('files', { name: 'avatar.png', data: blob, size: blob.size });
+
+const record = await db.get('files', 'avatar.png');
+const url    = URL.createObjectURL(record.data);
+// use url in an <img> src
+```
+
+Storing blobs is covered end-to-end in lesson 6.
+
+---
+
+## Object store → index relationship
+
+export const indexOverviewDiagram = `flowchart LR
+    subgraph ObjectStore["Object Store — users"]
+        direction TB
+        R1["{ id:1, name:'Ada',   email:'ada@x.com',   age:36 }"]
+        R2["{ id:2, name:'Bob',   email:'bob@x.com',   age:24 }"]
+        R3["{ id:3, name:'Carol', email:'carol@x.com', age:31 }"]
+    end
+
+    subgraph PK["Primary Key (id)"]
+        direction TB
+        PK1["1 → record 1"]
+        PK2["2 → record 2"]
+        PK3["3 → record 3"]
+    end
+
+    subgraph IDX["Index — by_email"]
+        direction TB
+        I1["ada@x.com   → record 1"]
+        I2["bob@x.com   → record 2"]
+        I3["carol@x.com → record 3"]
+    end
+
+    ObjectStore --> PK
+    ObjectStore --> IDX
+    IDX -. "index.get('ada@x.com')" .-> R1
+`;
+
+<Mermaid code={indexOverviewDiagram} title="An object store with a secondary index on the email property" />
+
+---
+
+## Runnable demo: open a DB, create an index, query by index
+
+export const indexOverviewCode = `// Open (or create) a versioned DB
+const request = indexedDB.open('demo-advanced-index-overview', 1);
+
+request.onupgradeneeded = (event) => {
+  const db = event.target.result;
+  if (!db.objectStoreNames.contains('contacts')) {
+    const store = db.createObjectStore('contacts', { keyPath: 'id' });
+    store.createIndex('by_email', 'email', { unique: true });
+    store.createIndex('by_city',  'city',  { unique: false });
+  }
+};
+
+request.onsuccess = (event) => {
+  const db = event.target.result;
+
+  // Put a record
+  const tx1 = db.transaction('contacts', 'readwrite');
+  tx1.objectStore('contacts').put({
+    id:    1,
+    name:  'Ada Lovelace',
+    email: 'ada@babbage.co',
+    city:  'London',
+  });
+  tx1.oncomplete = () => {
+    console.log('Record stored.');
+
+    // Query by email index
+    const tx2   = db.transaction('contacts', 'readonly');
+    const index = tx2.objectStore('contacts').index('by_email');
+    const req   = index.get('ada@babbage.co');
+
+    req.onsuccess = () => {
+      const record = req.result;
+      if (record) {
+        console.log('Found via index:', JSON.stringify(record));
+      } else {
+        console.log('Not found.');
+      }
+      db.close();
+    };
+  };
+};
+
+request.onerror = () => {
+  console.error('DB error:', request.error);
+};
+`;
+
+<StorageRunner client:visible code={indexOverviewCode} />
+
+<Callout title="Key point">
+Indexes are created once in `onupgradeneeded` and maintained automatically by the browser as records are added, updated, or deleted. Querying an index is O(log n) — far faster than a full-store cursor scan for large datasets. The idb library wraps the same primitives in Promises, making the code dramatically shorter.
+</Callout>
+
+export const quizIdbAdvancedIndex = [
+  {
+    q: 'Where is the only place you can create a new object store or index in IndexedDB?',
+    options: [
+      'Inside any readwrite transaction',
+      'Inside the onupgradeneeded event handler',
+      'By calling db.createObjectStore() at any time',
+      'Inside a onsuccess callback after opening the database',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'What is the main advantage of a secondary index over a full cursor scan?',
+    options: [
+      'Indexes compress the stored records to save space',
+      'Indexes allow you to store more than 50 MB of data',
+      'Indexes allow the engine to locate matching records in O(log n) instead of scanning every record',
+      'Indexes automatically sync data to the server',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'Which IDBKeyRange method returns a range that includes both the lower and upper bound values?',
+    options: [
+      'IDBKeyRange.only()',
+      'IDBKeyRange.lowerBound()',
+      'IDBKeyRange.upperBound()',
+      'IDBKeyRange.bound()',
+    ],
+    answer: 3,
+  },
+  {
+    q: 'Which of the following can IndexedDB store natively without base64-encoding?',
+    options: [
+      'Only plain strings and numbers',
+      'Only JSON-serialisable objects',
+      'Blob, File, and ArrayBuffer values',
+      'Only values that implement the Serialisable interface',
+    ],
+    answer: 2,
+  },
+];
+
+<Quiz client:visible id="indexeddb-advanced/index" questions={quizIdbAdvancedIndex} />
+
+<ProgressTracker client:visible id="indexeddb-advanced/index" />

@@ -1,0 +1,113 @@
+---
+title: 'postMessage และ Transferables'
+description: 'Structured clone คัดลอกข้อมูล ส่วน transferables โอนกรรมสิทธิ์ ArrayBuffer โดยไม่ต้องคัดลอก'
+sidebar:
+  order: 3
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## วิธีที่ postMessage คัดลอกข้อมูล — structured clone
+
+โดยค่าเริ่มต้น `postMessage` จะ deep-clone ค่าโดยใช้ **structured clone algorithm** รองรับ plain objects, arrays, strings, `TypedArray`, `Blob`, `Map`, `Set`, `Date` และอื่นๆ อีกมาก วัตถุต้นฉบับฝั่งผู้ส่งจะไม่ถูกแตะต้องเลย ต้นทุนของการ clone นั้นแปรตามขนาดข้อมูล — clone object เล็กๆ แทบไม่มีผล แต่ clone `ArrayBuffer` ขนาด 100 MB จะใช้เวลาพอสมควรและอาจวัดได้สำหรับ workload แบบ real-time
+
+```js
+const arr = [1, 2, 3];
+worker.postMessage(arr);    // arr ถูก clone — ต้นฉบับไม่เปลี่ยน
+console.log(arr);           // [1, 2, 3] — ยังอยู่ครบ
+```
+
+สิ่งที่ structured clone ไม่สามารถคัดลอกได้คือ: functions และ DOM nodes การพยายามส่งสิ่งเหล่านี้จะ throw `DataCloneError`
+
+## Transferables — โอนกรรมสิทธิ์แบบ zero-copy
+
+เพื่อหลีกเลี่ยงการคัดลอก buffer ขนาดใหญ่ ให้ส่งเป็น **transferables** ในอาร์กิวเมนต์ที่สองของ `postMessage` กรรมสิทธิ์ของ buffer จะโอนไปยังผู้รับ — ฝั่งต้นทางจะ **detached** (ความยาวเป็นศูนย์ ใช้งานไม่ได้) ทันที ไม่มีการคัดลอก byte ใดๆ มีแค่ pointer ที่ย้ายระหว่างเธรด
+
+```js
+const buffer = new ArrayBuffer(1024 * 1024); // 1 MB
+worker.postMessage(buffer, [buffer]);          // โอนกรรมสิทธิ์
+console.log(buffer.byteLength);               // 0 — detached แล้ว!
+```
+
+อาร์กิวเมนต์ที่สองคือ array ของ transferable objects คุณสามารถผสมข้อมูลปกติกับ transferable ได้:
+
+```js
+worker.postMessage({ kind: 'frame', data: imageBuffer }, [imageBuffer]);
+```
+
+## เมื่อใดควรใช้ transferables
+
+- **`ArrayBuffer` ขนาดใหญ่** (pixel ของภาพ, ตัวอย่างเสียง, เนื้อหาไฟล์ binary) — transferables เร็วกว่า clone หลายเท่าสำหรับข้อมูลที่มีขนาดมากกว่า ~1 MB
+- **`MessagePort`** — โอน port ให้ worker สองตัวคุยกันโดยตรงโดยไม่ผ่าน main thread
+- **`OffscreenCanvas`** — โอน canvas rendering context เข้าไปใน worker เพื่อวาดภาพโดยไม่บล็อก UI thread
+- สำหรับ plain objects และ strings ขนาดเล็ก structured clone ก็ใช้ได้ดีและง่ายกว่า
+
+## รันได้: โอน ArrayBuffer และสังเกต detachment
+
+demo นี้สร้าง buffer ขนาด 1 MB เติม byte แรกด้วยค่า 42 แล้วโอนให้ worker สังเกต `byteLength` ก่อนและหลังการ transfer
+
+export const transferCode = `var workerSrc = 'self.onmessage = function(e) {' +
+  ' var buf = e.data;' +
+  ' var view = new Uint8Array(buf);' +
+  ' console.log("[worker] received buffer, byteLength:", buf.byteLength, "first byte:", view[0]);' +
+  ' self.postMessage("done");' +
+  '};';
+var buf = new ArrayBuffer(1024 * 1024);
+var view = new Uint8Array(buf);
+view[0] = 42;
+console.log('Before transfer, byteLength:', buf.byteLength);
+var url = URL.createObjectURL(new Blob([workerSrc], {type: 'application/javascript'}));
+var w = new Worker(url);
+w.onmessage = function(e) {
+  console.log('Main thread received:', e.data);
+  w.terminate();
+  URL.revokeObjectURL(url);
+};
+w.postMessage(buf, [buf]);
+console.log('After transfer, byteLength:', buf.byteLength, '(detached — 0)');`;
+
+<StorageRunner client:visible code={transferCode} />
+
+<Callout title="ประเด็นสำคัญ">
+Transferables เป็น zero-copy เมื่อ transfer `ArrayBuffer` แล้ว ฝั่งผู้ส่งจะ detached — `byteLength` จะกลายเป็น 0 ห้ามอ่านหรือเขียน buffer หลังจาก transfer แล้ว
+</Callout>
+
+export const quizTransferables = [
+  {
+    q: 'postMessage ใช้ algorithm ใดในการคัดลอกข้อมูลโดยค่าเริ่มต้น?',
+    options: [
+      'JSON serialization',
+      'Structured clone',
+      'Shallow copy',
+      'Base64 encoding',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'หลังจากเรียก worker.postMessage(buffer, [buffer]) แล้ว buffer.byteLength ใน main thread เป็นเท่าไร?',
+    options: [
+      'ไม่เปลี่ยน — ส่ง copy ไป',
+      '0 — buffer ถูก detach แล้ว',
+      'undefined',
+      'Throw error',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'ข้อใดต่อไปนี้ไม่ใช่ transferable type?',
+    options: [
+      'ArrayBuffer',
+      'MessagePort',
+      'OffscreenCanvas',
+      'Plain JavaScript Object',
+    ],
+    answer: 3,
+  },
+];
+
+<Quiz client:visible id="workers-sharedworker/postmessage-and-transferables" questions={quizTransferables} />
+
+<ProgressTracker client:visible id="workers-sharedworker/postmessage-and-transferables" />

@@ -1,0 +1,179 @@
+---
+title: 'The Cookie Store API'
+description: 'The async cookieStore.get/set/delete API and change events — with a feature-detect fallback.'
+sidebar:
+  order: 5
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## The problem with document.cookie
+
+`document.cookie` is a synchronous API designed in the mid-1990s. It has three well-known friction points:
+
+1. **Parsing is manual** — reading a specific cookie requires splitting and looping.
+2. **Writes are string-based** — you build a cookie string by hand.
+3. **No change events** — there is no way to observe when another tab or the server changes a cookie.
+
+The **Cookie Store API** solves all three with a clean, Promise-based interface.
+
+## Browser support
+
+The Cookie Store API ships in Chrome and Edge (Chromium-based browsers). Firefox does not support it yet. Always feature-detect before using it.
+
+## cookieStore.get — read a single cookie
+
+Returns a Promise that resolves to a `CookieListItem` object or `null` if the cookie does not exist:
+
+```js
+const cookie = await cookieStore.get('theme');
+if (cookie) {
+  console.log(cookie.name);    // 'theme'
+  console.log(cookie.value);   // 'dark'
+}
+```
+
+The returned object also includes `domain`, `path`, `expires`, `secure`, `sameSite`, and `httpOnly` properties.
+
+## cookieStore.set — write a cookie
+
+Accepts a name/value string pair or an options object:
+
+```js
+// Simple form
+await cookieStore.set('theme', 'dark');
+
+// Options form — recommended for control over attributes
+await cookieStore.set({
+  name: 'theme',
+  value: 'dark',
+  maxAge: 86400,
+  sameSite: 'lax',
+});
+```
+
+Returns a Promise that resolves when the cookie is written.
+
+## cookieStore.delete — remove a cookie
+
+```js
+await cookieStore.delete('theme');
+```
+
+Returns a Promise that resolves when the cookie is deleted. This is equivalent to setting `Max-Age=0`.
+
+## cookieStore.getAll — read all cookies
+
+```js
+const allCookies = await cookieStore.getAll();
+allCookies.forEach(c => console.log(c.name, c.value));
+```
+
+Unlike `document.cookie`, this returns a proper array of objects — no string parsing required.
+
+## Change events
+
+The Cookie Store API allows you to listen for cookie changes reactively:
+
+```js
+cookieStore.addEventListener('change', event => {
+  event.changed.forEach(c => {
+    console.log('Cookie changed:', c.name, '=', c.value);
+  });
+  event.deleted.forEach(c => {
+    console.log('Cookie deleted:', c.name);
+  });
+});
+```
+
+`event.changed` is an array of cookies that were set or updated. `event.deleted` is an array of cookies that were removed. This works across tabs for cookies that are not scoped to a single tab.
+
+## Feature-detect pattern
+
+Because browser support is incomplete, always feature-detect and fall back to `document.cookie`:
+
+```js
+async function getTheme() {
+  if ('cookieStore' in window) {
+    const c = await cookieStore.get('theme');
+    return c ? c.value : null;
+  } else {
+    // document.cookie fallback
+    var pairs = document.cookie.split('; ');
+    for (var i = 0; i < pairs.length; i++) {
+      var p = pairs[i].split('=');
+      if (p[0] === 'theme') return decodeURIComponent(p[1]);
+    }
+    return null;
+  }
+}
+```
+
+## Runnable demo: cookieStore with fallback
+
+export const cookieStoreCode = `async function run() {
+  if ('cookieStore' in window) {
+    // Modern async API
+    await cookieStore.set({ name: 'demo_modern', value: 'hello', maxAge: 60 });
+    var c = await cookieStore.get('demo_modern');
+    console.log('cookieStore.get:', c ? c.value : null);
+    await cookieStore.delete('demo_modern');
+    var after = await cookieStore.get('demo_modern');
+    console.log('After delete:', after ? after.value : null);
+    console.log('Browser supports cookieStore API');
+  } else {
+    // Fallback to document.cookie
+    document.cookie = 'demo_modern=hello; Max-Age=60; SameSite=Lax';
+    var pairs = document.cookie.split('; ');
+    var val = null;
+    for (var i = 0; i < pairs.length; i++) {
+      var p = pairs[i].split('=');
+      if (p[0] === 'demo_modern') val = decodeURIComponent(p[1]);
+    }
+    console.log('document.cookie fallback:', val);
+    document.cookie = 'demo_modern=; Max-Age=0; SameSite=Lax';
+    console.log('Cookie Store API not available in this browser - used fallback');
+  }
+}
+run();`;
+
+<StorageRunner client:visible code={cookieStoreCode} />
+
+<Callout title="Use the Cookie Store API where available, but always provide a fallback">
+The Cookie Store API makes cookie code far more readable — async/await instead of string parsing, objects instead of semicolon-delimited strings, and reactive change events. Until Firefox ships support, always wrap usage in a feature-detect (`'cookieStore' in window`) and fall back to `document.cookie` for full cross-browser compatibility.
+</Callout>
+
+export const quizCookieStoreApi = [
+  {
+    q: 'What does cookieStore.get(name) return when the cookie exists?',
+    options: [
+      'The cookie value as a plain string',
+      'A Promise that resolves to a CookieListItem object',
+      'A CookieListItem object synchronously',
+      'A Promise that resolves to a name=value string',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'Which browser does NOT yet support the Cookie Store API?',
+    options: ['Chrome', 'Edge', 'Firefox', 'Chrome on Android'],
+    answer: 2,
+  },
+  {
+    q: 'How do you listen for cookie changes using the Cookie Store API?',
+    options: [
+      'window.addEventListener("cookiechange", handler)',
+      'cookieStore.addEventListener("change", handler)',
+      'document.cookie.onchange = handler',
+      'cookieStore.watch(handler)',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="cookies/cookie-store-api" questions={quizCookieStoreApi} />
+
+<ProgressTracker client:visible id="cookies/cookie-store-api" />

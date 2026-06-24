@@ -1,0 +1,173 @@
+---
+title: 'การอ่านและเขียนคุกกี้'
+description: 'document.cookie สำหรับอ่านทั้งหมด ตั้งค่าหนึ่ง และ helper สำหรับ get/set/delete ตามชื่อ'
+sidebar:
+  order: 3
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## ข้อแปลกของ document.cookie
+
+`document.cookie` ไม่ทำงานเหมือน property JavaScript ทั่วไป มันมีพฤติกรรมที่แตกต่างกันโดยสิ้นเชิงขึ้นอยู่กับว่าคุณกำลังอ่านหรือเขียน
+
+**การอ่าน** จะคืนคุกกี้ทั้งหมดสำหรับหน้าปัจจุบันเป็นสตริงเดียวคั่นด้วยเซมิโคลอน:
+
+```js
+// ถ้าตั้งค่าคุกกี้สามชิ้น:
+console.log(document.cookie);
+// "theme=dark; user=Alice; lang=en"
+```
+
+**การเขียน** จะตั้งค่า (หรืออัปเดต) คุกกี้เพียงหนึ่งชิ้น — ไม่ได้แทนที่คุกกี้ทั้งหมด:
+
+```js
+document.cookie = 'theme=light; Max-Age=86400; SameSite=Lax';
+// อัปเดตเฉพาะ theme — คุกกี้อื่นไม่เปลี่ยนแปลง
+```
+
+ความไม่สมมาตรนี้คือส่วนที่น่าประหลาดใจที่สุดของ cookies API การเขียนไปยัง `document.cookie` เหมือนกับการเรียกฟังก์ชัน `setCookie()` มากกว่าการกำหนดค่าให้ property สตริง
+
+## การตั้งค่าคุกกี้
+
+ไวยากรณ์สำหรับตั้งค่าคุกกี้คือสตริงที่เริ่มด้วย name=value ตามด้วย attribute ที่เป็นตัวเลือก คั่นด้วยเซมิโคลอน:
+
+```js
+// Session cookie (ไม่มี Expires/Max-Age — ลบเมื่อเบราว์เซอร์ปิด)
+document.cookie = 'demo_pref=dark; SameSite=Lax';
+
+// Persistent cookie (รอดหลังเบราว์เซอร์ restart)
+document.cookie = 'demo_pref=dark; Max-Age=86400; SameSite=Lax';
+
+// Cookie ที่จำกัด path
+document.cookie = 'demo_pref=dark; Max-Age=86400; Path=/app; SameSite=Lax';
+```
+
+ควรใส่ `SameSite=Lax` เป็นอย่างน้อยสำหรับคุกกี้ที่ตั้งฝั่ง client เสมอ เบราว์เซอร์สมัยใหม่ default เป็น `Lax` สำหรับคุกกี้ที่ไม่มี `SameSite` แต่การระบุชัดเจนปลอดภัยกว่า
+
+## การอ่านคุกกี้ตามชื่อ
+
+เนื่องจากการอ่าน `document.cookie` คืนคุกกี้ทั้งหมดเป็นสตริงเดียว คุณต้อง parse เองเพื่อหาคุกกี้ที่ต้องการตามชื่อ:
+
+```js
+function getCookie(name) {
+  var pairs = document.cookie.split('; ');
+  for (var i = 0; i < pairs.length; i++) {
+    var pair = pairs[i].split('=');
+    if (pair[0] === name) return decodeURIComponent(pair[1]);
+  }
+  return null;
+}
+
+var theme = getCookie('demo_pref'); // 'dark' หรือ null
+```
+
+สังเกต `decodeURIComponent` — ค่าที่ตั้งด้วย `encodeURIComponent` ต้องถูก decode ตอนอ่านด้วย
+
+## การลบคุกกี้
+
+ไม่สามารถลบคุกกี้ได้ด้วยการกำหนดสตริงว่าง การลบคุกกี้ทำได้โดยการตั้งค่าใหม่พร้อม `Max-Age=0` (หรือ `Expires` ที่ผ่านมาแล้ว):
+
+```js
+function deleteCookie(name) {
+  document.cookie = name + '=; Max-Age=0; SameSite=Lax';
+}
+
+deleteCookie('demo_pref');
+```
+
+## รูปแบบ helper ที่ครบชุด
+
+นี่คือรูปแบบ get/set/delete ที่ใช้ในโค้ด production:
+
+```js
+function setCookie(name, value, maxAge) {
+  document.cookie = name + '=' + encodeURIComponent(value) +
+    '; Max-Age=' + maxAge + '; SameSite=Lax';
+}
+
+function getCookie(name) {
+  var pairs = document.cookie.split('; ');
+  for (var i = 0; i < pairs.length; i++) {
+    var pair = pairs[i].split('=');
+    if (pair[0] === name) return decodeURIComponent(pair[1]);
+  }
+  return null;
+}
+
+function deleteCookie(name) {
+  document.cookie = name + '=; Max-Age=0; SameSite=Lax';
+}
+```
+
+## Demo ที่รันได้: ตั้งค่า อ่าน ลบ
+
+export const readingWritingCode = `// Helper functions
+function setCookie(name, value, maxAge) {
+  document.cookie = name + '=' + encodeURIComponent(value) + '; Max-Age=' + maxAge + '; SameSite=Lax';
+}
+function getCookie(name) {
+  var pairs = document.cookie.split('; ');
+  for (var i = 0; i < pairs.length; i++) {
+    var pair = pairs[i].split('=');
+    if (pair[0] === name) return decodeURIComponent(pair[1]);
+  }
+  return null;
+}
+function deleteCookie(name) {
+  document.cookie = name + '=; Max-Age=0; SameSite=Lax';
+}
+
+// Demo: set -> read -> delete
+setCookie('demo_user', 'Alice', 60);
+console.log('Set demo_user=Alice');
+console.log('Read:', getCookie('demo_user'));
+
+deleteCookie('demo_user');
+console.log('After delete:', getCookie('demo_user'));`;
+
+<StorageRunner client:visible code={readingWritingCode} />
+
+<Callout title="document.cookie ไม่ทำงานเหมือน property ทั่วไป">
+การอ่าน `document.cookie` คืนคุกกี้ทั้งหมดเป็นสตริงใหญ่ชิ้นเดียว การเขียนจะตั้งค่าคุกกี้เพียงชิ้นเดียว — ไม่ล้างคุกกี้อื่น เพื่อลบคุกกี้ต้องตั้งค่าใหม่พร้อม `Max-Age=0` ควรใช้ `encodeURIComponent` ตอนตั้งค่าและ `decodeURIComponent` ตอนอ่านเสมอเพื่อรองรับอักขระพิเศษ
+</Callout>
+
+export const quizReadingWriting = [
+  {
+    q: 'การอ่าน document.cookie คืนค่าอะไร?',
+    options: [
+      'ออบเจกต์ที่มีชื่อคุกกี้ทั้งหมดเป็น key',
+      'คุกกี้ที่ตั้งค่าล่าสุดเป็นสตริง',
+      'คุกกี้ทั้งหมดเป็นสตริงคั่นด้วยเซมิโคลอนในรูปแบบ name=value',
+      'null ถ้าไม่มีคุกกี้',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'วิธีลบคุกกี้ด้วย document.cookie คืออะไร?',
+    options: [
+      'document.cookie = "name=";',
+      'document.cookie = "name=; Max-Age=0;";',
+      'delete document.cookie["name"];',
+      'document.cookie.remove("name");',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'คุณเขียน document.cookie = "lang=en; SameSite=Lax" แล้วเกิดอะไรขึ้นกับคุกกี้ที่มีอยู่แล้ว?',
+    options: [
+      'คุกกี้ทั้งหมดถูกลบและแทนที่ด้วย lang=en',
+      'เฉพาะคุกกี้ lang ถูกเพิ่มหรืออัปเดต; คุกกี้อื่นไม่เปลี่ยน',
+      'เกิด error เพราะไม่สามารถกำหนดสตริงให้ document.cookie ได้',
+      'คุกกี้ lang ถูกเพิ่มใน Cookie header แต่ไม่ถูกเก็บ',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="cookies/reading-writing" questions={quizReadingWriting} />
+
+<ProgressTracker client:visible id="cookies/reading-writing" />

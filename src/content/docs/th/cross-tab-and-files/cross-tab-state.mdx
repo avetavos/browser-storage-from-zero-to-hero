@@ -1,0 +1,152 @@
+---
+title: 'Cross-Tab Shared State'
+description: 'รวม BroadcastChannel, localStorage/IndexedDB และ Web Locks เพื่อสร้าง shared-state layer พร้อม leader election'
+sidebar:
+  order: 4
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## ปัญหา: ทำให้แท็บ sync กัน
+
+ลองนึกภาพ dashboard แบบ multi-tab แท็บ A เพิ่ม counter แท็บ B ควรเห็นค่าใหม่โดยไม่ต้อง polling `storage` event บน `localStorage` สามารถแจ้งแท็บ B ได้ แต่มันส่งเฉพาะค่า string ใหม่ดิบๆ — ไม่มี structured state layer ในตัว
+
+วิธีแก้ปัญหาที่แข็งแกร่งรวม primitive สามตัว:
+
+1. **`localStorage` (หรือ IndexedDB)** — แหล่งความจริงที่คงทน
+2. **BroadcastChannel** — แจ้งเตือนทันทีไปยังทุกแท็บอื่นเมื่อ state เปลี่ยน
+3. **Web Locks** — ป้องกันสองแท็บเขียนพร้อมกัน (leader election หรือ write serialisation)
+
+## Pattern: broadcast-on-write
+
+Pattern ที่ง่ายที่สุด: ทุกแท็บที่เขียน state จะ broadcast การเปลี่ยนแปลงด้วย
+
+```js
+const ch = new BroadcastChannel('demo:app-state');
+
+async function setState(key, value) {
+  await navigator.locks.request('demo:state-write', async () => {
+    localStorage.setItem(key, JSON.stringify(value));
+    ch.postMessage({ type: 'STATE_UPDATE', key, value });
+  });
+}
+
+// React to changes from other tabs
+ch.onmessage = (e) => {
+  if (e.data.type === 'STATE_UPDATE') {
+    console.log('Remote update:', e.data.key, '=', e.data.value);
+    // Update local UI here
+  }
+};
+```
+
+Lock ทำให้แน่ใจว่าหากสองแท็บพยายามเขียนพร้อมกัน จะ queue แทนที่จะ race
+
+## Leader election ด้วย Web Locks
+
+สำหรับงานที่ใช้ resource มาก (เช่น แท็บเดียว polling API) ต้องการให้แท็บ "leader" แค่หนึ่งแท็บทำงานและ broadcast ผลลัพธ์ให้ follower Web Locks ทำให้ทำได้ง่าย:
+
+```js
+async function runAsLeader() {
+  // Only one tab can hold 'leader' at a time.
+  // The lock is held for the entire async block — when this tab closes the lock
+  // releases and the next queued tab becomes leader.
+  await navigator.locks.request('demo:leader', async () => {
+    console.log('I am the leader');
+    while (true) {
+      const data = await fetchLatestData();
+      ch.postMessage({ type: 'DATA_REFRESH', data });
+      await new Promise((r) => setTimeout(r, 5000));
+    }
+  });
+}
+
+runAsLeader();
+```
+
+เมื่อ leader tab ปิด เบราว์เซอร์ปล่อย lock และ callback ของแท็บถัดไปในคิวจะทำงาน — leader handoff อัตโนมัติโดยไม่ต้องเขียน code เพิ่ม
+
+## รันได้: shared counter sketch
+
+export const crossTabStateCode = `// Shared counter using localStorage + BroadcastChannel + Web Locks.
+// In-page demo: we write, then read back and log.
+const ch = new BroadcastChannel('demo:counter');
+const KEY = 'demo:counter-value';
+
+// Listen for updates from "other tabs" (same-tab echo in this runner)
+ch.onmessage = (e) => {
+  if (e.data.type === 'COUNTER_UPDATE') {
+    console.log('Broadcast received — counter is now:', e.data.value);
+  }
+};
+
+async function increment() {
+  await navigator.locks.request('demo:counter-lock', async () => {
+    const current = parseInt(localStorage.getItem(KEY) || '0', 10);
+    const next = current + 1;
+    localStorage.setItem(KEY, String(next));
+    // Notify other tabs
+    ch.postMessage({ type: 'COUNTER_UPDATE', value: next });
+    console.log('Incremented to:', next);
+  });
+}
+
+await increment();
+await increment();
+await increment();
+
+// Clean up
+localStorage.removeItem(KEY);
+ch.close();
+console.log('Done. Counter cleaned up.');`;
+
+<StorageRunner client:visible code={crossTabStateCode} />
+
+<Callout title="ประเด็นสำคัญ">
+Lock จะทำให้ write เป็น serial แต่ไม่ block read Read ทำได้อย่างปลอดภัยนอก lock ตราบเท่าที่แอปรับได้กับค่าที่อาจ stale เล็กน้อย สำหรับ read-then-write ที่ต้องการความแม่นยำสูง (check-then-act) ให้ทั้ง read และ write อยู่ใน lock callback เดียวกัน
+</Callout>
+
+export const quizCrossTabState = [
+  {
+    q: 'ทำไมต้อง wrap localStorage write ใน navigator.locks.request เมื่อหลายแท็บอาจเขียน?',
+    options: [
+      'localStorage.setItem เป็น asynchronous และต้อง await',
+      'เพื่อป้องกันสองแท็บเขียนพร้อมกันและสูญเสียการอัปเดตของกันและกัน',
+      'Lock เป็นข้อกำหนดของ spec ก่อนเรียก setItem',
+      'เพื่อเพิ่ม localStorage quota',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'ใน leader-election pattern เกิดอะไรขึ้นเมื่อ leader tab ปิด?',
+    options: [
+      'lock ถูกโอนไปยังแท็บอื่นโดยอัตโนมัติ',
+      'เบราว์เซอร์ปล่อย lock ทำให้ callback ของแท็บถัดไปในคิวทำงาน',
+      'ทุกแท็บอื่น throw LockError',
+      'leader ต้องเรียก lock.release() ก่อนปิดไม่งั้น lock จะ leak',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'Storage API ใดถูกใช้เป็น persistent source of truth ใน broadcast-on-write pattern ข้างต้น?',
+    options: ['BroadcastChannel', 'Web Locks', 'localStorage', 'sessionStorage'],
+    answer: 2,
+  },
+  {
+    q: 'แท็บที่เรียก BroadcastChannel.postMessage ได้รับ message event ของตัวเองหรือไม่?',
+    options: [
+      'ใช่ เสมอ',
+      'ไม่ มีเฉพาะแท็บและ worker อื่นที่ได้รับ',
+      'ใช่ แต่เฉพาะเมื่อใช้ addEventListener แทน onmessage',
+      'ใช่ แต่เฉพาะใน microtask tick ถัดไป',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="cross-tab-and-files/cross-tab-state" questions={quizCrossTabState} />
+
+<ProgressTracker client:visible id="cross-tab-and-files/cross-tab-state" />

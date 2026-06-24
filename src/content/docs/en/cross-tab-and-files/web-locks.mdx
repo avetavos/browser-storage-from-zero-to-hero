@@ -1,0 +1,141 @@
+---
+title: 'Web Locks'
+description: 'Coordinate concurrent work across tabs with navigator.locks — exclusive and shared modes, ifAvailable, and locks.query().'
+sidebar:
+  order: 3
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## Why locks?
+
+Multiple tabs of the same app can run simultaneously and may attempt to write to the same IndexedDB record or the same OPFS file at exactly the same moment. Without coordination, writes can race and the last writer silently wins (or, worse, data is corrupted). The Web Locks API provides a browser-native mutual-exclusion primitive that solves this — no server required.
+
+## `navigator.locks.request(name, callback)`
+
+To acquire a lock, pass a string name and an async callback. The browser holds the lock for as long as the callback's returned Promise is pending, then releases it automatically.
+
+```js
+await navigator.locks.request('demo:my-resource', async (lock) => {
+  // Inside here you hold the lock exclusively.
+  // No other tab can acquire 'demo:my-resource' until this async block resolves.
+  await doWork();
+});
+// Lock released here — next waiter can proceed.
+```
+
+If the lock is already held by another tab, `request` queues your callback until the lock is released. The queue is FIFO.
+
+## Exclusive vs shared mode
+
+The default mode is `exclusive` — only one holder at a time. For read-heavy workloads you can use `shared` mode: multiple `shared` holders can overlap, but an `exclusive` request waits until all shared holders finish (like a read-write lock).
+
+```js
+// Multiple tabs can hold this concurrently
+await navigator.locks.request('demo:db-read', { mode: 'shared' }, async (lock) => {
+  const data = await db.getAll();
+  return data;
+});
+
+// This waits until every shared holder above has finished
+await navigator.locks.request('demo:db-read', { mode: 'exclusive' }, async (lock) => {
+  await db.put({ key: 'x', value: 42 });
+});
+```
+
+## `ifAvailable` — non-blocking try
+
+Pass `ifAvailable: true` to get `null` instead of queuing when the lock is already held. This is useful for "do work only if I can start immediately, otherwise skip this cycle":
+
+```js
+const result = await navigator.locks.request(
+  'demo:background-sync',
+  { ifAvailable: true },
+  async (lock) => {
+    if (!lock) {
+      console.log('Lock busy — skipping this cycle');
+      return null;
+    }
+    // We have the lock
+    return await syncData();
+  }
+);
+```
+
+## `navigator.locks.query()`
+
+`query()` returns a snapshot of all currently held and waiting locks — useful for debugging:
+
+```js
+const state = await navigator.locks.query();
+console.log('Held:', state.held);
+console.log('Pending:', state.pending);
+```
+
+## Runnable: acquire an exclusive lock
+
+export const locksCode = `// Request an exclusive lock named 'demo:lock-lesson'
+console.log('Requesting lock...');
+
+await navigator.locks.request('demo:lock-lesson', async (lock) => {
+  console.log('Lock acquired:', lock.name, '| mode:', lock.mode);
+  // Simulate async work inside the lock
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  console.log('Work done inside lock.');
+});
+
+console.log('Lock released. Querying state...');
+const state = await navigator.locks.query();
+console.log('Held locks after release:', state.held.length);
+// Expected: 0 — the lock was released when the callback resolved.`;
+
+<StorageRunner client:visible code={locksCode} />
+
+<Callout title="Key point">
+The Web Locks API is promise-based: you never need to call an explicit "release" method. The lock is held for the lifetime of the async callback and released automatically when the returned Promise settles — even if it rejects. This makes cleanup safe and deterministic.
+</Callout>
+
+export const quizWebLocks = [
+  {
+    q: 'What happens if Tab A holds an exclusive lock named "x" and Tab B calls navigator.locks.request("x", cb) with no options?',
+    options: [
+      'Tab B immediately receives a null lock',
+      "Tab B's callback is queued until Tab A's lock is released",
+      'An error is thrown in Tab B',
+      'Tab A loses the lock immediately',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'In shared mode, how many tabs can hold the same lock simultaneously?',
+    options: [
+      'Only one — shared mode still serialises access',
+      'Two — one reader and one writer',
+      'Unlimited — multiple shared holders can overlap',
+      'Shared mode is not supported in Web Locks',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'You pass `ifAvailable: true` and the lock is currently held. What does the callback receive?',
+    options: ['The lock object with mode: "shared"', 'null', 'undefined', 'A rejected Promise'],
+    answer: 1,
+  },
+  {
+    q: 'When is a Web Lock released?',
+    options: [
+      'When you call lock.release()',
+      'When the tab is closed',
+      'When the async callback returns (its Promise settles)',
+      'After a 30-second timeout',
+    ],
+    answer: 2,
+  },
+];
+
+<Quiz client:visible id="cross-tab-and-files/web-locks" questions={quizWebLocks} />
+
+<ProgressTracker client:visible id="cross-tab-and-files/web-locks" />

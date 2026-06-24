@@ -1,0 +1,161 @@
+---
+title: 'Cache API'
+description: 'caches.open, cache.put, cache.add, cache.addAll, cache.match, caches.match, cache.delete, caches.keys'
+sidebar:
+  order: 2
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## เมธอดทั้งหมดของ Cache API
+
+Cache API เข้าถึงได้ผ่าน global object `caches` ด้านล่างนี้คือเมธอดทั้งหมดที่คุณจะใช้
+
+### `caches.open(name)`
+
+เปิด cache ที่มีชื่อ หรือสร้างใหม่ถ้ายังไม่มี คืนค่าเป็น `Cache` object
+
+```js
+const cache = await caches.open('demo-cache-v1');
+```
+
+### `cache.put(request, response)`
+
+จัดเก็บคู่ `Request`/`Response` อาร์กิวเมนต์แรกอาจเป็น `Request` object หรือ URL string ส่วนอาร์กิวเมนต์ที่สองต้องเป็น `Response` หากมี entry สำหรับ request เดิมอยู่แล้ว จะถูกแทนที่
+
+```js
+const cache = await caches.open('demo-cache-v1');
+await cache.put('/api/hello', new Response('{"status":"ok"}', {
+  headers: { 'Content-Type': 'application/json' },
+}));
+```
+
+### `cache.add(url)` และ `cache.addAll(urls)`
+
+`cache.add(url)` ดึงข้อมูลจาก URL แล้วจัดเก็บ response ไว้ใน cache เป็น shorthand สำหรับ `fetch(url)` ตามด้วย `cache.put(url, response)`
+
+`cache.addAll(urls)` ทำเช่นเดียวกันสำหรับ URL หลายรายการ แต่เป็นแบบ **atomic**: ถ้า request ใดล้มเหลว จะไม่มีการจัดเก็บใด ๆ เลย
+
+```js
+const cache = await caches.open('demo-cache-v1');
+// URL เดียว
+await cache.add('/index.html');
+// หลาย URL — ทั้งหมดหรือไม่มีเลย
+await cache.addAll(['/index.html', '/styles/main.css', '/scripts/app.js']);
+```
+
+### `cache.match(request)` และ `caches.match(request)`
+
+`cache.match(request)` ค้นหาใน cache เดียวและคืนค่า `Response` ที่ตรงกัน หรือ `undefined` ถ้าไม่พบ
+
+`caches.match(request)` ค้นหาใน **cache ทั้งหมด** ของ origin และคืนค่า match แรกที่พบ
+
+```js
+const cache = await caches.open('demo-cache-v1');
+const response = await cache.match('/api/hello');
+if (response) {
+  console.log(await response.json());
+}
+```
+
+### `cache.delete(request)`
+
+ลบ entry เฉพาะออกจาก cache ที่มีชื่อ คืนค่า `true` ถ้าพบและลบได้ หรือ `false` ถ้าไม่พบ
+
+```js
+const cache = await caches.open('demo-cache-v1');
+const deleted = await cache.delete('/api/hello');
+console.log('Deleted:', deleted); // true หรือ false
+```
+
+### `caches.keys()`
+
+คืนค่า array ของชื่อ cache ทั้งหมดสำหรับ origin ปัจจุบัน ใช้สำหรับจัดการ version
+
+```js
+const names = await caches.keys();
+console.log('Open caches:', names);
+```
+
+## ลองเลย: สร้าง, จับคู่, และล้าง cache
+
+export const cacheApiCode = `(async () => {
+  const cacheName = 'demo-cache-api-v1';
+  const cache = await caches.open(cacheName);
+
+  // Store a synthetic response
+  const syntheticResponse = new Response('Hello from cache!', {
+    headers: { 'Content-Type': 'text/plain' },
+  });
+  await cache.put('/demo/greeting', syntheticResponse);
+  console.log('Stored response for /demo/greeting');
+
+  // Match by URL string
+  const matched = await cache.match('/demo/greeting');
+  if (matched) {
+    const text = await matched.text();
+    console.log('Matched text:', text);
+    console.log('Content-Type:', matched.headers.get('Content-Type'));
+  } else {
+    console.log('No match found');
+  }
+
+  // List all caches before cleanup
+  const keys = await caches.keys();
+  console.log('Caches before delete:', keys);
+
+  // Clean up
+  await caches.delete(cacheName);
+  console.log('Caches after delete:', await caches.keys());
+})();`;
+
+<StorageRunner client:visible code={cacheApiCode} />
+
+<Callout title="จุดสำคัญ">
+`cache.addAll` เป็นแบบ atomic: request ทุกรายการต้องสำเร็จ หรือจะไม่มีการจัดเก็บใด ๆ เลย ใช้สำหรับ pre-cache asset ที่สำคัญในช่วง Service Worker install ถ้า asset ใด 404 การติดตั้งทั้งหมดจะล้มเหลว ซึ่งมักเป็นพฤติกรรมที่ถูกต้อง
+</Callout>
+
+export const quizCacheApi = [
+  {
+    q: 'cache.addAll([...urls]) ทำอะไรถ้า URL หนึ่งคืนค่า 404?',
+    options: [
+      'ข้าม URL ที่ล้มเหลวและจัดเก็บที่เหลือ',
+      'จัดเก็บ response ทั้งหมดรวมถึง 404',
+      'throw และไม่จัดเก็บ response ใด ๆ เลย',
+      'ลองใหม่ URL ที่ล้มเหลวสูงสุด 3 ครั้ง',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'ความแตกต่างระหว่าง cache.match() และ caches.match() คืออะไร?',
+    options: [
+      'cache.match() เป็น async; caches.match() เป็น synchronous',
+      'caches.match() ค้นหาทุก cache; cache.match() ค้นหาเฉพาะ cache ที่มีชื่อ',
+      'cache.match() คืนค่า array; caches.match() คืนค่า Response เดียว',
+      'ไม่มีความแตกต่าง — เป็น alias กัน',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'cache.delete(request) คืนค่าอะไร?',
+    options: [
+      'Response object ที่ถูกลบ',
+      'undefined',
+      'boolean: true ถ้าลบได้, false ถ้าไม่พบ',
+      'จำนวน entry ที่เหลืออยู่ใน cache',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'เมธอดใดคืนค่าชื่อ cache ทั้งหมดที่เปิดอยู่สำหรับ origin ปัจจุบัน?',
+    options: ['caches.list()', 'caches.keys()', 'caches.names()', 'CacheStorage.all()'],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="cache-and-quota/cache-api" questions={quizCacheApi} />
+
+<ProgressTracker client:visible id="cache-and-quota/cache-api" />

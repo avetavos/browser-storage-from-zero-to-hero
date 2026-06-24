@@ -1,0 +1,104 @@
+---
+title: 'What Are Cookies'
+description: 'name=value pairs, size limits, per-domain count limits, and automatic request inclusion.'
+sidebar:
+  order: 2
+---
+
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## The cookie format
+
+A cookie is a plain string in `name=value` format. Everything after the first `=` in each attribute is the value. Names and values are both strings — there are no numbers, booleans, or objects at the cookie level.
+
+```http
+Set-Cookie: session=abc123
+Set-Cookie: theme=dark
+Set-Cookie: user_id=42
+```
+
+Multiple cookies for the same domain are stored independently. When the browser sends them, they appear together in a single `Cookie` request header:
+
+```http
+Cookie: session=abc123; theme=dark; user_id=42
+```
+
+Notice that the `Cookie` request header is just a semicolon-separated list of `name=value` pairs — no attributes, no metadata. Attributes like `HttpOnly` and `Secure` are only part of the `Set-Cookie` response header.
+
+## Size limit
+
+Each individual cookie (name + value + attributes combined) is limited to approximately **4 KB**. This is a hard browser limit. Attempting to set a cookie larger than 4 KB silently fails — the browser does not throw an error; the cookie simply is not stored.
+
+This makes cookies unsuitable for storing JSON payloads, base64-encoded images, or any significant amount of structured data. Use `localStorage` or IndexedDB for larger values.
+
+## Per-domain count limit
+
+Browsers also impose a **per-domain cookie count limit**, typically around **50 cookies** per domain (the exact number varies by browser). When the limit is exceeded, browsers may silently evict older cookies to make room for newer ones (the LRU eviction behavior also varies).
+
+In practice, you rarely approach this limit in a well-designed app. If you find yourself needing many cookies, that is usually a sign that some of that data belongs in `localStorage` or IndexedDB instead.
+
+## Automatic request inclusion — the key difference from Web Storage
+
+This is the most important property of cookies and the reason they exist at all:
+
+**Every time the browser makes an HTTP request, it automatically attaches all matching cookies in the `Cookie` request header.**
+
+"Matching" means the cookie's `Domain`, `Path`, `Secure`, and `SameSite` attributes allow it to be sent to the request's URL.
+
+```http
+GET /api/user HTTP/1.1
+Host: example.com
+Cookie: session=abc123; theme=dark
+```
+
+The server receives the cookies without any JavaScript involvement. This is what makes cookies the right choice for session management — the server can authenticate the request before any JavaScript runs.
+
+**Web Storage never touches the network.** `localStorage` and `sessionStorage` values sit in the browser. JavaScript must explicitly read them and include them in a `fetch` or `XMLHttpRequest` call. The browser never sends Web Storage values automatically.
+
+## Comparing transmission behavior
+
+| | Cookies | localStorage | sessionStorage |
+|---|---|---|---|
+| Sent with HTTP requests | Yes — automatically | No | No |
+| Readable by server | Yes (unless JS-set and stripped) | No | No |
+| Readable by JavaScript | Yes (unless HttpOnly) | Yes | Yes |
+| Max size per entry | ~4 KB | ~5 MB total | ~5 MB total |
+| Expiry control | Yes (Expires / Max-Age) | Never expires | Tab lifetime |
+
+<Callout title="Automatic network transmission is the key differentiator">
+Cookies and Web Storage are not interchangeable. The defining difference is that cookies are **sent automatically on every HTTP request** to the matching domain — Web Storage values stay in the browser and never leave unless your own code sends them. Use cookies when the server needs the value; use Web Storage when the value is purely client-side.
+</Callout>
+
+export const quizWhatAreCookies = [
+  {
+    q: 'What is the approximate maximum size of a single cookie?',
+    options: ['1 KB', '4 KB', '5 MB', '10 MB'],
+    answer: 1,
+  },
+  {
+    q: 'How does the browser send multiple cookies to the server?',
+    options: [
+      'In separate Cookie headers, one per cookie',
+      'As a JSON array in a single Cookie header',
+      'As a semicolon-separated list of name=value pairs in a single Cookie header',
+      'Cookies are never sent — the server must call an API to read them',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'When does the browser send cookies to the server?',
+    options: [
+      'Only when JavaScript calls document.cookie',
+      'Only on POST requests',
+      'Automatically on every matching HTTP request',
+      'Only on the first request after login',
+    ],
+    answer: 2,
+  },
+];
+
+<Quiz client:visible id="cookies/what-are-cookies" questions={quizWhatAreCookies} />
+
+<ProgressTracker client:visible id="cookies/what-are-cookies" />

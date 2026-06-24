@@ -1,0 +1,162 @@
+---
+title: 'File System Access & OPFS'
+description: 'Read and write real files with showOpenFilePicker / showSaveFilePicker, and use the Origin Private File System for fully programmatic file I/O.'
+sidebar:
+  order: 5
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## Two ways to write files
+
+The browser provides two distinct file-writing surfaces:
+
+1. **File System Access API** (`showOpenFilePicker`, `showSaveFilePicker`) — lets users pick real files from their local file system. Requires a user gesture (button click). Not available in all browsers.
+2. **Origin Private File System (OPFS)** — a sandboxed, origin-scoped virtual file system. No user gesture, no file picker, fully programmatic. Works in workers. Quota-managed like IndexedDB.
+
+## File System Access API
+
+The picker functions show the native OS file dialog. They must be called from a user-gesture handler.
+
+```js
+// Open a file chosen by the user
+async function openFile() {
+  // showOpenFilePicker must be called inside a user gesture (click, etc.)
+  const [fileHandle] = await window.showOpenFilePicker();
+  const file = await fileHandle.getFile();
+  const text = await file.text();
+  console.log('File contents:', text.slice(0, 200));
+}
+
+// Save / overwrite a file
+async function saveFile(content) {
+  const handle = await window.showSaveFilePicker({
+    suggestedName: 'output.txt',
+    types: [{ description: 'Text file', accept: { 'text/plain': ['.txt'] } }],
+  });
+  const writable = await handle.createWritable();
+  await writable.write(content);
+  await writable.close();
+}
+```
+
+Because `showOpenFilePicker` and `showSaveFilePicker` require a user gesture, they cannot be run autonomously in the StorageRunner above. The OPFS demo below is fully runnable.
+
+## Origin Private File System (OPFS)
+
+OPFS gives every origin a private directory tree. You do not need a user gesture — just call `navigator.storage.getDirectory()`.
+
+```js
+// Get the root of the OPFS
+const root = await navigator.storage.getDirectory();
+
+// Create or open a file handle
+const fileHandle = await root.getFileHandle('notes.txt', { create: true });
+
+// Write to it
+const writable = await fileHandle.createWritable();
+await writable.write('Hello from OPFS!');
+await writable.close();
+
+// Read it back
+const file = await fileHandle.getFile();
+const text = await file.text();
+console.log(text); // 'Hello from OPFS!'
+```
+
+## Directory navigation
+
+```js
+const root = await navigator.storage.getDirectory();
+
+// Create a sub-directory
+const subDir = await root.getDirectoryHandle('drafts', { create: true });
+
+// List entries
+for await (const [name, handle] of subDir.entries()) {
+  console.log(handle.kind, name);
+}
+```
+
+## Runnable: OPFS write and read
+
+export const opfsCode = `// OPFS is fully available in the same-origin iframe — no user gesture needed.
+const root = await navigator.storage.getDirectory();
+
+// Write a file
+const fh = await root.getFileHandle('demo-opfs.txt', { create: true });
+const writable = await fh.createWritable();
+await writable.write('Hello from OPFS! Written at: ' + new Date().toISOString());
+await writable.close();
+console.log('File written.');
+
+// Read it back
+const file = await fh.getFile();
+const text = await file.text();
+console.log('Read back:', text);
+
+// List all files in the root
+console.log('Root entries:');
+for await (const [name, handle] of root.entries()) {
+  console.log(' ', handle.kind, name);
+}
+
+// Clean up — remove the demo file
+await root.removeEntry('demo-opfs.txt');
+console.log('Cleaned up demo-opfs.txt');`;
+
+<StorageRunner client:visible code={opfsCode} />
+
+<Callout title="Key point">
+OPFS storage is counted against the origin's overall quota (same pool as IndexedDB and Cache API). Use `navigator.storage.estimate()` to check available space. OPFS data survives browser restarts but can be evicted by the browser under storage pressure if the origin has not been granted persistent storage via `navigator.storage.persist()`.
+</Callout>
+
+export const quizFileSystemAccessOpfs = [
+  {
+    q: 'Why does showOpenFilePicker require a user gesture?',
+    options: [
+      'It is a browser bug that will be fixed in future versions',
+      'To prevent malicious scripts from silently reading the user\'s local files',
+      'Because OPFS uses a different security model',
+      'User gestures increase the file quota',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'What does navigator.storage.getDirectory() return?',
+    options: [
+      'A Promise that resolves to a FileSystemDirectoryHandle for the OPFS root',
+      'A synchronous reference to the user\'s Downloads folder',
+      'A Promise that shows the OS file picker',
+      'A directory listing of the origin\'s localStorage keys',
+    ],
+    answer: 0,
+  },
+  {
+    q: 'After calling fileHandle.createWritable() and writing data, what must you do before the data is visible to future reads?',
+    options: [
+      'Call fileHandle.flush()',
+      'Call writable.close()',
+      'Nothing — writes are immediately durable',
+      'Reload the page',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'Which of the following correctly describes OPFS storage persistence?',
+    options: [
+      'Data is lost when the tab is closed',
+      'Data survives browser restarts but may be evicted under storage pressure unless persist() is granted',
+      'Data is permanent and can never be cleared by the browser',
+      'Data is shared across all origins',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="cross-tab-and-files/file-system-access-opfs" questions={quizFileSystemAccessOpfs} />
+
+<ProgressTracker client:visible id="cross-tab-and-files/file-system-access-opfs" />

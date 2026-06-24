@@ -1,0 +1,195 @@
+---
+title: 'การสร้างและค้นหา Indexes'
+description: 'ใช้ createIndex() ใน onupgradeneeded เพื่อ index ฟิลด์ใดก็ได้ จากนั้นค้นหาด้วย index.get() และ index.getAll()'
+sidebar:
+  order: 2
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## ทำไมต้องใช้ indexes?
+
+Object store ทุกตัวใน IndexedDB จะใช้ primary key (ได้แก่ `keyPath` หรือ id ที่เพิ่มขึ้นอัตโนมัติ) เป็นตัวระบุระเบียน วิธีนี้มีประสิทธิภาพสำหรับการค้นหา **ด้วย primary key** แต่หากต้องการค้นหาด้วยฟิลด์อื่น เช่น ค้นหา contacts ทั้งหมดตาม `name` คุณจำเป็นต้องใช้ **index**
+
+Index คือโครงสร้างเรียงลำดับรองที่แมปค่าของฟิลด์ที่เลือกไปยัง primary key ของระเบียนนั้น เมื่อสร้างแล้ว คุณสามารถเรียก `get()` หรือ `getAll()` บน index ได้เหมือนกับที่เรียกบน store โดยตรง
+
+## การสร้าง index ด้วย `createIndex()`
+
+Index **ต้อง**ถูกสร้าง (หรือลบ) ภายใน callback ของ `onupgradeneeded` เท่านั้น ไม่สามารถเพิ่ม index ให้กับ store ที่มีอยู่แล้วนอก upgrade transaction ได้
+
+```js
+const request = indexedDB.open('mydb', 1);
+
+request.onupgradeneeded = (event) => {
+  const db = event.target.result;
+
+  // Create the object store
+  const store = db.createObjectStore('contacts', { keyPath: 'id' });
+
+  // Create an index on the 'name' field
+  store.createIndex('by_name', 'name', { unique: false });
+};
+```
+
+### พารามิเตอร์ของ `createIndex(name, keyPath, options)`
+
+| พารามิเตอร์ | ความหมาย |
+|-----------|---------|
+| `name` | ชื่อ index ที่จะใช้เรียกคืนในภายหลังด้วย `store.index(name)` |
+| `keyPath` | path ของ property บนแต่ละระเบียนที่จะ index (เช่น `'name'`, `'address.city'`) |
+| `unique` | หาก `true` store จะปฏิเสธระเบียนที่มีค่า indexed ซ้ำกับที่มีอยู่ |
+| `multiEntry` | หาก `true` และ property ที่ index เป็น array แต่ละ element ของ array จะมี entry เป็นของตัวเองใน index |
+
+## การเปิด index และการค้นหา
+
+หลังจาก upgrade เสร็จสิ้น ให้เปิด index จาก transaction อ่าน/เขียนปกติด้วย `store.index('by_name')` จากนั้นเรียก `get(value)` สำหรับระเบียนเดียว หรือ `getAll(value)` สำหรับระเบียนที่ตรงกันทั้งหมด
+
+```js
+const tx = db.transaction('contacts', 'readonly');
+const store = tx.objectStore('contacts');
+const nameIndex = store.index('by_name');
+
+// Single match
+const getReq = nameIndex.get('Alice');
+getReq.onsuccess = () => console.log(getReq.result); // { id: 1, name: 'Alice', ... }
+
+// All records (no filter → returns every record sorted by index key)
+const getAllReq = nameIndex.getAll();
+getAllReq.onsuccess = () => console.log(getAllReq.result);
+```
+
+การส่งค่าให้ `getAll(value)` จะกรองเฉพาะระเบียนที่ฟิลด์ indexed ตรงกับค่านั้น หากไม่ส่งอาร์กิวเมนต์ (หรือส่ง `undefined`) จะคืนค่าทุกระเบียนใน store โดยเรียงตาม index key
+
+## แฟล็ก `unique`
+
+```js
+// Enforce unique emails
+store.createIndex('by_email', 'email', { unique: true });
+```
+
+เมื่อใช้ `unique: true` การเรียก `add()` หรือ `put()` ใดๆ ที่จะสร้างค่า indexed ซ้ำกันจะเกิด `ConstraintError` ใช้ตัวเลือกนี้กับฟิลด์อย่างเช่น email หรือ username ที่ไม่อนุญาตให้มีซ้ำ
+
+## แฟล็ก `multiEntry`
+
+```js
+// Record: { id: 1, tags: ['js', 'idb', 'storage'] }
+store.createIndex('by_tag', 'tags', { multiEntry: true });
+```
+
+เมื่อใช้ `multiEntry: true` ฟิลด์ที่มีค่าเป็น array จะสร้าง index entry หนึ่งรายการต่อ element คุณสามารถเรียก `index.getAll('idb')` และระเบียนข้างต้นจะถูกคืนค่า แม้ว่าค่าของ `tags` จะเป็น array ก็ตาม
+
+## ตัวอย่างรันได้: สร้าง index และค้นหา
+
+export const indexesCode = `(async function () {
+  // Helper: wrap an IDBRequest in a Promise
+  function req(r) {
+    return new Promise((resolve, reject) => {
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+    });
+  }
+
+  // 1. Open the database (version 1)
+  const db = await new Promise((resolve, reject) => {
+    const openReq = indexedDB.open('demo-advanced-indexes', 1);
+
+    openReq.onupgradeneeded = (event) => {
+      const database = event.target.result;
+      const store = database.createObjectStore('contacts', { keyPath: 'id' });
+      store.createIndex('by_name', 'name', { unique: false });
+      console.log('Store and index created.');
+    };
+
+    openReq.onsuccess = () => resolve(openReq.result);
+    openReq.onerror = () => reject(openReq.error);
+  });
+
+  // 2. Add two records
+  const writeTx = db.transaction('contacts', 'readwrite');
+  const writeStore = writeTx.objectStore('contacts');
+  await req(writeStore.put({ id: 1, name: 'Alice', email: 'alice@example.com' }));
+  await req(writeStore.put({ id: 2, name: 'Bob',   email: 'bob@example.com' }));
+  await new Promise((resolve, reject) => {
+    writeTx.oncomplete = resolve;
+    writeTx.onerror = () => reject(writeTx.error);
+  });
+  console.log('Records inserted.');
+
+  // 3. Query using the index
+  const readTx = db.transaction('contacts', 'readonly');
+  const readStore = readTx.objectStore('contacts');
+  const nameIndex = readStore.index('by_name');
+
+  // Single lookup
+  const alice = await req(nameIndex.get('Alice'));
+  console.log('Alice email:', alice.email);
+
+  // Get all records (sorted by name)
+  const all = await req(nameIndex.getAll());
+  console.log('All contacts by name:', all.map(function(c) { return c.name; }).join(', '));
+
+  // 4. Clean up
+  db.close();
+  await new Promise((resolve, reject) => {
+    const delReq = indexedDB.deleteDatabase('demo-advanced-indexes');
+    delReq.onsuccess = resolve;
+    delReq.onerror = () => reject(delReq.error);
+  });
+  console.log('Database deleted — cleanup done.');
+})();`;
+
+<StorageRunner client:visible code={indexesCode} />
+
+<Callout title="ประเด็นสำคัญ">
+Index จะถูกสร้างครั้งเดียวใน `onupgradeneeded` และไม่มีการสร้างซ้ำอีก ใช้ `{ unique: true }` เพื่อบังคับความไม่ซ้ำกันของฟิลด์ และใช้ `{ multiEntry: true }` เมื่อ property ที่ index เก็บค่าเป็น array เรียกคืน index ในขณะค้นหาด้วย `store.index('indexName')` จากนั้นเรียก `.get(value)` สำหรับระเบียนเดียว หรือ `.getAll(value)` สำหรับระเบียนที่ตรงกันทั้งหมด
+</Callout>
+
+export const quizIndexes = [
+  {
+    q: 'คุณต้องเรียก objectStore.createIndex() ที่ไหนเพื่อเพิ่ม index ได้สำเร็จ?',
+    options: [
+      'ภายใน readwrite transaction ใดก็ได้',
+      'ภายใน callback ของ onupgradeneeded เท่านั้น',
+      'ภายใน callback ของ onsuccess ของ indexedDB.open()',
+      'ที่จุดใดก็ได้ก่อนการอ่านครั้งแรก',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'การตั้งค่า { unique: true } บน index ทำอะไร?',
+    options: [
+      'ทำให้การเรียก getAll() เร็วขึ้น',
+      'อนุญาตให้มีได้เพียง index เดียวต่อ object store',
+      'ปฏิเสธระเบียนใดก็ตามที่มีค่า indexed ซ้ำกับที่มีอยู่',
+      'ทำให้ index.get() คืนค่าเฉพาะระเบียนแรกที่ตรงกัน',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'คุณเรียก nameIndex.getAll() โดยไม่ส่งอาร์กิวเมนต์ จะได้ผลลัพธ์อะไร?',
+    options: [
+      'เฉพาะระเบียนแรกใน store',
+      'array ว่าง — ต้องส่งค่าเสมอ',
+      'ระเบียนทั้งหมดใน store เรียงตามฟิลด์ที่ index',
+      'ระเบียนทั้งหมดตามลำดับที่เพิ่มเข้ามา',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'ระเบียนมีฟิลด์ tags: ["js", "idb"] ตัวเลือก createIndex ใดที่ทำให้ค้นหา "js" และ "idb" แยกกันได้ผ่าน index.getAll("js")?',
+    options: [
+      '{ unique: true }',
+      '{ multiEntry: true }',
+      '{ arrayIndex: true }',
+      '{ expand: true }',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="indexeddb-advanced/indexes" questions={quizIndexes} />
+
+<ProgressTracker client:visible id="indexeddb-advanced/indexes" />

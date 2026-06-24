@@ -1,0 +1,180 @@
+---
+title: 'The Cache API'
+description: 'caches.open, cache.put, cache.add, cache.addAll, cache.match, caches.match, cache.delete, caches.keys.'
+sidebar:
+  order: 2
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## The complete Cache API
+
+The Cache API revolves around two objects: the global `CacheStorage` (accessed via `caches`) and the individual `Cache` objects it manages. All methods are async and return Promises.
+
+### `caches.open(name)`
+
+Opens an existing named cache or creates a new one if it does not exist. Returns a `Cache` object. Cache names are arbitrary strings — use versioned names like `app-shell-v2` to manage upgrades.
+
+```js
+const cache = await caches.open('demo-cache-v1');
+```
+
+### `cache.put(request, response)`
+
+Stores a `Request`/`Response` pair. The first argument can be a `Request` object or a URL string; the second must be a `Response`. Any existing entry for the same request is replaced.
+
+```js
+const cache = await caches.open('demo-cache-v1');
+await cache.put('/api/hello', new Response('{"status":"ok"}', {
+  headers: { 'Content-Type': 'application/json' },
+}));
+```
+
+### `cache.add(url)`
+
+Fetches the given URL and stores the resulting response in the cache. Equivalent to calling `fetch(url)` followed by `cache.put(url, response)`. The request must succeed (2xx status) or the cache is not updated.
+
+```js
+const cache = await caches.open('demo-cache-v1');
+await cache.add('/images/logo.png'); // fetches then stores
+```
+
+### `cache.addAll(urls)`
+
+Accepts an array of URL strings and fetches all of them atomically. If **any** request fails, **none** of the responses are stored. Use this when you need a group of assets to be cached together or not at all.
+
+```js
+const cache = await caches.open('demo-cache-v1');
+await cache.addAll([
+  '/index.html',
+  '/styles/main.css',
+  '/scripts/app.js',
+]);
+```
+
+### `cache.match(request, options?)`
+
+Looks up the cache for an entry matching the given request (URL string or `Request`). Returns the matching `Response` or `undefined` if no entry exists. The optional `options` object accepts `ignoreSearch`, `ignoreMethod`, and `ignoreVary`.
+
+```js
+const cache = await caches.open('demo-cache-v1');
+const response = await cache.match('/api/hello');
+if (response) {
+  console.log(await response.json());
+}
+```
+
+### `caches.match(request, options?)`
+
+Like `cache.match` but searches **across all named caches** in the current origin, returning the first match found. Useful when you do not know which cache holds a particular response.
+
+```js
+const response = await caches.match('/api/hello');
+```
+
+### `cache.delete(request, options?)`
+
+Removes the entry for the given request from the cache. Returns `true` if an entry was found and deleted, `false` otherwise.
+
+```js
+const cache = await caches.open('demo-cache-v1');
+const deleted = await cache.delete('/api/hello');
+console.log('Deleted:', deleted); // true
+```
+
+### `caches.keys()`
+
+Returns an array of all cache names for the current origin. Use it to enumerate or clean up caches.
+
+```js
+const names = await caches.keys();
+console.log('Open caches:', names);
+
+// Delete all caches
+for (const name of names) {
+  await caches.delete(name);
+}
+```
+
+## Runnable: put, match, and clean up
+
+export const cacheApiCode = `(async () => {
+  const cacheName = 'demo-cache-api-v1';
+  const cache = await caches.open(cacheName);
+
+  // Store a synthetic response
+  const syntheticResponse = new Response('Hello from cache!', {
+    headers: { 'Content-Type': 'text/plain' },
+  });
+  await cache.put('/demo/greeting', syntheticResponse);
+  console.log('Stored response for /demo/greeting');
+
+  // Match by URL string
+  const matched = await cache.match('/demo/greeting');
+  if (matched) {
+    const text = await matched.text();
+    console.log('Matched text:', text);
+    console.log('Content-Type:', matched.headers.get('Content-Type'));
+  } else {
+    console.log('No match found');
+  }
+
+  // List all caches before cleanup
+  const keys = await caches.keys();
+  console.log('Caches before delete:', keys);
+
+  // Clean up
+  await caches.delete(cacheName);
+  console.log('Caches after delete:', await caches.keys());
+})();`;
+
+<StorageRunner client:visible code={cacheApiCode} />
+
+<Callout title="Key point">
+`cache.addAll` is atomic: all requests must succeed or none are stored. Use it to pre-cache a known set of critical assets at Service Worker install time. If one asset 404s, the entire installation fails, which is usually the correct behavior — you do not want a partially cached app shell.
+</Callout>
+
+export const quizCacheApi = [
+  {
+    q: 'What does cache.addAll([...urls]) do if one URL returns a 404?',
+    options: [
+      'It skips the failed URL and stores the rest',
+      'It stores all responses including the 404 response',
+      'It throws and stores none of the responses',
+      'It retries the failed URL up to three times',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'What is the difference between cache.match() and caches.match()?',
+    options: [
+      'cache.match() is async; caches.match() is synchronous',
+      'caches.match() searches all caches; cache.match() searches only one named cache',
+      'cache.match() returns an array; caches.match() returns a single Response',
+      'There is no difference — they are aliases',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'What does cache.delete(request) return?',
+    options: [
+      'The deleted Response object',
+      'undefined',
+      'A boolean: true if deleted, false if not found',
+      'The number of entries remaining in the cache',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'Which method returns the names of all open caches for the current origin?',
+    options: ['caches.list()', 'caches.keys()', 'caches.names()', 'CacheStorage.all()'],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="cache-and-quota/cache-api" questions={quizCacheApi} />
+
+<ProgressTracker client:visible id="cache-and-quota/cache-api" />

@@ -1,0 +1,137 @@
+---
+title: 'Quota และ persistent storage'
+description: "ใช้ navigator.storage.estimate() ตรวจสอบ quota และ usage, ขอ persistence ด้วย persist() และทำความเข้าใจการ evict ของเบราว์เซอร์ภายใต้ storage pressure"
+sidebar:
+  order: 5
+---
+
+import Mermaid from '../../../../components/Mermaid.astro';
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## เบราว์เซอร์ให้ storage คุณเท่าไหร่?
+
+เบราว์เซอร์ไม่ได้ให้ storage ไม่จำกัดแก่ทุก origin แต่จะจัดสรร **quota** ซึ่งเป็นจำนวนสูงสุดที่ origin อาจใช้ โดยพิจารณาจาก disk ที่มีอยู่และนโยบายเบราว์เซอร์ quota สำหรับ IndexedDB, Cache API และ OPFS มาจาก shared pool ที่เรียกว่า **"default" storage bucket**
+
+`navigator.storage.estimate()` API คืนค่า snapshot ของปริมาณ quota ที่ origin ของคุณใช้ไปแล้ว
+
+```js
+const { quota, usage } = await navigator.storage.estimate();
+console.log('Quota :', (quota / 1024 / 1024).toFixed(1), 'MB');
+console.log('Usage :', (usage / 1024 / 1024).toFixed(2), 'MB');
+```
+
+ค่า `usage` ที่คืนมาครอบคลุม IndexedDB, Cache API และ OPFS รวมกัน ไม่รวม `localStorage` หรือ cookies ซึ่งมี limits แยกต่างหากที่เล็กกว่า
+
+## Best-effort กับ persistent storage
+
+โดยค่าเริ่มต้น ทุก origin จะได้รับ **best-effort** storage ภายใต้ disk ที่มีน้อย เบราว์เซอร์มีอิสระที่จะ evict ข้อมูล best-effort ได้ โดยไม่มีการแจ้งเตือน เพื่อเพิ่มพื้นที่ ลำดับการ evict มักเป็น origin ที่ใช้งานล่าสุดน้อยที่สุดก่อน
+
+คุณสามารถขอให้เบราว์เซอร์อัปเกรด origin ของคุณเป็น **persistent** storage ข้อมูล persistent จะไม่ถูก evict โดยไม่มีการกระทำที่ชัดเจนจากผู้ใช้ (การล้าง site data) ในการขอ:
+
+```js
+const granted = await navigator.storage.persist();
+console.log('Persistent storage granted:', granted); // true หรือ false
+```
+
+ในการตรวจสอบสถานะปัจจุบันโดยไม่ขอ:
+
+```js
+const isPersisted = await navigator.storage.persisted();
+console.log('Already persistent:', isPersisted);
+```
+
+### เบราว์เซอร์จะอนุมัติ persistence เมื่อไหร่?
+
+เบราว์เซอร์ใช้ engagement heuristics ในการตัดสินใจว่าจะอนุมัติ request แบบเงียบ ๆ หรือแสดง permission prompt ปัจจัยที่เพิ่มโอกาสในการได้รับการอนุมัติโดยอัตโนมัติ ได้แก่:
+
+- Site ถูก install เป็น PWA (เพิ่มใน Home Screen / ติดตั้งผ่าน browser UI)
+- ผู้ใช้เยี่ยมชม site บ่อยครั้ง
+- ผู้ใช้ bookmark site หรือมอบ permissions อื่น ๆ (push notifications, geolocation)
+- บางเบราว์เซอร์ (Firefox) จะถามผู้ใช้เสมอ เบราว์เซอร์ที่ใช้ Chromium อาจอนุมัติเงียบ ๆ
+
+## storage durability สองระดับ
+
+export const durabilityDiagram = `flowchart TD
+  A[Origin stores data] --> B{Durability tier}
+  B -->|Default| C[Best-effort storage]
+  B -->|After persist granted| D[Persistent storage]
+  C --> E[Browser MAY evict under\\ndisk pressure]
+  E --> F[Data silently deleted]
+  D --> G[Browser will NEVER evict\\nwithout user action]
+  G --> H[Data safe until user\\nclears site data]`;
+
+<Mermaid code={durabilityDiagram} title="Best-effort storage อาจถูก evict เงียบ ๆ; persistent storage ต้องการการกระทำที่ชัดเจนจากผู้ใช้เพื่อลบ" />
+
+## Runnable: ตรวจสอบ quota และสถานะ persistence
+
+snippet ด้านล่างเรียกทั้ง `estimate()` และ `persisted()` และบันทึกผลลัพธ์ ไม่มีการเขียน demo keys ดังนั้นไม่ต้องทำความสะอาด
+
+export const quotaCode = `async function checkStorage() {
+  // Quota and usage
+  const estimate = await navigator.storage.estimate();
+  const usedMB  = (estimate.usage  / 1024 / 1024).toFixed(3);
+  const quotaMB = (estimate.quota  / 1024 / 1024).toFixed(1);
+  const pct     = ((estimate.usage / estimate.quota) * 100).toFixed(4);
+
+  console.log('--- Storage estimate ---');
+  console.log('Usage : ' + usedMB  + ' MB');
+  console.log('Quota : ' + quotaMB + ' MB');
+  console.log('Used  : ' + pct + '%');
+
+  // Persistence status
+  const persisted = await navigator.storage.persisted();
+  console.log('\\n--- Persistence ---');
+  console.log('Currently persistent:', persisted);
+
+  if (!persisted) {
+    console.log('Tip: call navigator.storage.persist() to request durable storage.');
+  }
+}
+
+checkStorage();`;
+
+<StorageRunner client:visible code={quotaCode} />
+
+<Callout title="ประเด็นสำคัญ">
+Best-effort storage เหมาะสำหรับ caches และข้อมูลที่ไม่สำคัญ สำหรับข้อมูลที่แอปของคุณไม่สามารถสูญเสียได้ เช่น offline documents, user-generated content, saved game state ให้เรียก `navigator.storage.persist()` เร็ว ๆ ในช่วงต้น lifecycle ของแอป โดยเฉพาะหลังจากที่ผู้ใช้แสดงให้เห็นถึงการมีส่วนร่วมกับ site ของคุณ
+</Callout>
+
+export const quizQuota = [
+  {
+    q: 'navigator.storage.estimate() return อะไร?',
+    options: [
+      'จำนวน keys ที่เก็บใน localStorage',
+      'object ที่มี quota และ usage เป็น bytes สำหรับ origin',
+      'Boolean ที่บอกว่า persistent storage ได้รับการอนุมัติหรือไม่',
+      'ความจุ cookie ที่เหลือเป็น kilobytes',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'ภายใต้เงื่อนไขใดที่เบราว์เซอร์สามารถลบข้อมูล best-effort storage เงียบ ๆ?',
+    options: [
+      'เมื่อผู้ใช้ล้าง browsing history',
+      'เมื่อมีการลงทะเบียน service worker ใหม่',
+      'เมื่อ disk space ต่ำและ origin ยังไม่ได้รับ persistent storage',
+      'เมื่อผู้ใช้ไม่ได้เยี่ยมชม site เป็นเวลา 7 วัน',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'navigator.storage.persist() คืน Promise ค่าที่ resolve หมายความว่าอะไร?',
+    options: [
+      'จำนวน bytes ที่ได้รับการปกป้องจาก eviction',
+      'Boolean — true หากเบราว์เซอร์อนุมัติ persistent storage, false หากไม่',
+      'quota ใหม่เป็น bytes หลังการอัปเกรด',
+      'String ที่อธิบาย persistence policy ที่ใช้',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="intro-storage-landscape/quota-and-persistence" questions={quizQuota} />
+
+<ProgressTracker client:visible id="intro-storage-landscape/quota-and-persistence" />

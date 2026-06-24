@@ -1,0 +1,114 @@
+---
+title: 'Storage Manager'
+description: 'navigator.storage.estimate() คืนค่า usage และ quota; persist() และ persisted() ควบคุมการป้องกันการลบข้อมูล'
+sidebar:
+  order: 3
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## navigator.storage
+
+Object `navigator.storage` เป็นจุดเข้าถึง Storage Manager API ให้คุณมองเห็นได้ว่า origin ของคุณใช้พื้นที่ดิสก์ไปเท่าไร ได้รับ quota เท่าไรจากเบราว์เซอร์ และข้อมูลของคุณได้รับการป้องกันจากการ eviction หรือไม่
+
+เมธอดทั้งสามคืนค่า Promise และใช้ร่วมกับ `await`
+
+### `navigator.storage.estimate()`
+
+คืนค่าออบเจกต์ที่มีสองฟิลด์:
+
+- `usage` — จำนวน byte ที่ origin ใช้อยู่ขณะนี้ ครอบคลุมกลไกการจัดเก็บทั้งหมด (Cache API, IndexedDB, localStorage ฯลฯ)
+- `quota` — จำนวน byte โดยประมาณที่เบราว์เซอร์ยินดีให้ origin นี้ใช้
+
+```js
+const { usage, quota } = await navigator.storage.estimate();
+console.log('Using', usage, 'of', quota, 'bytes');
+```
+
+ค่าที่ได้เป็นค่าประมาณ เบราว์เซอร์อาจปัดค่าเพื่อป้องกันการ fingerprinting
+
+### `navigator.storage.persist()`
+
+ร้องขอให้เบราว์เซอร์ให้ *persistent* storage แก่ origin ปัจจุบัน คืนค่า `Promise<boolean>`:
+
+- `true` — ได้รับ persistent storage เบราว์เซอร์จะไม่ evict ข้อมูลของ origin โดยอัตโนมัติ
+- `false` — คำขอถูกปฏิเสธ storage ยังคงเป็น best-effort และอาจถูก evict ได้
+
+```js
+const granted = await navigator.storage.persist();
+console.log('Persistent:', granted);
+```
+
+### `navigator.storage.persisted()`
+
+ตรวจสอบว่า persistent storage ได้รับอนุญาตไปแล้วหรือยัง คืนค่า `Promise<boolean>`
+
+```js
+const isPersisted = await navigator.storage.persisted();
+if (!isPersisted) {
+  // ตัดสินใจว่าจะขอ persistence หรือไม่
+}
+```
+
+## ลองเลย: ตรวจสอบ usage, quota, และ persistence
+
+export const storageManagerCode = `(async () => {
+  // Check current usage and quota
+  const { usage, quota } = await navigator.storage.estimate();
+
+  const usageMB = (usage / 1024 ** 2).toFixed(2);
+  const quotaMB = (quota / 1024 ** 2).toFixed(2);
+
+  console.log('Storage usage:', usageMB, 'MB');
+  console.log('Storage quota:', quotaMB, 'MB');
+  console.log('Usage as % of quota:', ((usage / quota) * 100).toFixed(4) + '%');
+
+  // Check whether storage is currently persistent
+  const isPersistent = await navigator.storage.persisted();
+  console.log('Is persistent:', isPersistent);
+
+  if (!isPersistent) {
+    console.log('Tip: call navigator.storage.persist() to request eviction protection');
+  }
+})();`;
+
+<StorageRunner client:visible code={storageManagerCode} />
+
+<Callout title="จุดสำคัญ">
+`navigator.storage.estimate()` รายงาน usage ของ **storage ทั้งหมด** ของ origin ไม่ใช่แค่ Cache API IndexedDB, Service Worker registration และ API อื่น ๆ ล้วนนับรวมใน quota เดียวกัน ตรวจสอบในแอปที่ production ซึ่ง cache asset ขนาดใหญ่หรือเก็บข้อมูลออฟไลน์จำนวนมาก
+</Callout>
+
+export const quizStorageManager = [
+  {
+    q: 'navigator.storage.estimate() คืนค่า usage และ quota ในหน่วยใด?',
+    options: ['Kilobyte', 'Megabyte', 'Byte', 'Gigabyte'],
+    answer: 2,
+  },
+  {
+    q: 'navigator.storage.persist() คืนค่าอะไร?',
+    options: [
+      'สตริง: "granted" หรือ "denied"',
+      'boolean: true ถ้าได้รับ persistent storage',
+      'ออบเจกต์ usage และ quota ปัจจุบัน',
+      'undefined — ทำงานผ่าน side effect เท่านั้น',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'กลไกการจัดเก็บใดบ้างที่รวมอยู่ใน usage ที่รายงานโดย navigator.storage.estimate()?',
+    options: [
+      'เฉพาะ Cache API',
+      'เฉพาะ IndexedDB',
+      'storage ทั้งหมดของ origin: Cache API, IndexedDB, localStorage และอื่น ๆ',
+      'เฉพาะ storage ที่เขียนโดย Service Workers',
+    ],
+    answer: 2,
+  },
+];
+
+<Quiz client:visible id="cache-and-quota/storage-manager" questions={quizStorageManager} />
+
+<ProgressTracker client:visible id="cache-and-quota/storage-manager" />

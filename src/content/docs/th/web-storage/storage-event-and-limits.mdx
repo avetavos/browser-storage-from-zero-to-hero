@@ -1,0 +1,164 @@
+---
+title: 'The storage Event and Limits'
+description: 'การสื่อสารข้ามแท็บด้วย storage event, quota 5 MB และข้อควรระวังเรื่องการบล็อกแบบ sync'
+sidebar:
+  order: 5
+---
+
+import Mermaid from '../../../../components/Mermaid.astro';
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## storage event
+
+เมื่อหน้าเว็บหนึ่งเปลี่ยนแปลง `localStorage` เบราว์เซอร์จะยิง `storage` event ไปยัง **ทุกแท็บและทุกหน้าต่างอื่นที่เปิดอยู่บน origin เดียวกัน** — แต่ **ไม่** ยิงในแท็บที่ทำการเปลี่ยนแปลงนั้น ความไม่สมมาตรนี้ทำให้นักพัฒนาส่วนใหญ่ประหลาดใจในครั้งแรก
+
+```js
+// Register this listener in Tab B
+window.addEventListener('storage', (event) => {
+  console.log('key changed:', event.key);
+  console.log('old value:', event.oldValue);
+  console.log('new value:', event.newValue);
+  console.log('storage area:', event.storageArea); // localStorage object
+});
+
+// In Tab A, write to localStorage — Tab B's listener fires; Tab A's does NOT
+```
+
+property ของ `StorageEvent` มีดังนี้:
+
+| Property | Type | คำอธิบาย |
+|---|---|---|
+| `key` | `string \| null` | key ที่เปลี่ยนแปลง เป็น `null` เมื่อมีการเรียก `clear()` |
+| `oldValue` | `string \| null` | ค่าก่อนหน้า หรือ `null` หาก key เพิ่งถูกสร้างใหม่ |
+| `newValue` | `string \| null` | ค่าใหม่ หรือ `null` หาก key ถูกลบ |
+| `url` | `string` | URL ของเอกสารที่ทำการเปลี่ยนแปลง |
+| `storageArea` | `Storage \| null` | object `localStorage` (ไม่เคยเป็น `sessionStorage` — event นั้นยิงเฉพาะภายในแท็บเดียวกัน) |
+
+`storage` event ยิง **เฉพาะสำหรับ `localStorage`** เท่านั้น การเปลี่ยนแปลง `sessionStorage` จะไม่ส่งต่อข้ามแท็บ เพราะแต่ละแท็บมี session store ของตัวเองที่แยกขาดกัน
+
+## แพตเทิร์นการส่งสัญญาณข้ามแท็บ (Cross-tab signalling)
+
+export const eventFlowDiagram = `sequenceDiagram
+  participant A as Tab A (writer)
+  participant LS as localStorage
+  participant B as Tab B (listener)
+  A->>LS: setItem("demo:signal", "ping")
+  LS-->>B: storage event fires
+  Note over B: key="demo:signal"<br/>newValue="ping"
+  Note over A: No event fires in Tab A`;
+
+<Mermaid code={eventFlowDiagram} title="storage event ยิงในแท็บอื่น ไม่ใช่ในแท็บที่เขียน" />
+
+use case ที่พบบ่อยคือการ broadcast การ logout ข้ามแท็บ:
+
+```js
+// In any tab: signal logout
+localStorage.setItem('demo:auth-event', 'logout:' + Date.now());
+
+// In every other tab: react to it
+window.addEventListener('storage', (e) => {
+  if (e.key === 'demo:auth-event' && e.newValue?.startsWith('logout:')) {
+    // redirect to login page
+    window.location.href = '/login';
+  }
+});
+```
+
+## quota ราว ~5 MB
+
+ข้อกำหนด (specification) ของ Web Storage ไม่ได้บังคับขนาด quota ที่ตายตัว แต่เบราว์เซอร์ต่าง ๆ implement ที่ประมาณ **5 MB ต่อ origin** สำหรับ `localStorage` เหมือนกันทั่วไป (บางตัวให้ 10 MB; เบราว์เซอร์บนมือถืออาจให้น้อยกว่า)
+
+เมื่อคุณใช้เกิน quota `setItem` จะโยน `QuotaExceededError` (ซึ่งเป็น `DOMException`):
+
+```js
+try {
+  const big = 'x'.repeat(6 * 1024 * 1024); // 6 MB string
+  localStorage.setItem('demo:big', big);
+} catch (e) {
+  if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+    console.error('Storage quota exceeded — cannot save data');
+  }
+}
+```
+
+ให้ครอบการเขียนที่อาจมีขนาดใหญ่ (เช่น array หรือ object ที่ serialise แล้วและโตขึ้นเรื่อย ๆ ตามเวลา) ด้วย `try/catch` เสมอ เพื่อจัดการ quota error อย่างนุ่มนวล
+
+## ข้อควรระวังเรื่องการบล็อกแบบ synchronous
+
+ทุก operation ของ Web Storage — `setItem`, `getItem`, `removeItem`, `clear` — ทำงานแบบ **synchronous บน main thread** ปกติแล้วไม่มีปัญหากับ value เล็ก ๆ แต่จะกลายเป็นปัญหาเมื่อ:
+
+- คุณกำลังเก็บ string ขนาดใหญ่ (หลักร้อย KB ขึ้นไป) — แต่ละการเรียกจะบล็อก main thread ขณะ serialise และเขียน
+- คุณเรียก `setItem` ใน loop ที่ถี่ — การบล็อกสะสมรวมกันมากขึ้น
+- คุณอ่านค่าขนาดใหญ่ภายใน `requestAnimationFrame` หรือ event handler — frame drop จะมองเห็นได้ชัด
+
+หากคุณพบว่าตัวเองกำลังเก็บ blob ขนาดใหญ่ ลองพิจารณา IndexedDB (asynchronous รองรับข้อมูล binary) หรือ Cache API แทน
+
+## รันได้: storage event listener + การเขียน
+
+โค้ดด้านล่างจะลงทะเบียน `storage` listener แล้วเขียนลง `localStorage` เนื่องจาก listener ยิงเฉพาะใน **แท็บอื่น** เท่านั้น คุณจะเห็นการยืนยันการเขียนแต่ไม่เห็น event ในหน้าต่างนี้ ลองเปิดหน้าเดียวกันในแท็บที่สองเพื่อสังเกต event ข้ามแท็บ
+
+export const storageEventCode = `// Register a storage listener
+// Note: this fires in OTHER tabs, not in this one
+window.addEventListener('storage', function(e) {
+  console.log('[storage event] key:', e.key, '| new:', e.newValue);
+});
+
+// Write to localStorage — the listener above will NOT fire here
+localStorage.setItem('demo:signal', 'hello-from-tab');
+console.log('Written demo:signal =', localStorage.getItem('demo:signal'));
+console.log('(Open this page in another tab to see the storage event fire there)');
+
+// Clean up
+localStorage.removeItem('demo:signal');
+console.log('Cleaned up. demo:signal =', localStorage.getItem('demo:signal'));`;
+
+<StorageRunner client:visible code={storageEventCode} />
+
+<Callout title="ประเด็นสำคัญ">
+`storage` event เป็นสัญญาณข้ามแท็บแบบเรียบง่ายสำหรับการเปลี่ยนแปลง `localStorage` — มันยิงใน **แท็บอื่นเท่านั้น** ไม่ใช่ในแท็บที่เขียน Web Storage ทำงานแบบ **synchronous** ดังนั้นจึงควรเลี่ยงการเก็บ blob ขนาดใหญ่ ให้ใช้ IndexedDB สำหรับอะไรก็ตามที่เกินไม่กี่ KB
+</Callout>
+
+export const quizStorageEventAndLimits = [
+  {
+    q: 'คุณเรียก localStorage.setItem("x", "1") ใน Tab A แท็บไหนบ้างที่ได้รับ storage event?',
+    options: [
+      'Tab A เท่านั้น',
+      'ทุกแท็บของ origin เดียวกัน ยกเว้น Tab A',
+      'ทุกแท็บของ origin เดียวกัน รวมถึง Tab A',
+      'ไม่มีแท็บไหน — storage event ต้องใช้ BroadcastChannel',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'exception อะไรที่ถูกโยนเมื่อการเขียน localStorage เกิน quota?',
+    options: ['RangeError', 'QuotaExceededError (DOMException)', 'StorageError', 'OverflowError'],
+    answer: 1,
+  },
+  {
+    q: 'storage event ยิงสำหรับการเปลี่ยนแปลง sessionStorage ในอีกแท็บหนึ่งหรือไม่?',
+    options: [
+      'ยิง — sessionStorage ยิง storage event ข้ามแท็บ',
+      'ไม่ยิง — sessionStorage เป็นแบบเฉพาะแท็บ การเปลี่ยนแปลงไม่เคยส่งต่อไปยังแท็บอื่น',
+      'เฉพาะเมื่อทั้งสองแท็บใช้ session cookie เดียวกัน',
+      'เฉพาะในแท็บที่ทำการเปลี่ยนแปลงเท่านั้น',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'ทำไมคุณจึงควรเลี่ยงการเก็บ blob ขนาดใหญ่ใน localStorage?',
+    options: [
+      'localStorage ไม่รองรับข้อมูล binary',
+      'ทุก operation ของ localStorage เป็นแบบ synchronous และบล็อก main thread',
+      'localStorage มีขีดจำกัด 50 KB ต่อ key',
+      'blob ถูกบีบอัดอัตโนมัติและทำให้ JSON เสียหาย',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="web-storage/storage-event-and-limits" questions={quizStorageEventAndLimits} />
+
+<ProgressTracker client:visible id="web-storage/storage-event-and-limits" />

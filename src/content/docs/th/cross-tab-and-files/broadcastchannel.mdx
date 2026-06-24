@@ -1,0 +1,141 @@
+---
+title: 'BroadcastChannel'
+description: 'รับ-ส่งข้อความข้ามแท็บและ worker ด้วย BroadcastChannel — postMessage, onmessage และ close'
+sidebar:
+  order: 2
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## BroadcastChannel คืออะไร?
+
+`BroadcastChannel` เป็น browser API ที่ให้ message bus แบบ publish/subscribe ที่ scoped ไว้กับ origin เดียวกัน แท็บ, iframe หรือ worker ใดก็ตามที่สร้าง channel ด้วยชื่อเดียวกันจะเข้าร่วมกลุ่มเดียวกันโดยอัตโนมัติ เมื่อสมาชิกหนึ่งเรียก `postMessage` สมาชิกอื่นทุกคนจะได้รับข้อความผ่าน handler `onmessage`
+
+มีความคล้ายคลึงกับ `storage` event ของ `localStorage` แต่มีความแตกต่างที่สำคัญ:
+
+| คุณสมบัติ | BroadcastChannel | `storage` event |
+|---|---|---|
+| เนื้อหาข้อความ | ค่าใดก็ได้ที่ structured-cloneable | String เท่านั้น (storage value) |
+| ทำงานใน workers | ใช่ (Shared/Service Workers) | ไม่ |
+| เกิดในแท็บที่ส่ง | ไม่ | ไม่ |
+| ต้องเขียน localStorage ก่อน | ไม่ — ส่งตรง | ใช่ |
+
+## การสร้างและใช้งาน channel
+
+```js
+// Create (or join) a channel by name
+const ch = new BroadcastChannel('my-channel');
+
+// Listen for messages
+ch.onmessage = (event) => {
+  console.log('Got:', event.data);
+};
+
+// Send a message to all other members
+ch.postMessage({ type: 'UPDATE', payload: 42 });
+
+// When done, release resources
+ch.close();
+```
+
+ชื่อเป็นตัวระบุเพียงอย่างเดียว — สองหน้าบน origin เดียวกันที่ใช้ `new BroadcastChannel('chat')` จะเป็น peer กันโดยอัตโนมัติ ไม่มีขั้นตอน server หรือการลงทะเบียน
+
+## รูปแบบ event listener
+
+ใช้ `addEventListener` แทน `onmessage` ก็ได้ ทำให้แนบ listener หลายตัวได้:
+
+```js
+const ch = new BroadcastChannel('notifications');
+
+ch.addEventListener('message', (e) => {
+  console.log('Handler 1:', e.data);
+});
+
+ch.addEventListener('message', (e) => {
+  console.log('Handler 2:', e.data);
+});
+```
+
+## การปิด channel
+
+เรียก `ch.close()` เมื่อไม่ต้องการรับข้อความอีก channel ไม่ใช่ shared state — การปิดในแท็บหนึ่งไม่มีผลต่อแท็บอื่น
+
+```js
+const ch = new BroadcastChannel('demo:temp');
+// ... use it ...
+ch.close(); // releases internal resources
+```
+
+## รันได้: post และรับบน channel เดียวกัน
+
+ตัวอย่างด้านล่างสร้าง channel แนบ listener ส่งข้อความ และปิดหลังรับข้อความ เพราะ sender และ receiver อยู่ในหน้าเดียวกัน ข้อความจึงสะท้อนกลับ — ในแอปจริง listener อยู่ในแท็บแยก
+
+export const bcCode = `const ch = new BroadcastChannel('demo:bc-lesson');
+
+ch.onmessage = (e) => {
+  console.log('onmessage fired:', JSON.stringify(e.data));
+  ch.close();
+  console.log('Channel closed.');
+};
+
+ch.postMessage({ type: 'HELLO', from: 'lesson', ts: Date.now() });
+console.log('postMessage called.');
+// NOTE: In a real app the listener runs in a SECOND tab.
+// Same-page echo works here only because the event loop
+// dispatches the message back to this context.`;
+
+<StorageRunner client:visible code={bcCode} />
+
+<Callout title="ประเด็นสำคัญ">
+`BroadcastChannel` จะไม่ยิง `message` event ในแท็บที่ส่งในการใช้งาน multi-tab จริง — เฉพาะแท็บและ worker อื่นเท่านั้น echo ในหน้าเดียวกันข้างต้นทำงานได้ใน runner เพราะ sender และ receiver อยู่ใน JS context เดียวกัน อย่าพึ่งพา pattern นี้ใน production
+</Callout>
+
+export const quizBroadcastChannel = [
+  {
+    q: 'ส่งค่าประเภทใดได้บ้างผ่าน BroadcastChannel.postMessage()?',
+    options: [
+      'String เท่านั้น',
+      'Object ที่ JSON-serialisable เท่านั้น',
+      'ค่าใดก็ได้ที่ structured-cloneable (objects, arrays, ArrayBuffers ฯลฯ)',
+      'เฉพาะ number และ boolean',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'สองแท็บบน https://example.com ต่างสร้าง new BroadcastChannel("sync") แท็บ A เรียก postMessage แท็บใดได้รับ message event?',
+    options: [
+      'แท็บ A เท่านั้น',
+      'แท็บ B เท่านั้น',
+      'ทั้งแท็บ A และแท็บ B',
+      'ไม่มีแท็บใด — postMessage เป็น fire-and-forget',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'เกิดอะไรขึ้นเมื่อเรียก ch.close() ในแท็บหนึ่ง?',
+    options: [
+      'Channel ถูกทำลายสำหรับทุกแท็บ',
+      'ข้อความที่รอส่งทั้งหมดหาย',
+      'เฉพาะแท็บนั้นหยุดรับข้อความ; แท็บอื่นไม่ได้รับผลกระทบ',
+      'จะเกิด error หากแท็บอื่นยังเชื่อมต่ออยู่',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'ข้อได้เปรียบสำคัญของ BroadcastChannel เหนือ storage event ของ localStorage คืออะไร?',
+    options: [
+      'BroadcastChannel เก็บข้อมูลข้ามเซสชัน',
+      'BroadcastChannel ทำงานใน Web Workers',
+      'BroadcastChannel ยิงในแท็บ sender ด้วย',
+      'BroadcastChannel มี quota ขนาดใหญ่กว่า',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="cross-tab-and-files/broadcastchannel" questions={quizBroadcastChannel} />
+
+<ProgressTracker client:visible id="cross-tab-and-files/broadcastchannel" />

@@ -1,0 +1,227 @@
+---
+title: 'Iterating with Cursors and Ranges'
+description: 'Walk through IndexedDB records with openCursor(), advance with cursor.continue(), and filter subsets using IDBKeyRange.'
+sidebar:
+  order: 3
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## What is a cursor?
+
+Reading a single record by key with `objectStore.get(key)` is fast, but sometimes you need to **walk through many records** — filtering, aggregating, or transforming as you go. That is what cursors are for.
+
+A cursor points at one record at a time. You open it on an object store (or index), process the current record, then call `cursor.continue()` to advance to the next one. When there are no more records the cursor resolves to `null`, signalling that iteration is complete.
+
+```js
+const request = objectStore.openCursor();
+
+request.onsuccess = (event) => {
+  const cursor = event.target.result;
+  if (cursor) {
+    console.log(cursor.key, cursor.value);
+    cursor.continue(); // advance to next record
+  } else {
+    console.log('Done — no more records');
+  }
+};
+```
+
+## Opening a cursor
+
+`objectStore.openCursor(query, direction)` — both arguments are optional.
+
+- **`query`** — an `IDBKeyRange` or a specific key. Omit (or pass `null`) to iterate all records.
+- **`direction`** — `"next"` (default, ascending), `"prev"` (descending), `"nextunique"`, or `"prevunique"`.
+
+```js
+// All records, ascending order (default)
+objectStore.openCursor();
+
+// All records, descending order
+objectStore.openCursor(null, 'prev');
+
+// Only records with keys 2–3 (inclusive on both ends)
+objectStore.openCursor(IDBKeyRange.bound(2, 3));
+```
+
+## IDBKeyRange — filtering by key
+
+`IDBKeyRange` lets you describe a subset of keys without scanning every record. The four factory methods are:
+
+| Method | What it matches |
+|---|---|
+| `IDBKeyRange.only(value)` | Exactly one key |
+| `IDBKeyRange.lowerBound(lower, open?)` | Keys ≥ lower (pass `true` to exclude lower itself) |
+| `IDBKeyRange.upperBound(upper, open?)` | Keys ≤ upper (pass `true` to exclude upper itself) |
+| `IDBKeyRange.bound(lower, upper, lowerOpen?, upperOpen?)` | Keys between lower and upper, inclusive by default |
+
+```js
+IDBKeyRange.only(42)           // key === 42
+IDBKeyRange.lowerBound(10)     // key >= 10
+IDBKeyRange.lowerBound(10, true) // key > 10
+IDBKeyRange.upperBound(50)     // key <= 50
+IDBKeyRange.bound(10, 50)      // 10 <= key <= 50
+IDBKeyRange.bound(10, 50, true, true) // 10 < key < 50
+```
+
+## Wrapping cursor iteration in a Promise
+
+Raw `onsuccess` callbacks are tedious. Wrapping the pattern in a helper makes it composable with `async/await`:
+
+```js
+function iterateCursor(store, range = null) {
+  return new Promise((resolve, reject) => {
+    const results = [];
+    const req = store.openCursor(range);
+    req.onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (cursor) {
+        results.push(cursor.value);
+        cursor.continue();
+      } else {
+        resolve(results);
+      }
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+```
+
+## Runnable: iterate all records, then a range
+
+The demo below:
+1. Opens a database and seeds four player score records.
+2. Uses a cursor to iterate **all** records and logs each one.
+3. Uses `IDBKeyRange.bound(2, 3)` to iterate only the records with `id` 2 and 3.
+4. Deletes the database afterwards to leave no trace.
+
+export const cursorsCode = `(async function() {
+  // Helper: wrap an IDBRequest in a Promise
+  function req(r) {
+    return new Promise((res, rej) => {
+      r.onsuccess = () => res(r.result);
+      r.onerror  = () => rej(r.error);
+    });
+  }
+
+  // Helper: iterate a cursor and collect all values
+  function iterateCursor(store, range) {
+    return new Promise((resolve, reject) => {
+      const results = [];
+      const r = store.openCursor(range);
+      r.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (cursor) {
+          results.push(cursor.value);
+          cursor.continue();
+        } else {
+          resolve(results);
+        }
+      };
+      r.onerror = () => reject(r.error);
+    });
+  }
+
+  // --- Open / seed ---
+  const db = await new Promise((resolve, reject) => {
+    const openReq = indexedDB.open('demo-advanced-cursors', 1);
+    openReq.onupgradeneeded = (e) => {
+      const database = e.target.result;
+      database.createObjectStore('scores', { keyPath: 'id' });
+    };
+    openReq.onsuccess = () => resolve(openReq.result);
+    openReq.onerror   = () => reject(openReq.error);
+  });
+
+  const seedTx = db.transaction('scores', 'readwrite');
+  const seedStore = seedTx.objectStore('scores');
+  await Promise.all([
+    req(seedStore.put({ id: 1, player: 'Alice', score: 150 })),
+    req(seedStore.put({ id: 2, player: 'Bob',   score: 80  })),
+    req(seedStore.put({ id: 3, player: 'Carol', score: 200 })),
+    req(seedStore.put({ id: 4, player: 'Dave',  score: 60  })),
+  ]);
+  await new Promise((res, rej) => {
+    seedTx.oncomplete = res;
+    seedTx.onerror    = () => rej(seedTx.error);
+  });
+
+  // --- Iterate ALL records ---
+  console.log('=== All records (cursor, no range) ===');
+  const allTx    = db.transaction('scores', 'readonly');
+  const allStore = allTx.objectStore('scores');
+  const allRows  = await iterateCursor(allStore, null);
+  for (const row of allRows) {
+    console.log(\`  \${row.player}: \${row.score}\`);
+  }
+
+  // --- Iterate with IDBKeyRange.bound(2, 3) ---
+  console.log('=== Range: ids 2–3 only ===');
+  const rangeTx    = db.transaction('scores', 'readonly');
+  const rangeStore = rangeTx.objectStore('scores');
+  const rangeRows  = await iterateCursor(rangeStore, IDBKeyRange.bound(2, 3));
+  for (const row of rangeRows) {
+    console.log(\`  \${row.player}: \${row.score}\`);
+  }
+
+  // --- Cleanup ---
+  db.close();
+  await new Promise((res, rej) => {
+    const del = indexedDB.deleteDatabase('demo-advanced-cursors');
+    del.onsuccess = res;
+    del.onerror   = () => rej(del.error);
+  });
+  console.log('Database deleted — cleanup complete.');
+})();`;
+
+<StorageRunner client:visible code={cursorsCode} />
+
+<Callout title="Key point">
+A cursor does not load all records into memory at once — it steps through them one at a time. Always call `cursor.continue()` inside the `onsuccess` handler to advance; forgetting it will stall iteration silently. Pair cursors with `IDBKeyRange` to avoid scanning records you do not need.
+</Callout>
+
+export const quizCursorsAndRanges = [
+  {
+    q: 'What value does the cursor resolve to when there are no more records to iterate?',
+    options: ['undefined', 'null', '0', 'It throws a StopIteration error'],
+    answer: 1,
+  },
+  {
+    q: 'Which IDBKeyRange factory creates a range that includes keys from 5 to 10, inclusive on both ends?',
+    options: [
+      'IDBKeyRange.between(5, 10)',
+      'IDBKeyRange.bound(5, 10)',
+      'IDBKeyRange.lowerBound(5) && IDBKeyRange.upperBound(10)',
+      'IDBKeyRange.only(5, 10)',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'What happens if you forget to call cursor.continue() inside the onsuccess handler?',
+    options: [
+      'The cursor automatically advances to the next record',
+      'An error is thrown immediately',
+      'Iteration stalls — onsuccess is never called again',
+      'The transaction rolls back',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'You want to iterate only records whose key is strictly greater than 10. Which range is correct?',
+    options: [
+      'IDBKeyRange.lowerBound(10)',
+      'IDBKeyRange.lowerBound(10, true)',
+      'IDBKeyRange.bound(10, Infinity)',
+      'IDBKeyRange.upperBound(10, true)',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="indexeddb-advanced/cursors-and-ranges" questions={quizCursorsAndRanges} />
+
+<ProgressTracker client:visible id="indexeddb-advanced/cursors-and-ranges" />

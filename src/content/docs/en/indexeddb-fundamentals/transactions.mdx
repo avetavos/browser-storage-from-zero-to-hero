@@ -1,0 +1,167 @@
+---
+title: Transactions
+description: Learn how IndexedDB transactions group operations into atomic units that either all succeed or all fail, and how auto-commit works.
+sidebar:
+  order: 4
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## What is a Transaction?
+
+A **transaction** is a group of database operations that execute as a single atomic unit. This follows the ACID principle: either **all** operations in the transaction succeed, or **none** of them are applied. If any operation fails, the entire transaction is rolled back to the state before it started.
+
+In IndexedDB, every read and write must happen inside a transaction. There is no way to access an object store directly — you always go through a transaction first.
+
+## Opening a Transaction
+
+Use `db.transaction()` to open a new transaction. It takes two arguments: an array of store names you want to access, and a mode string.
+
+```js
+// Read-only transaction — for reads only
+const tx = db.transaction(['storeName'], 'readonly');
+
+// Read-write transaction — for reads and writes
+const tx = db.transaction(['storeName'], 'readwrite');
+```
+
+Once you have a transaction, call `tx.objectStore('storeName')` to get the `IDBObjectStore` reference you need to issue requests:
+
+```js
+const store = tx.objectStore('storeName');
+const request = store.get(42);
+```
+
+## Transaction Modes
+
+IndexedDB supports two modes:
+
+- **`readonly`** — Multiple readonly transactions on the same stores can run concurrently. Use this whenever you only need to read data.
+- **`readwrite`** — Acquires an exclusive lock on each store listed. Only one readwrite transaction can access a given store at a time. Other transactions wait until it completes.
+
+Always prefer `readonly` when you do not need to write — it allows better parallelism and avoids unnecessary locking.
+
+## Listening to Transaction Events
+
+A transaction fires three events that you should handle:
+
+```js
+tx.oncomplete = () => {
+  // All requests inside the transaction succeeded and were committed
+  console.log('Transaction committed successfully');
+};
+
+tx.onerror = (event) => {
+  // At least one request failed — the transaction was rolled back
+  console.error('Transaction error:', tx.error);
+};
+
+tx.onabort = () => {
+  // The transaction was explicitly aborted via tx.abort()
+  console.warn('Transaction aborted');
+};
+```
+
+`oncomplete` fires only after every request inside the transaction has finished successfully and the changes have been flushed to disk. This is the right place to confirm to the user that data was saved.
+
+## Auto-Commit Behaviour
+
+IndexedDB transactions use **auto-commit**: when the last pending request in the transaction finishes and the JavaScript call stack returns to the event loop with no new requests queued, the transaction automatically commits.
+
+This means you must issue all requests in a **synchronous chain** — one request's success handler triggers the next request. If you yield to the event loop between requests (for example by awaiting a `fetch()` call or wrapping logic in `setTimeout`), the transaction will already have committed by the time your code resumes, and any new requests against it will throw an error.
+
+```js
+// WRONG — do not do this
+tx.oncomplete = async () => { /* ... */ };  // not the right pattern
+
+const store = tx.objectStore('items');
+store.get(1).onsuccess = async (e) => {
+  const data = await fetch('/api/extra');  // yields to event loop — transaction is gone!
+  store.put({ ...e.target.result, extra: data }); // ERROR: transaction has already committed
+};
+```
+
+```js
+// CORRECT — keep all requests in the same synchronous microtask chain
+const store = tx.objectStore('items');
+const getReq = store.get(1);
+getReq.onsuccess = (e) => {
+  store.put({ ...e.target.result, updated: true }); // issued synchronously — still in tx
+};
+```
+
+## Runnable Example
+
+The code below opens a database, creates an `items` object store, opens a readwrite transaction, adds a record, and waits for `oncomplete` before closing.
+
+export const transactionsCode = `
+const db = await new Promise((resolve, reject) => {
+  const req = indexedDB.open('demo-tx', 1);
+  req.onupgradeneeded = (e) => {
+    e.target.result.createObjectStore('items', { keyPath: 'id' });
+  };
+  req.onsuccess = (e) => resolve(e.target.result);
+  req.onerror = (e) => reject(e.target.error);
+});
+
+await new Promise((resolve, reject) => {
+  const tx = db.transaction(['items'], 'readwrite');
+  const store = tx.objectStore('items');
+  store.add({ id: 1, name: 'Widget' });
+  tx.oncomplete = () => {
+    console.log('Transaction complete — item saved');
+    resolve();
+  };
+  tx.onerror = () => reject(tx.error);
+});
+
+db.close();
+indexedDB.deleteDatabase('demo-tx');
+console.log('Cleanup done');
+`.trim();
+
+<StorageRunner client:visible code={transactionsCode} />
+
+<Callout title="Never yield inside a live transaction">
+Do not use `await fetch()`, `await setTimeout()`, or any other call that returns control to the event loop while a transaction is open. IndexedDB will auto-commit the transaction the moment the call stack empties with no pending requests. All subsequent requests on that transaction will fail with a `TransactionInactiveError`. Keep all reads and writes in a single synchronous call chain.
+</Callout>
+
+export const quizTransactions = [
+  {
+    q: "What does it mean for a transaction to be 'atomic'?",
+    options: [
+      "Each operation runs as fast as possible",
+      "All operations either all succeed or all fail together",
+      "Operations run in parallel for better performance",
+      "The transaction uses the least amount of memory possible"
+    ],
+    answer: 1
+  },
+  {
+    q: "Which transaction mode allows multiple transactions to run concurrently on the same store?",
+    options: [
+      "readwrite",
+      "versionchange",
+      "readonly",
+      "concurrent"
+    ],
+    answer: 2
+  },
+  {
+    q: "What happens if you await a fetch() call inside a readwrite transaction before issuing a second store request?",
+    options: [
+      "The transaction pauses and resumes after the fetch completes",
+      "The fetch is queued and runs after the transaction commits",
+      "The transaction auto-commits and the second request throws a TransactionInactiveError",
+      "Nothing — IndexedDB waits for all promises to resolve"
+    ],
+    answer: 2
+  }
+];
+
+<Quiz client:visible id="indexeddb-fundamentals/transactions" questions={quizTransactions} />
+
+<ProgressTracker client:visible id="indexeddb-fundamentals/transactions" />

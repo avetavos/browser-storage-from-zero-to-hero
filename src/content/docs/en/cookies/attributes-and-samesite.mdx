@@ -1,0 +1,170 @@
+---
+title: 'Attributes and SameSite'
+description: 'Expires, Max-Age, Path, Domain, Secure, HttpOnly, and SameSite — what each attribute does and why it matters.'
+sidebar:
+  order: 4
+---
+
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## Cookie attributes overview
+
+Cookie attributes are added after the `name=value` pair, separated by semicolons. They control lifetime, scope, transport security, and cross-site behaviour.
+
+```http
+Set-Cookie: session=abc123; Max-Age=3600; Path=/; Secure; HttpOnly; SameSite=Strict
+```
+
+Only the `name=value` pair is required. Every attribute is optional, but omitting security-relevant attributes like `SameSite` and `Secure` leaves cookies vulnerable.
+
+## Expires and Max-Age — lifetime control
+
+These two attributes control whether a cookie is a **session cookie** or a **persistent cookie**.
+
+**No Expires/Max-Age** → session cookie. The browser deletes it when the tab/window session ends (browser close behaviour varies by browser and "restore session" settings).
+
+```http
+Set-Cookie: pref=dark
+```
+
+**`Expires=<date>`** → persistent cookie, deleted at the given UTC date:
+
+```http
+Set-Cookie: pref=dark; Expires=Thu, 01 Jan 2027 00:00:00 GMT
+```
+
+**`Max-Age=<seconds>`** → persistent cookie, deleted after this many seconds from now. This is preferred over `Expires` because it is relative and avoids clock-skew issues:
+
+```http
+Set-Cookie: pref=dark; Max-Age=86400
+```
+
+Setting `Max-Age=0` (or a negative value) deletes the cookie immediately.
+
+## Path — URL scope
+
+`Path` restricts which request URLs the browser attaches the cookie to:
+
+```http
+Set-Cookie: admin_token=xyz; Path=/admin
+```
+
+The browser only sends this cookie on requests to paths that begin with `/admin`. Requests to `/` or `/app` do not include it.
+
+Default: if omitted, browsers use the path of the URL that set the cookie (often `/`).
+
+## Domain — host scope
+
+`Domain` controls which hostnames receive the cookie:
+
+```http
+Set-Cookie: pref=dark; Domain=.example.com
+```
+
+A leading dot (`.example.com`) means the cookie is sent to `example.com` and all its subdomains (`api.example.com`, `www.example.com`, etc.).
+
+Without `Domain`, the cookie is sent only to the exact host that set it (no subdomains).
+
+## Secure — HTTPS only
+
+`Secure` instructs the browser to send the cookie only over HTTPS connections:
+
+```http
+Set-Cookie: session=abc; Secure
+```
+
+Without `Secure`, the cookie is sent over plain HTTP, where it can be intercepted by network attackers (man-in-the-middle). All cookies containing sensitive data must have `Secure`.
+
+## HttpOnly — invisible to JavaScript
+
+`HttpOnly` is one of the most important security attributes. It prevents JavaScript from reading the cookie via `document.cookie`:
+
+```http
+Set-Cookie: session=abc123; HttpOnly; Secure; SameSite=Strict
+```
+
+With `HttpOnly`, even if an attacker injects malicious JavaScript into your page (XSS), that script cannot steal the session cookie. The cookie is still sent automatically with HTTP requests — it just cannot be read or modified by JavaScript.
+
+**HttpOnly cookies can only be set by the server via the `Set-Cookie` header.** Client-side `document.cookie` cannot set `HttpOnly` cookies.
+
+## SameSite — cross-site request control
+
+`SameSite` controls when cookies are sent on cross-site requests, defending against CSRF (Cross-Site Request Forgery) attacks.
+
+**`SameSite=Strict`** — cookie is sent only on same-site requests (navigations and requests that originate from your own site). Never sent on cross-site requests:
+
+```http
+Set-Cookie: session=abc; SameSite=Strict
+```
+
+Best for session cookies — maximum CSRF protection.
+
+**`SameSite=Lax`** (default in modern browsers) — cookie is sent on same-site requests AND on top-level navigations from other sites (e.g., clicking a link to your site from an email). Not sent on cross-site subresource requests (images, iframes, fetch):
+
+```http
+Set-Cookie: pref=dark; SameSite=Lax
+```
+
+Good balance for most cookies.
+
+**`SameSite=None; Secure`** — cookie is sent on all requests including cross-site. Must be paired with `Secure` or browsers reject it. Required for legitimate cross-site use cases (e.g., embedded widgets, third-party authentication):
+
+```http
+Set-Cookie: analytics_id=abc; SameSite=None; Secure
+```
+
+## Recommended combination for session cookies
+
+For any cookie that authenticates a user or authorises an action, use all three security attributes:
+
+```http
+Set-Cookie: session=abc123; Max-Age=3600; Path=/; Secure; HttpOnly; SameSite=Strict
+```
+
+This combination:
+- Sends the cookie only over HTTPS (`Secure`)
+- Blocks JavaScript access, preventing XSS theft (`HttpOnly`)
+- Prevents the cookie being sent on cross-site requests, blocking CSRF (`SameSite=Strict`)
+
+<Callout title="HttpOnly cookies are invisible to JavaScript — this is a feature, not a bug">
+`HttpOnly` means `document.cookie` will never return the cookie, and no script can read or modify it. This is intentional: it protects session tokens from being stolen by injected scripts. If you cannot see a cookie in `document.cookie` that you know the server set, it is almost certainly `HttpOnly` — exactly as designed.
+</Callout>
+
+export const quizAttributesSameSite = [
+  {
+    q: 'What does Max-Age=0 do to a cookie?',
+    options: [
+      'Sets the cookie to expire in 0 milliseconds',
+      'Deletes the cookie immediately',
+      'Creates a session cookie with no expiry',
+      'Resets the cookie\'s expiry to the browser default',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'Which attribute prevents JavaScript from reading a cookie via document.cookie?',
+    options: ['Secure', 'SameSite=Strict', 'HttpOnly', 'Path=/'],
+    answer: 2,
+  },
+  {
+    q: 'What is the difference between SameSite=Strict and SameSite=Lax?',
+    options: [
+      'Strict requires HTTPS; Lax works on HTTP',
+      'Strict never sends the cookie cross-site; Lax sends it on top-level navigations from other sites',
+      'Strict applies to all subdomains; Lax applies only to the exact domain',
+      'They are identical — Lax is just an older name for Strict',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'A cookie has SameSite=None. What other attribute is required for the browser to accept it?',
+    options: ['HttpOnly', 'Path=/', 'Secure', 'Domain=.example.com'],
+    answer: 2,
+  },
+];
+
+<Quiz client:visible id="cookies/attributes-and-samesite" questions={quizAttributesSameSite} />
+
+<ProgressTracker client:visible id="cookies/attributes-and-samesite" />

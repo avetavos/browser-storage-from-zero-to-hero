@@ -1,0 +1,115 @@
+---
+title: 'Cookies'
+description: 'What cookies are and when to use them instead of Web Storage.'
+sidebar:
+  order: 1
+---
+
+import Mermaid from '../../../../components/Mermaid.astro';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## What are cookies?
+
+Cookies are small strings — each up to about 4 KB — that the browser stores per-domain and **automatically includes in every matching HTTP request**. This automatic network transmission is what sets cookies apart from every other browser storage mechanism.
+
+When your server sends a `Set-Cookie` response header, the browser stores that cookie and sends it back on every subsequent request to that domain (subject to the cookie's `Path`, `Domain`, `Secure`, and `SameSite` attributes).
+
+When your JavaScript calls `document.cookie = 'name=value'`, it sets a cookie on the client side — but the browser will still send that cookie to your server on the next request.
+
+## Client-set vs server-set cookies
+
+There are two ways a cookie ends up in the browser's cookie jar:
+
+**Server-set (via `Set-Cookie` header):**
+
+```http
+HTTP/1.1 200 OK
+Set-Cookie: session=abc123; HttpOnly; Secure; SameSite=Strict
+```
+
+The server controls the cookie's value and attributes. An `HttpOnly` cookie is completely invisible to JavaScript — `document.cookie` will never return it.
+
+**Client-set (via `document.cookie`):**
+
+```js
+document.cookie = 'theme=dark; Max-Age=86400; SameSite=Lax';
+```
+
+JavaScript can set, read, and delete cookies that are not marked `HttpOnly`.
+
+## Cookie flow
+
+export const cookieFlowDiagram = `flowchart LR
+  Browser -->|HTTP Request + Cookie header| Server
+  Server -->|HTTP Response + Set-Cookie header| Browser
+  Browser -->|stores| CookieJar[(Cookie Jar)]
+  CookieJar -->|sent on every matching request| Server`;
+
+<Mermaid code={cookieFlowDiagram} title="Cookies are stored in the browser's cookie jar and sent automatically on every matching HTTP request" />
+
+## Cookies vs Web Storage: when to use which
+
+The single most important question is: **does the server need this value?**
+
+| Use case | Best choice | Why |
+|---|---|---|
+| Auth token / session ID | Cookie (HttpOnly + Secure) | Server needs it; HttpOnly prevents XSS theft |
+| CSRF token | Cookie | Server sets it; JS reads it to include in request body |
+| User preferences (theme, language) | Web Storage | Client-only; no need to send to server on every request |
+| Shopping cart (client-only) | Web Storage or IndexedDB | Larger, richer data; no network overhead |
+| Feature flags from server | Cookie | Server can vary response before JS loads |
+
+The fundamental rule: **cookies for anything the server must receive; Web Storage for client-only UI state**.
+
+## What this module covers
+
+| Lesson | What you will learn |
+|---|---|
+| **This page** | What cookies are, cookie flow, and cookies vs Web Storage |
+| `what-are-cookies` | name=value format, size limits, per-domain count limits, automatic request inclusion |
+| `reading-writing` | `document.cookie` quirks, get/set/delete helpers, runnable demo |
+| `attributes-and-samesite` | Expires, Max-Age, Path, Domain, Secure, HttpOnly, SameSite |
+| `cookie-store-api` | The async `cookieStore` API and feature-detect fallback |
+
+<Callout title="Cookies vs Web Storage">
+Reach for cookies when the **server** needs the value — authentication tokens, session IDs, server-read preferences. Reach for `localStorage` or `sessionStorage` when the value is **client-only** — UI state, cached JSON, feature toggles that never need to reach the server. Sending unnecessary data to the server on every request wastes bandwidth and can leak sensitive information.
+</Callout>
+
+export const quizCookiesIndex = [
+  {
+    q: 'What is the key difference between cookies and Web Storage (localStorage/sessionStorage)?',
+    options: [
+      'Cookies can store more data than Web Storage',
+      'Cookies are automatically sent with HTTP requests; Web Storage never touches the network',
+      'Web Storage is shared across domains; cookies are not',
+      'Cookies are always encrypted; Web Storage is not',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'Which storage mechanism is best for storing an authentication session token that the server needs to validate?',
+    options: [
+      'localStorage',
+      'sessionStorage',
+      'Cookie with HttpOnly + Secure attributes',
+      'IndexedDB',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'Which mechanism should you use to store a user\'s preferred UI theme that is only needed by client-side JavaScript?',
+    options: [
+      'A session cookie',
+      'A persistent cookie',
+      'localStorage',
+      'A cookie with SameSite=None',
+    ],
+    answer: 2,
+  },
+];
+
+<Quiz client:visible id="cookies/index" questions={quizCookiesIndex} />
+
+<ProgressTracker client:visible id="cookies/index" />

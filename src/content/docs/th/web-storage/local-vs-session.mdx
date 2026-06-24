@@ -1,0 +1,121 @@
+---
+title: 'localStorage vs sessionStorage'
+description: 'เปรียบเทียบ lifetime, tab scope และกฎเรื่อง origin แบบเจาะลึก'
+sidebar:
+  order: 2
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## Lifetime
+
+ความแตกต่างที่สำคัญที่สุดระหว่าง store ทั้งสองคือข้อมูลอยู่ได้นานแค่ไหน:
+
+**`localStorage`**
+
+- ข้อมูลอยู่ถาวรจนกว่าจะถูกลบอย่างชัดเจนด้วย `removeItem` หรือ `clear` หรือผู้ใช้ล้างข้อมูลเบราว์เซอร์
+- การปิดทุกแท็บ ปิดเบราว์เซอร์ หรือรีสตาร์ทเครื่อง **ไม่** ทำให้ข้อมูลหายไป
+- จึงเหมาะกับ preferences, ธีม หรือค่าที่ cache ไว้ซึ่งควรอยู่รอดข้าม session (เช่น ปุ่มสลับ dark mode, ภาษาที่บันทึกไว้)
+
+**`sessionStorage`**
+
+- ข้อมูลอยู่เฉพาะตลอดอายุของแท็บเบราว์เซอร์ (หรือหน้าต่าง) ที่มันถูกสร้างขึ้นเท่านั้น
+- ทันทีที่แท็บนั้นถูกปิด ข้อมูลก็หายไป — กู้คืนไม่ได้
+- การเปิดแท็บใหม่ไปยัง URL เดิมจะเริ่มต้นด้วย `sessionStorage` ที่ว่างเปล่าใหม่
+- จึงเหมาะกับ state เฉพาะแท็บที่ไม่ควรรั่วข้ามแท็บ (เช่น ขั้นตอนปัจจุบันของ wizard หลายขั้น, token แบบใช้ครั้งเดียว, ฉบับร่างฟอร์มชั่วคราว)
+
+## ขอบเขตของแท็บและหน้าต่าง (Tab and window scope)
+
+ขอบเขตคือจุดที่ API ทั้งสองต่างกันอย่างละเอียดอ่อนที่สุด:
+
+```js
+// Tab A:
+localStorage.setItem('demo:user', 'Ada');
+// Tab B on the same origin sees 'Ada' immediately.
+
+sessionStorage.setItem('demo:step', '2');
+// Tab B has its OWN sessionStorage — it cannot see Tab A's 'step'.
+```
+
+มีรายละเอียดปลีกย่อยอยู่อย่างหนึ่ง: เมื่อผู้ใช้เปิดลิงก์ด้วย `window.open()` หรือ `Ctrl+click` (ซึ่งทำสำเนาแท็บ) แท็บใหม่จะได้รับ **สำเนา** ของ `sessionStorage` จากแท็บแม่ ณ ขณะที่ถูกเปิดขึ้น หลังจากนั้น store ทั้งสองจะเป็นอิสระต่อกัน — การเปลี่ยนแปลงในตัวหนึ่งจะไม่ส่งผลต่ออีกตัว
+
+## ขอบเขตของ origin (Origin scope)
+
+store ทั้งสองมีขอบเขตตาม **origin**: `scheme + hostname + port`
+
+| URL | Origin |
+|---|---|
+| `https://example.com` | `https://example.com:443` |
+| `https://app.example.com` | `https://app.example.com:443` (ต่างกัน!) |
+| `http://example.com` | `http://example.com:80` (ต่าง scheme!) |
+| `https://example.com:8080` | `https://example.com:8080` (ต่าง port!) |
+
+ดังนั้น `https://app.example.com` และ `https://api.example.com` ต่างก็มี `localStorage` ของตัวเองที่แยกขาดจากกันโดยสิ้นเชิง แม้ว่าจะใช้ registrable domain เดียวกันก็ตาม
+
+## รันได้: เขียนลง store ทั้งสอง
+
+รันโค้ดด้านล่างเพื่อดูทั้งสอง store ถูกเขียนและอ่านกลับมาภายใน context ของหน้าเดียวกัน
+
+export const localVsSessionCode = `// --- localStorage ---
+localStorage.setItem('demo:ls-color', 'blue');
+console.log('localStorage color:', localStorage.getItem('demo:ls-color'));
+
+// --- sessionStorage ---
+sessionStorage.setItem('demo:ss-step', '3');
+console.log('sessionStorage step:', sessionStorage.getItem('demo:ss-step'));
+
+// Show that sessionStorage does NOT inherit localStorage and vice-versa
+console.log('sessionStorage color (should be null):', sessionStorage.getItem('demo:ls-color'));
+console.log('localStorage step (should be null):', localStorage.getItem('demo:ss-step'));
+
+// Clean up
+localStorage.removeItem('demo:ls-color');
+sessionStorage.removeItem('demo:ss-step');
+console.log('Cleaned up. localStorage color:', localStorage.getItem('demo:ls-color'));
+console.log('Cleaned up. sessionStorage step:', sessionStorage.getItem('demo:ss-step'));`;
+
+<StorageRunner client:visible code={localVsSessionCode} />
+
+<Callout title="ประเด็นสำคัญ">
+`sessionStorage` มีขอบเขตอยู่ที่ **แท็บเดียว** และตายไปพร้อมกับแท็บนั้น ส่วน `localStorage` ถูกแชร์ข้าม **ทุกแท็บ** ของ origin เดียวกัน และอยู่รอดหลังรีสตาร์ทเบราว์เซอร์ เลือกใช้ตามว่าคุณต้องการให้ข้อมูลอยู่ได้นานแค่ไหน และต้องการการแชร์ข้ามแท็บหรือไม่
+</Callout>
+
+export const quizLocalVsSession = [
+  {
+    q: 'คุณเปิด Tab A แล้วเรียก sessionStorage.setItem("x", "1") จากนั้นเปิด Tab B ไปยัง URL เดียวกัน sessionStorage.getItem("x") ใน Tab B จะคืนค่าอะไร?',
+    options: ['"1" — sessionStorage ถูกแชร์ภายใน origin', 'null — แต่ละแท็บมี sessionStorage ของตัวเอง', '"undefined"', 'มันโยน SecurityError'],
+    answer: 1,
+  },
+  {
+    q: 'ผู้ใช้ตั้งค่า dark-mode preference store ตัวไหนเหมาะสมที่สุดเพื่อให้ค่านี้อยู่รอดหลังจากปิดและเปิดเบราว์เซอร์ใหม่?',
+    options: ['sessionStorage', 'localStorage', 'ตัวไหนก็ได้ — ทำงานเหมือนกัน', 'ไม่มีตัวไหน — ใช้ cookie แทน'],
+    answer: 1,
+  },
+  {
+    q: 'https://shop.example.com และ https://blog.example.com ใช้ localStorage เดียวกันหรือไม่?',
+    options: [
+      'ใช่ — ใช้ registrable domain example.com ร่วมกัน',
+      'ไม่ — คนละ subdomain หมายถึงคนละ origin',
+      'ใช่ — ถ้าเซิร์ฟเวอร์ตั้งค่า CORS origin เดียวกัน',
+      'เฉพาะเมื่อทั้งคู่เสิร์ฟผ่าน HTTPS เท่านั้น',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'เมื่อผู้ใช้ทำสำเนาแท็บ (Ctrl+click ที่ลิงก์) จะเกิดอะไรขึ้นกับ sessionStorage?',
+    options: [
+      'แท็บใหม่แชร์ sessionStorage ของแท็บแม่แบบเรียลไทม์',
+      'แท็บใหม่ได้สำเนาครั้งเดียว หลังจากนั้น store ทั้งสองเป็นอิสระต่อกัน',
+      'แท็บใหม่เริ่มต้นด้วย sessionStorage ว่างเปล่า ไม่มีการคัดลอก',
+      'sessionStorage ใช้งานไม่ได้ในแท็บที่ทำสำเนา',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="web-storage/local-vs-session" questions={quizLocalVsSession} />
+
+<ProgressTracker client:visible id="web-storage/local-vs-session" />

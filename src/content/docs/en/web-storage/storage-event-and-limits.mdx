@@ -1,0 +1,164 @@
+---
+title: 'The storage Event and Limits'
+description: 'Cross-tab communication with the storage event, the 5 MB quota, and the sync-blocking caveat.'
+sidebar:
+  order: 5
+---
+
+import Mermaid from '../../../../components/Mermaid.astro';
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## The `storage` event
+
+When a page changes `localStorage`, the browser fires a `storage` event in **every other tab and window open on the same origin** — but **not** in the tab that made the change. This asymmetry surprises most developers the first time.
+
+```js
+// Register this listener in Tab B
+window.addEventListener('storage', (event) => {
+  console.log('key changed:', event.key);
+  console.log('old value:', event.oldValue);
+  console.log('new value:', event.newValue);
+  console.log('storage area:', event.storageArea); // localStorage object
+});
+
+// In Tab A, write to localStorage — Tab B's listener fires; Tab A's does NOT
+```
+
+The `StorageEvent` properties are:
+
+| Property | Type | Description |
+|---|---|---|
+| `key` | `string \| null` | The key that changed. `null` when `clear()` is called. |
+| `oldValue` | `string \| null` | The previous value, or `null` if the key was newly created. |
+| `newValue` | `string \| null` | The new value, or `null` if the key was removed. |
+| `url` | `string` | The URL of the document that made the change. |
+| `storageArea` | `Storage \| null` | The `localStorage` object (never `sessionStorage` — that event only fires within the same tab). |
+
+The `storage` event fires **only for `localStorage`**. `sessionStorage` changes do not propagate across tabs because each tab has its own isolated session store.
+
+## Cross-tab signalling pattern
+
+export const eventFlowDiagram = `sequenceDiagram
+  participant A as Tab A (writer)
+  participant LS as localStorage
+  participant B as Tab B (listener)
+  A->>LS: setItem("demo:signal", "ping")
+  LS-->>B: storage event fires
+  Note over B: key="demo:signal"<br/>newValue="ping"
+  Note over A: No event fires in Tab A`;
+
+<Mermaid code={eventFlowDiagram} title="The storage event fires in other tabs, not the writer" />
+
+A common use case is broadcasting a logout across tabs:
+
+```js
+// In any tab: signal logout
+localStorage.setItem('demo:auth-event', 'logout:' + Date.now());
+
+// In every other tab: react to it
+window.addEventListener('storage', (e) => {
+  if (e.key === 'demo:auth-event' && e.newValue?.startsWith('logout:')) {
+    // redirect to login page
+    window.location.href = '/login';
+  }
+});
+```
+
+## The ~5 MB quota
+
+The Web Storage specification does not mandate a specific quota size, but browsers universally implement approximately **5 MB per origin** for `localStorage` (some give 10 MB; mobile browsers may give less).
+
+When you exceed the quota, `setItem` throws a `QuotaExceededError` (a `DOMException`):
+
+```js
+try {
+  const big = 'x'.repeat(6 * 1024 * 1024); // 6 MB string
+  localStorage.setItem('demo:big', big);
+} catch (e) {
+  if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+    console.error('Storage quota exceeded — cannot save data');
+  }
+}
+```
+
+Always wrap writes that could be large (e.g., serialised arrays or objects that grow over time) in a `try/catch` to handle quota errors gracefully.
+
+## The synchronous-blocking caveat
+
+All Web Storage operations — `setItem`, `getItem`, `removeItem`, `clear` — run **synchronously on the main thread**. This is normally fine for small values, but it becomes a problem when:
+
+- You are storing large strings (hundreds of KB or more) — each call blocks the main thread while serialising and writing.
+- You are calling `setItem` in a tight loop — the cumulative blocking adds up.
+- You are reading a large value inside a `requestAnimationFrame` or event handler — frame drops become visible.
+
+If you find yourself storing large blobs, consider IndexedDB (asynchronous, supports binary data) or the Cache API instead.
+
+## Runnable: storage event listener + write
+
+The snippet below registers a `storage` listener and then writes to `localStorage`. Because the listener only fires in **other tabs**, you will see the write confirmation but not the event in this window. Open the same page in a second tab to observe the cross-tab event.
+
+export const storageEventCode = `// Register a storage listener
+// Note: this fires in OTHER tabs, not in this one
+window.addEventListener('storage', function(e) {
+  console.log('[storage event] key:', e.key, '| new:', e.newValue);
+});
+
+// Write to localStorage — the listener above will NOT fire here
+localStorage.setItem('demo:signal', 'hello-from-tab');
+console.log('Written demo:signal =', localStorage.getItem('demo:signal'));
+console.log('(Open this page in another tab to see the storage event fire there)');
+
+// Clean up
+localStorage.removeItem('demo:signal');
+console.log('Cleaned up. demo:signal =', localStorage.getItem('demo:signal'));`;
+
+<StorageRunner client:visible code={storageEventCode} />
+
+<Callout title="Key point">
+The `storage` event is a simple cross-tab signal for `localStorage` changes — it fires in **other tabs only**, not the writer. Web Storage is **synchronous**, so avoid storing large blobs; prefer IndexedDB for anything above a few KB.
+</Callout>
+
+export const quizStorageEventAndLimits = [
+  {
+    q: 'You call localStorage.setItem("x", "1") in Tab A. Which tabs receive the storage event?',
+    options: [
+      'Tab A only',
+      'All tabs of the same origin except Tab A',
+      'All tabs of the same origin including Tab A',
+      'No tab — the storage event requires a BroadcastChannel',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'What exception is thrown when a localStorage write exceeds the quota?',
+    options: ['RangeError', 'QuotaExceededError (DOMException)', 'StorageError', 'OverflowError'],
+    answer: 1,
+  },
+  {
+    q: 'Does the storage event fire for sessionStorage changes in another tab?',
+    options: [
+      'Yes — sessionStorage fires storage events across tabs',
+      'No — sessionStorage is per-tab; its changes never propagate to other tabs',
+      'Only if both tabs share the same session cookie',
+      'Only in the tab that made the change',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'Why should you avoid storing large blobs in localStorage?',
+    options: [
+      'localStorage does not support binary data',
+      'All localStorage operations are synchronous and block the main thread',
+      'localStorage has a 50 KB limit per key',
+      'Blobs are automatically compressed and corrupt JSON',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="web-storage/storage-event-and-limits" questions={quizStorageEventAndLimits} />
+
+<ProgressTracker client:visible id="web-storage/storage-event-and-limits" />

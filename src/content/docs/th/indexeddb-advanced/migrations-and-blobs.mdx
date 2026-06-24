@@ -1,0 +1,211 @@
+---
+title: 'Migrations และ Blobs'
+description: 'การ migration schema แบบมีเวอร์ชันใน onupgradeneeded ด้วย oldVersion checks และการจัดเก็บ Blob/File โดยตรงใน IndexedDB โดยไม่ต้อง serialise'
+sidebar:
+  order: 5
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## การกำหนดเวอร์ชัน Schema ใน IndexedDB
+
+ฐานข้อมูล IndexedDB ทุกตัวมี **หมายเลขเวอร์ชัน** เป็นจำนวนเต็ม เมื่อคุณเรียก `indexedDB.open(name, version)` ด้วยเวอร์ชันที่สูงกว่าที่จัดเก็บอยู่ในปัจจุบัน เบราว์เซอร์จะยิงเหตุการณ์ `upgradeneeded` ก่อน `success` นี่คือ **สถานที่เดียว** ที่คุณสามารถสร้างหรือลบ object store และ index ได้
+
+```js
+const request = indexedDB.open('my-db', 2);
+
+request.onupgradeneeded = (event) => {
+  const db = event.target.result;
+  const oldVersion = event.oldVersion; // 0 if brand-new, 1 if upgrading from v1
+  // ...create stores based on oldVersion
+};
+```
+
+คุณสมบัติสำคัญคือ `event.oldVersion`: มันบอกให้คุณรู้ว่าฐานข้อมูลอยู่ที่เวอร์ชันใด **ก่อน** การเปิดครั้งนี้ ฐานข้อมูลที่สร้างใหม่จะรายงาน `oldVersion === 0`
+
+## รูปแบบ migration: การตรวจสอบ `if (oldVersion < N)` แบบต่อเนื่อง
+
+แทนที่จะใช้ `if/else` เพียงอันเดียว ให้ใช้การตรวจสอบแบบน้อยกว่าต่อเนื่องกัน เพื่อให้ฐานข้อมูลที่อยู่ในเวอร์ชันก่อนหน้าใด ๆ รัน upgrade ทั้งหมดที่ขาดหายไป:
+
+```js
+request.onupgradeneeded = (event) => {
+  const db = event.target.result;
+  const { oldVersion } = event;
+
+  if (oldVersion < 1) {
+    // v0 → v1: create the initial 'users' store
+    db.createObjectStore('users', { keyPath: 'id' });
+  }
+
+  if (oldVersion < 2) {
+    // v1 → v2: add a 'files' store for binary data
+    db.createObjectStore('files', { keyPath: 'name' });
+  }
+
+  // if oldVersion < 3: future migration goes here
+};
+```
+
+ผู้ใช้ที่อัปเกรดจาก v0 จะรัน **ทั้งสอง** บล็อก ผู้ใช้ที่อัปเกรดจาก v1 จะรันเฉพาะบล็อกที่สอง ผู้ใช้ที่อยู่บน v2 อยู่แล้วจะไม่รันบล็อกใดเลย
+
+## การจัดเก็บออบเจกต์ `Blob` และ `File`
+
+หนึ่งในข้อได้เปรียบที่ยิ่งใหญ่ที่สุดของ IndexedDB เหนือ Web Storage คือความสามารถในการจัดเก็บค่า JavaScript ที่ **structured-cloneable** — รวมถึงออบเจกต์ `Blob` และ `File` — **โดยไม่ต้องทำ serialisation ใด ๆ**
+
+```js
+// Create a Blob in memory
+const blob = new Blob(['Hello, binary world!'], { type: 'text/plain' });
+
+// Store it directly — no JSON.stringify, no base64 encoding
+const tx = db.transaction('files', 'readwrite');
+tx.objectStore('files').put({ name: 'greeting.txt', data: blob });
+```
+
+เมื่อคุณอ่าน record กลับมา คุณจะได้รับ `Blob` จริง ๆ พร้อมกับ method ทั้งหมดที่ยังคงสมบูรณ์:
+
+```js
+const getReq = db.transaction('files').objectStore('files').get('greeting.txt');
+getReq.onsuccess = async () => {
+  const record = getReq.result;
+  const text = await record.data.text(); // Blob.prototype.text() returns a Promise
+  console.log(text); // 'Hello, binary world!'
+};
+```
+
+เทคนิคเดียวกันนี้ใช้ได้กับออบเจกต์ `File` (ซึ่งเป็น subclass ของ `Blob`), `ArrayBuffer`, `ImageBitmap` และประเภทอื่น ๆ ที่ structured-cloneable
+
+## ทดลองรัน: v2 migration และ Blob round-trip
+
+ตัวอย่างด้านล่างเปิด `demo-advanced-migrations` ที่ **เวอร์ชัน 2** หากฐานข้อมูลยังไม่มีอยู่ `onupgradeneeded` จะรันทั้งสองบล็อก migration (oldVersion เป็น 0) จากนั้นจะจัดเก็บ record ผู้ใช้และ Blob ดึง Blob กลับมา และอ่านเนื้อหาข้อความก่อนทำการล้างข้อมูล
+
+export const migrationsCode = `(async function () {
+  // --- helpers to promisify IDB requests ---
+  function req(idbRequest) {
+    return new Promise((resolve, reject) => {
+      idbRequest.onsuccess = () => resolve(idbRequest.result);
+      idbRequest.onerror   = () => reject(idbRequest.error);
+    });
+  }
+
+  function txDone(tx) {
+    return new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror    = () => reject(tx.error);
+      tx.onabort    = () => reject(tx.error);
+    });
+  }
+
+  // --- open (or upgrade) the database ---
+  const db = await new Promise((resolve, reject) => {
+    const openReq = indexedDB.open('demo-advanced-migrations', 2);
+
+    openReq.onupgradeneeded = (event) => {
+      const database = event.target.result;
+      const { oldVersion } = event;
+      console.log('onupgradeneeded — oldVersion:', oldVersion);
+
+      if (oldVersion < 1) {
+        database.createObjectStore('users', { keyPath: 'id' });
+        console.log('  created store: users');
+      }
+
+      if (oldVersion < 2) {
+        database.createObjectStore('files', { keyPath: 'name' });
+        console.log('  created store: files');
+      }
+    };
+
+    openReq.onsuccess = () => resolve(openReq.result);
+    openReq.onerror   = () => reject(openReq.error);
+  });
+
+  // --- write a user record ---
+  const writeTx = db.transaction(['users', 'files'], 'readwrite');
+  const usersStore = writeTx.objectStore('users');
+  const filesStore = writeTx.objectStore('files');
+
+  usersStore.put({ id: 1, username: 'alice' });
+  console.log('Stored user: { id: 1, username: "alice" }');
+
+  // --- create and store a Blob (no serialisation needed!) ---
+  const blob = new Blob(['Hello from a blob!'], { type: 'text/plain' });
+  filesStore.put({ name: 'hello.txt', data: blob });
+  console.log('Stored blob as: { name: "hello.txt", data: <Blob> }');
+
+  await txDone(writeTx);
+
+  // --- retrieve the Blob and read its text ---
+  const readTx = db.transaction('files', 'readonly');
+  const record = await req(readTx.objectStore('files').get('hello.txt'));
+
+  const text = await record.data.text();
+  console.log('Retrieved blob text:', text);
+
+  // --- clean up ---
+  db.close();
+  await new Promise((resolve, reject) => {
+    const del = indexedDB.deleteDatabase('demo-advanced-migrations');
+    del.onsuccess = () => { console.log('Database deleted.'); resolve(); };
+    del.onerror   = () => reject(del.error);
+  });
+})();`;
+
+<StorageRunner client:visible code={migrationsCode} />
+
+<Callout title="ประเด็นสำคัญ">
+ใช้การตรวจสอบ `if (oldVersion < N)` แบบต่อเนื่องกันใน `onupgradeneeded` เพื่อให้ผู้ใช้ทุกคน — ไม่ว่าจะอัปเกรดจาก v1 หรือเริ่มต้นใหม่ — รัน migration ที่จำเป็นพอดี Blob และ File จะถูกจัดเก็บ **ตามสภาพ** ใน IndexedDB เพราะ structured clone algorithm จัดการให้โดยอัตโนมัติ ไม่จำเป็นต้องเข้ารหัส base64 หรือใช้ `JSON.stringify`
+</Callout>
+
+## สรุป
+
+| แนวคิด | รายละเอียด |
+|---|---|
+| `event.oldVersion` | หมายเลขเวอร์ชันก่อนการเปิดครั้งนี้ `0` สำหรับฐานข้อมูลที่สร้างใหม่ |
+| การตรวจสอบ `if (oldVersion < N)` แบบต่อเนื่อง | รับประกันว่า migration แบบเพิ่มทีละขั้นจะไม่ถูกข้ามไป |
+| `Blob` / `File` ใน IDB | จัดเก็บและดึงกลับโดยไม่ต้อง serialisation ใด ๆ |
+| `Blob.prototype.text()` | คืนค่า `Promise<string>` — ใช้ `await` |
+
+export const quizMigrationsAndBlobs = [
+  {
+    q: 'event.oldVersion มีค่าเป็นเท่าใด เมื่อผู้ใช้เปิดฐานข้อมูล IndexedDB เป็นครั้งแรกสุด (ยังไม่เคยมีมาก่อน)?',
+    options: ['1', 'undefined', '0', 'null'],
+    answer: 2,
+  },
+  {
+    q: 'คุณเปิดฐานข้อมูลที่เวอร์ชัน 3 ผู้ใช้ปัจจุบันมีเวอร์ชัน 1 บล็อก migration ใดควรรันภายใน onupgradeneeded?',
+    options: [
+      'เฉพาะบล็อกสำหรับ oldVersion < 3',
+      'บล็อกสำหรับ oldVersion < 2 และ oldVersion < 3',
+      'ทุกบล็อก: oldVersion < 1, oldVersion < 2 และ oldVersion < 3',
+      'ไม่มี — migration จะรันเฉพาะเมื่อไม่มีฐานข้อมูลอยู่',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'คุณควรจัดเก็บออบเจกต์ Blob ใน IndexedDB อย่างไร?',
+    options: [
+      'แปลงเป็น base64 ด้วย FileReader ก่อน แล้วจึงจัดเก็บ string',
+      'เรียก JSON.stringify ก่อนจัดเก็บ',
+      'ส่ง Blob โดยตรงไปยัง put() — structured clone algorithm จัดการให้',
+      'ไม่สามารถจัดเก็บ Blob ใน IndexedDB ได้',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'Blob.prototype.text() คืนค่าอะไร?',
+    options: [
+      'string แบบ synchronous',
+      'Promise ที่ resolve เป็น string',
+      'ArrayBuffer',
+      'ReadableStream',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="indexeddb-advanced/migrations-and-blobs" questions={quizMigrationsAndBlobs} />
+
+<ProgressTracker client:visible id="indexeddb-advanced/migrations-and-blobs" />

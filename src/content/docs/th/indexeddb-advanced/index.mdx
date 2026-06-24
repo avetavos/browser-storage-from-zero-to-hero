@@ -1,0 +1,272 @@
+---
+title: 'ก้าวข้าม CRUD พื้นฐาน'
+description: 'ภาพรวมของฟีเจอร์ขั้นสูงใน IndexedDB — indexes, cursors, ranges, ไลบรารี idb, migrations และ blobs'
+sidebar:
+  order: 1
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Mermaid from '../../../../components/Mermaid.astro';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## ภาพรวมโมดูล
+
+CRUD พื้นฐานของ IndexedDB — `put`, `get`, `delete` — ช่วยได้มาก แต่แอปพลิเคชันจริงต้องการมากกว่านั้น โมดูลนี้ครอบคลุมเลเยอร์ขั้นสูงที่อยู่เหนือ Core API
+
+| บทเรียน | สิ่งที่คุณจะได้เรียนรู้ |
+|---|---|
+| **1. ภาพรวมนี้** | Indexes, cursors, key ranges, ไลบรารี idb, migrations และ blobs เชื่อมต่อกันอย่างไร |
+| **2. Indexes** | การสร้างและสืบค้น secondary indexes; `index.get` vs `index.getAll` |
+| **3. Cursors & key ranges** | การเดินผ่านผลลัพธ์แบบเรียงลำดับ; `IDBKeyRange.bound`, `lowerBound`, `upperBound` |
+| **4. ไลบรารี idb** | Wrapper แบบ Promise; เหตุใดคุณควรใช้มันเสมอในโปรดักชัน |
+| **5. Migrations** | รูปแบบ `onupgradeneeded` สำหรับการพัฒนาสคีมาอย่างปลอดภัยข้ามเวอร์ชัน |
+| **6. Blobs & files** | การเก็บข้อมูลไบนารี — รูปภาพ, เสียง, PDF — โดยตรงใน object store |
+
+---
+
+## Index คืออะไร?
+
+**Object store** เปรียบเหมือนตารางที่มี primary key เป็นกุญแจ (โดยทั่วไปคือ `id`) ส่วน **index** คือมุมมองแบบเรียงลำดับรองของ records เดียวกัน โดยใช้คุณสมบัติอื่นเป็นกุญแจ — เช่น `email` หรือ `createdAt`
+
+หากไม่มี index การค้นหา records ทั้งหมดที่ `email === 'ada@example.com'` ต้องเปิด cursor ผ่านทุก record (การสแกนทั้งหมด) แต่เมื่อมี index บน `email` เอนจินจะกระโดดไปยังรายการที่ตรงกันโดยตรงใน O(log n)
+
+```js
+// Creating a store with an index during onupgradeneeded
+const store = db.createObjectStore('users', { keyPath: 'id' });
+store.createIndex('by_email', 'email', { unique: true });
+store.createIndex('by_age',   'age',   { unique: false });
+```
+
+เมื่อ index มีอยู่แล้ว คุณสามารถสืบค้นได้ภายใน transaction ใดก็ได้:
+
+```js
+const tx    = db.transaction('users', 'readonly');
+const index = tx.objectStore('users').index('by_email');
+const user  = await index.get('ada@example.com');
+```
+
+---
+
+## Cursors ช่วยให้คุณเดินผ่านผลลัพธ์ได้
+
+**Cursor** ทำการวนซ้ำ records ตามลำดับ index คุณเปิดมันบน object store (ลำดับ primary key) หรือ index (ลำดับ secondary key) แล้วเรียก `cursor.continue()` เพื่อเลื่อนไปข้างหน้า:
+
+```js
+const tx     = db.transaction('users', 'readonly');
+const index  = tx.objectStore('users').index('by_age');
+const range  = IDBKeyRange.bound(18, 65); // ages 18–65 inclusive
+let   cursor = await index.openCursor(range);
+
+while (cursor) {
+  console.log(cursor.value.name, cursor.value.age);
+  cursor = await cursor.continue();
+}
+```
+
+Key ranges — `bound`, `lowerBound`, `upperBound`, `only` — สามารถส่งผ่านไปยังทั้ง `openCursor` และ `getAll` เพื่อกรองโดยไม่ต้องสแกนทั้งหมด
+
+---
+
+## ไลบรารี idb
+
+Raw IndexedDB API ทำงานแบบ callback/event-driven และมีความยาวมาก ไลบรารี **idb** ของ Jake Archibald ห่อหุ้มมันด้วย Promises ที่สะอาดโดยไม่มีค่าใช้จ่ายรันไทม์:
+
+```js
+import { openDB } from 'idb';
+
+const db = await openDB('my-app', 1, {
+  upgrade(db) {
+    const store = db.createObjectStore('users', { keyPath: 'id' });
+    store.createIndex('by_email', 'email', { unique: true });
+  },
+});
+
+await db.put('users', { id: 1, name: 'Ada', email: 'ada@example.com', age: 36 });
+const user = await db.getFromIndex('users', 'by_email', 'ada@example.com');
+```
+
+บทเรียนถัดไปในโมดูลนี้ใช้ทั้ง raw IDB (เพื่อเข้าใจ primitives) และ idb (สำหรับรูปแบบโปรดักชันที่สมจริง)
+
+---
+
+## Migrations ด้วย onupgradeneeded
+
+ทุกครั้งที่คุณเพิ่มหมายเลขเวอร์ชันที่ส่งไปยัง `indexedDB.open` เบราว์เซอร์จะเรียก `onupgradeneeded` ก่อนที่ฐานข้อมูลจะเปิด นี่คือ **สถานที่เดียว** ที่คุณสามารถสร้างหรือลบ object stores และ indexes ได้
+
+```js
+const db = await openDB('app', 3, {
+  upgrade(db, oldVersion) {
+    if (oldVersion < 1) {
+      db.createObjectStore('users', { keyPath: 'id' });
+    }
+    if (oldVersion < 2) {
+      db.transaction.objectStore('users')
+        .createIndex('by_email', 'email', { unique: true });
+    }
+    if (oldVersion < 3) {
+      db.createObjectStore('files', { keyPath: 'name' });
+    }
+  },
+});
+```
+
+บล็อก `if (oldVersion < N)` แบบต่อเนื่องช่วยให้ผู้ใช้สามารถอัปเกรดจากเวอร์ชันเก่าใดก็ได้ในครั้งเดียว — นี่คือรูปแบบ migration หลักที่จะอธิบายเชิงลึกในบทเรียนที่ 5
+
+---
+
+## Blobs และ files
+
+IndexedDB เก็บค่าที่ structured-cloneable ซึ่งรวมถึง `Blob`, `File`, `ArrayBuffer` และ `ImageData` ไม่จำเป็นต้องเข้ารหัส base64 ข้อมูลไบนารีเหมือนที่ต้องทำกับ `localStorage`:
+
+```js
+const response = await fetch('/avatar.png');
+const blob     = await response.blob();
+
+await db.put('files', { name: 'avatar.png', data: blob, size: blob.size });
+
+const record = await db.get('files', 'avatar.png');
+const url    = URL.createObjectURL(record.data);
+// use url in an <img> src
+```
+
+การเก็บ blobs จะถูกครอบคลุมแบบครบวงจรในบทเรียนที่ 6
+
+---
+
+## ความสัมพันธ์ระหว่าง Object store กับ Index
+
+export const indexOverviewDiagram = `flowchart LR
+    subgraph ObjectStore["Object Store — users"]
+        direction TB
+        R1["{ id:1, name:'Ada',   email:'ada@x.com',   age:36 }"]
+        R2["{ id:2, name:'Bob',   email:'bob@x.com',   age:24 }"]
+        R3["{ id:3, name:'Carol', email:'carol@x.com', age:31 }"]
+    end
+
+    subgraph PK["Primary Key (id)"]
+        direction TB
+        PK1["1 → record 1"]
+        PK2["2 → record 2"]
+        PK3["3 → record 3"]
+    end
+
+    subgraph IDX["Index — by_email"]
+        direction TB
+        I1["ada@x.com   → record 1"]
+        I2["bob@x.com   → record 2"]
+        I3["carol@x.com → record 3"]
+    end
+
+    ObjectStore --> PK
+    ObjectStore --> IDX
+    IDX -. "index.get('ada@x.com')" .-> R1
+`;
+
+<Mermaid code={indexOverviewDiagram} title="Object store พร้อม secondary index บนคุณสมบัติ email" />
+
+---
+
+## ตัวอย่างที่รันได้: เปิด DB, สร้าง index, สืบค้นผ่าน index
+
+export const indexOverviewCode = `// Open (or create) a versioned DB
+const request = indexedDB.open('demo-advanced-index-overview', 1);
+
+request.onupgradeneeded = (event) => {
+  const db = event.target.result;
+  if (!db.objectStoreNames.contains('contacts')) {
+    const store = db.createObjectStore('contacts', { keyPath: 'id' });
+    store.createIndex('by_email', 'email', { unique: true });
+    store.createIndex('by_city',  'city',  { unique: false });
+  }
+};
+
+request.onsuccess = (event) => {
+  const db = event.target.result;
+
+  // Put a record
+  const tx1 = db.transaction('contacts', 'readwrite');
+  tx1.objectStore('contacts').put({
+    id:    1,
+    name:  'Ada Lovelace',
+    email: 'ada@babbage.co',
+    city:  'London',
+  });
+  tx1.oncomplete = () => {
+    console.log('Record stored.');
+
+    // Query by email index
+    const tx2   = db.transaction('contacts', 'readonly');
+    const index = tx2.objectStore('contacts').index('by_email');
+    const req   = index.get('ada@babbage.co');
+
+    req.onsuccess = () => {
+      const record = req.result;
+      if (record) {
+        console.log('Found via index:', JSON.stringify(record));
+      } else {
+        console.log('Not found.');
+      }
+      db.close();
+    };
+  };
+};
+
+request.onerror = () => {
+  console.error('DB error:', request.error);
+};
+`;
+
+<StorageRunner client:visible code={indexOverviewCode} />
+
+<Callout title="ประเด็นสำคัญ">
+Indexes ถูกสร้างครั้งเดียวใน `onupgradeneeded` และได้รับการดูแลรักษาอัตโนมัติโดยเบราว์เซอร์เมื่อมีการเพิ่ม อัปเดต หรือลบ records การสืบค้น index ใช้เวลา O(log n) — เร็วกว่าการสแกน cursor ทั้ง store มากสำหรับชุดข้อมูลขนาดใหญ่ ไลบรารี idb ห่อหุ้ม primitives เดียวกันใน Promises ทำให้โค้ดสั้นลงอย่างมาก
+</Callout>
+
+export const quizIdbAdvancedIndex = [
+  {
+    q: 'สถานที่เดียวที่คุณสามารถสร้าง object store หรือ index ใหม่ใน IndexedDB คือที่ไหน?',
+    options: [
+      'ภายใน readwrite transaction ใดก็ได้',
+      'ภายใน event handler ของ onupgradeneeded',
+      'โดยการเรียก db.createObjectStore() ได้ทุกเวลา',
+      'ภายใน callback ของ onsuccess หลังจากเปิดฐานข้อมูล',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'ข้อดีหลักของ secondary index เมื่อเทียบกับการสแกน cursor ทั้งหมดคืออะไร?',
+    options: [
+      'Indexes บีบอัด records ที่เก็บอยู่เพื่อประหยัดพื้นที่',
+      'Indexes ช่วยให้คุณเก็บข้อมูลได้มากกว่า 50 MB',
+      'Indexes ช่วยให้เอนจินค้นหา records ที่ตรงกันใน O(log n) แทนที่จะสแกนทุก record',
+      'Indexes ซิงค์ข้อมูลไปยังเซิร์ฟเวอร์โดยอัตโนมัติ',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'เมธอด IDBKeyRange ใดที่คืนค่า range ซึ่งรวมทั้งค่าขอบเขตล่างและขอบเขตบน?',
+    options: [
+      'IDBKeyRange.only()',
+      'IDBKeyRange.lowerBound()',
+      'IDBKeyRange.upperBound()',
+      'IDBKeyRange.bound()',
+    ],
+    answer: 3,
+  },
+  {
+    q: 'สิ่งใดต่อไปนี้ที่ IndexedDB สามารถเก็บได้โดยตรงโดยไม่ต้องเข้ารหัส base64?',
+    options: [
+      'เฉพาะ strings และ numbers ธรรมดา',
+      'เฉพาะ objects ที่ JSON-serialisable ได้',
+      'ค่า Blob, File และ ArrayBuffer',
+      'เฉพาะค่าที่ implement Serialisable interface',
+    ],
+    answer: 2,
+  },
+];
+
+<Quiz client:visible id="indexeddb-advanced/index" questions={quizIdbAdvancedIndex} />
+
+<ProgressTracker client:visible id="indexeddb-advanced/index" />

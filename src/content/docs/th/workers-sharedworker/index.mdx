@@ -1,0 +1,111 @@
+---
+title: 'Web Workers & SharedWorker'
+description: 'ทำไม Workers ถึงมีความสำคัญ ความแตกต่างระหว่าง Dedicated กับ Shared และโครงสร้างของโมดูลนี้'
+sidebar:
+  order: 1
+---
+
+import Mermaid from '../../../../components/Mermaid.astro';
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## ทำไมต้องรัน JS นอก main thread?
+
+JavaScript ทำงานแบบ single-threaded นั่นคือ ทุกสคริปต์ การอัปเดต DOM การคำนวณ layout และ event handler ล้วนทำงานบนเธรดเดียวกัน เมื่อรัน computation ที่หนัก เช่น การ parse ไฟล์ขนาดใหญ่ การคำนวณ hash หรือการประมวลผลภาพ UI จะ "แช่แข็ง" ตลอดช่วงเวลานั้น — scroll หยุด animation กระตุก และ click ไม่ตอบสนอง
+
+Web Workers ช่วยให้โยนงานหนักไปยัง background thread ได้ เบราว์เซอร์จะสร้าง JS environment แยกต่างหากพร้อม event loop ของตัวเอง เธรดหลักและ worker สื่อสารกันผ่าน `postMessage` และ `onmessage` โดยค่าเริ่มต้นทั้งสองเธรดจะไม่แชร์ memory ดังนั้นจึงไม่มีปัญหา race condition
+
+export const overviewDiagram = `flowchart LR
+  MT["Main Thread\n(UI, events)"]
+  DW["Dedicated Worker\n(background JS)"]
+  MT -- "worker.postMessage(data)" --> DW
+  DW -- "self.postMessage(result)" --> MT
+`;
+
+<Mermaid code={overviewDiagram} title="เธรดหลัก ↔ Dedicated Worker ผ่าน postMessage/onmessage" />
+
+## Dedicated vs Shared Worker
+
+| | Dedicated Worker | SharedWorker |
+|---|---|---|
+| **ขอบเขต** | หนึ่งแท็บ / หนึ่งสคริปต์ | ทุกแท็บของ origin เดียวกัน |
+| **Constructor** | `new Worker(url)` | `new SharedWorker(url)` |
+| **การสื่อสาร** | Direct: `worker.postMessage(data)` | ผ่าน `MessagePort`: `port.postMessage(data)` |
+| **ฝั่ง Worker** | `self.onmessage = fn` | ต้องจัดการ `onconnect` ก่อน แล้วฟัง `event.ports[0]` |
+| **ความซับซ้อน** | ง่าย | ปานกลาง — ต้องดูแล port |
+| **กรณีใช้งาน** | งาน CPU หนักในแท็บเดียว | Shared cache, ประสานงานข้ามแท็บ |
+
+## โมดูลนี้ครอบคลุมอะไรบ้าง
+
+| บทเรียน | สิ่งที่จะได้เรียนรู้ |
+|---|---|
+| **index** (หน้านี้) | ภาพรวม, Dedicated vs Shared, แผนผังโมดูล |
+| **web-workers** | สร้าง ส่งข้อความ และยกเลิก Dedicated Worker |
+| **postmessage-and-transferables** | Structured clone vs zero-copy transferables |
+| **sharedworker** | เชื่อมต่อหลายแท็บกับ SharedWorker เดียว |
+| **worker-patterns** | Error handling, worker pools, และ best practices |
+
+## ลองใช้งานทันที
+
+snippet ด้านล่างสร้าง Dedicated Worker ผ่าน Blob URL ส่งตัวเลข 10 และ worker จะคำนวณ Fibonacci แบบ off-thread แล้วส่งผลลัพธ์กลับมา
+
+export const introCode = `var workerSrc = 'self.onmessage = function(e) {' +
+  ' var n = e.data;' +
+  ' var a = 0, b = 1, t;' +
+  ' for (var i = 0; i < n; i++) { t = a + b; a = b; b = t; }' +
+  ' self.postMessage(a);' +
+  '};';
+var url = URL.createObjectURL(new Blob([workerSrc], {type: 'application/javascript'}));
+var w = new Worker(url);
+w.onmessage = function(e) {
+  console.log('fibonacci(10) =', e.data);
+  w.terminate();
+  URL.revokeObjectURL(url);
+};
+w.postMessage(10);
+console.log('Worker created — waiting for result...');`;
+
+<StorageRunner client:visible code={introCode} />
+
+<Callout title="ประเด็นสำคัญ">
+Workers ทำงานใน global scope แยกต่างหาก — ไม่มี `window` ไม่มี `document` สื่อสารได้ผ่าน `postMessage` เท่านั้น
+</Callout>
+
+export const quizWorkersIndex = [
+  {
+    q: 'เหตุผลหลักในการย้ายงานไปยัง Web Worker คืออะไร?',
+    options: [
+      'ทำให้ network requests เร็วขึ้น',
+      'ป้องกันไม่ให้ main thread ถูกบล็อก',
+      'เข้าถึง DOM แบบ parallel',
+      'ลดการใช้ memory',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'Worker ประเภทใดที่แชร์ข้ามทุกแท็บของ origin เดียวกัน?',
+    options: [
+      'Dedicated Worker',
+      'Service Worker',
+      'SharedWorker',
+      'Broadcast Worker',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'main thread และ worker สื่อสารกันอย่างไร?',
+    options: [
+      'แชร์ memory โดยค่าเริ่มต้น',
+      'ผ่าน postMessage และ onmessage events',
+      'window.Worker.call()',
+      'อ้างอิง function โดยตรง',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="workers-sharedworker/index" questions={quizWorkersIndex} />
+
+<ProgressTracker client:visible id="workers-sharedworker/index" />

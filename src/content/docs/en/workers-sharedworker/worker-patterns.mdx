@@ -1,0 +1,167 @@
+---
+title: 'Worker Patterns'
+description: 'Request/response with message IDs, a tiny RPC wrapper, error handling with onerror, and when to use a worker.'
+sidebar:
+  order: 5
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## The request/response pattern
+
+Workers are asynchronous and may handle many tasks. To match a response to the right request, attach a unique `id` to each message:
+
+```js
+// main.js
+let nextId = 0;
+const pending = {};
+worker.onmessage = (e) => {
+  const { id, result } = e.data;
+  if (pending[id]) { pending[id](result); delete pending[id]; }
+};
+function ask(payload) {
+  return new Promise((resolve) => {
+    const id = ++nextId;
+    pending[id] = resolve;
+    worker.postMessage({ id, payload });
+  });
+}
+// worker.js
+self.onmessage = (e) => {
+  const { id, payload } = e.data;
+  self.postMessage({ id, result: process(payload) });
+};
+```
+
+## A tiny RPC wrapper
+
+Wrapping the pattern above into a small helper makes calling the worker feel like a regular async function call.
+
+```js
+function createRpc(worker) {
+  let seq = 0;
+  const map = {};
+  worker.onmessage = (e) => {
+    const cb = map[e.data.id];
+    if (cb) { cb(e.data.result); delete map[e.data.id]; }
+  };
+  return {
+    call(method, args) {
+      return new Promise((res) => {
+        const id = ++seq;
+        map[id] = res;
+        worker.postMessage({ id, method, args });
+      });
+    }
+  };
+}
+```
+
+## Error handling with onerror
+
+Uncaught errors inside a worker fire `worker.onerror` in the main thread — not `window.onerror`. Always attach a handler:
+
+```js
+worker.onerror = (event) => {
+  console.error('Worker error:', event.message, 'at', event.filename, ':', event.lineno);
+  event.preventDefault(); // suppress browser console error
+};
+```
+
+You can also attach `self.onerror` inside the worker itself to catch async errors before they bubble up to the main thread.
+
+## When to use a worker
+
+| Use a worker | Do NOT use a worker |
+|---|---|
+| CPU-intensive loops (crypto, image processing, compression) | Simple DOM reads/writes |
+| Parsing large JSON or binary data | Short tasks < 5 ms |
+| Real-time data processing (audio, video) | Tasks needing direct DOM access |
+| Keeping the UI at 60 fps during heavy work | One-off simple async fetches (use `fetch` directly) |
+
+## Runnable: request/response with message IDs
+
+export const rpcCode = `var workerSrc = 'self.onmessage = function(e) {' +
+  ' var id = e.data.id, n = e.data.n;' +
+  ' var r = 1; for (var i = 2; i <= n; i++) r *= i;' +
+  ' self.postMessage({ id: id, result: r });' +
+  '};';
+var url = URL.createObjectURL(new Blob([workerSrc], {type:'application/javascript'}));
+var w = new Worker(url);
+var pending = {};
+w.onerror = function(e) { console.error('Worker error:', e.message); };
+w.onmessage = function(e) {
+  var cb = pending[e.data.id];
+  if (cb) { cb(e.data.result); delete pending[e.data.id]; }
+};
+var seq = 0;
+function ask(n) {
+  return new Promise(function(resolve) {
+    var id = ++seq;
+    pending[id] = resolve;
+    w.postMessage({ id: id, n: n });
+  });
+}
+ask(5).then(function(r) { console.log('5! =', r); });
+ask(10).then(function(r) { console.log('10! =', r); });
+ask(15).then(function(r) {
+  console.log('15! =', r);
+  w.terminate();
+  URL.revokeObjectURL(url);
+});`;
+
+<StorageRunner client:visible code={rpcCode} />
+
+<Callout title="Key point">
+Always handle `worker.onerror`. Without it, worker crashes fail silently in production. Use message IDs to track request/response pairs when a worker handles multiple concurrent tasks.
+</Callout>
+
+export const quizWorkerPatterns = [
+  {
+    q: 'Why include a unique `id` in each worker message?',
+    options: [
+      'Workers require it to compile',
+      'To match async responses back to the correct request',
+      'To prevent memory leaks',
+      'To encrypt the message payload',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'Where does an uncaught error inside a Web Worker fire?',
+    options: [
+      'window.onerror on the main thread',
+      'worker.onerror on the main thread',
+      'self.onerror inside the worker only',
+      'The error is silently ignored',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'Which task is a GOOD use case for a Web Worker?',
+    options: [
+      'Reading a button click event',
+      'Updating the DOM after a fetch',
+      'Compressing a 50 MB image before upload',
+      'Making a simple GET request',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'In the tiny RPC pattern, what does the `map` object store?',
+    options: [
+      'Worker source code',
+      'Pending resolve callbacks keyed by message id',
+      'Errors from onerror',
+      'Transferable buffers',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="workers-sharedworker/worker-patterns" questions={quizWorkerPatterns} />
+
+<ProgressTracker client:visible id="workers-sharedworker/worker-patterns" />

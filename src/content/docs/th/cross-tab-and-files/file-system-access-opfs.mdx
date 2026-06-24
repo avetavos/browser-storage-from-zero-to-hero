@@ -1,0 +1,162 @@
+---
+title: 'File System Access & OPFS'
+description: 'อ่านและเขียนไฟล์จริงด้วย showOpenFilePicker / showSaveFilePicker และใช้ Origin Private File System สำหรับ file I/O แบบ programmatic'
+sidebar:
+  order: 5
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## สองวิธีในการเขียนไฟล์
+
+เบราว์เซอร์มีพื้นที่เขียนไฟล์สองแบบ:
+
+1. **File System Access API** (`showOpenFilePicker`, `showSaveFilePicker`) — ให้ผู้ใช้เลือกไฟล์จริงจาก file system ในเครื่อง ต้องใช้ user gesture (คลิกปุ่ม) ไม่รองรับในทุกเบราว์เซอร์
+2. **Origin Private File System (OPFS)** — virtual file system แบบ sandboxed scoped ตาม origin ไม่ต้องใช้ user gesture, ไม่มี file picker, เขียน program ได้ทั้งหมด ทำงานใน worker ใช้ quota เหมือน IndexedDB
+
+## File System Access API
+
+ฟังก์ชัน picker จะแสดง dialog ไฟล์ของ OS ต้องเรียกจาก user-gesture handler
+
+```js
+// Open a file chosen by the user
+async function openFile() {
+  // showOpenFilePicker must be called inside a user gesture (click, etc.)
+  const [fileHandle] = await window.showOpenFilePicker();
+  const file = await fileHandle.getFile();
+  const text = await file.text();
+  console.log('File contents:', text.slice(0, 200));
+}
+
+// Save / overwrite a file
+async function saveFile(content) {
+  const handle = await window.showSaveFilePicker({
+    suggestedName: 'output.txt',
+    types: [{ description: 'Text file', accept: { 'text/plain': ['.txt'] } }],
+  });
+  const writable = await handle.createWritable();
+  await writable.write(content);
+  await writable.close();
+}
+```
+
+เนื่องจาก `showOpenFilePicker` และ `showSaveFilePicker` ต้องใช้ user gesture จึงไม่สามารถรันใน StorageRunner ข้างต้นได้โดยอัตโนมัติ ตัวอย่าง OPFS ด้านล่างรันได้เต็มรูปแบบ
+
+## Origin Private File System (OPFS)
+
+OPFS ให้ directory tree ส่วนตัวแก่ทุก origin ไม่ต้องใช้ user gesture — แค่เรียก `navigator.storage.getDirectory()`
+
+```js
+// Get the root of the OPFS
+const root = await navigator.storage.getDirectory();
+
+// Create or open a file handle
+const fileHandle = await root.getFileHandle('notes.txt', { create: true });
+
+// Write to it
+const writable = await fileHandle.createWritable();
+await writable.write('Hello from OPFS!');
+await writable.close();
+
+// Read it back
+const file = await fileHandle.getFile();
+const text = await file.text();
+console.log(text); // 'Hello from OPFS!'
+```
+
+## การนำทางใน directory
+
+```js
+const root = await navigator.storage.getDirectory();
+
+// Create a sub-directory
+const subDir = await root.getDirectoryHandle('drafts', { create: true });
+
+// List entries
+for await (const [name, handle] of subDir.entries()) {
+  console.log(handle.kind, name);
+}
+```
+
+## รันได้: OPFS write และ read
+
+export const opfsCode = `// OPFS is fully available in the same-origin iframe — no user gesture needed.
+const root = await navigator.storage.getDirectory();
+
+// Write a file
+const fh = await root.getFileHandle('demo-opfs.txt', { create: true });
+const writable = await fh.createWritable();
+await writable.write('Hello from OPFS! Written at: ' + new Date().toISOString());
+await writable.close();
+console.log('File written.');
+
+// Read it back
+const file = await fh.getFile();
+const text = await file.text();
+console.log('Read back:', text);
+
+// List all files in the root
+console.log('Root entries:');
+for await (const [name, handle] of root.entries()) {
+  console.log(' ', handle.kind, name);
+}
+
+// Clean up — remove the demo file
+await root.removeEntry('demo-opfs.txt');
+console.log('Cleaned up demo-opfs.txt');`;
+
+<StorageRunner client:visible code={opfsCode} />
+
+<Callout title="ประเด็นสำคัญ">
+พื้นที่จัดเก็บ OPFS นับรวมกับ quota รวมของ origin (pool เดียวกับ IndexedDB และ Cache API) ใช้ `navigator.storage.estimate()` เพื่อตรวจสอบพื้นที่ที่มี ข้อมูล OPFS จะอยู่รอดหลังรีสตาร์ทเบราว์เซอร์ แต่สามารถถูก evict โดยเบราว์เซอร์ภายใต้แรงกดดันของพื้นที่จัดเก็บ หาก origin ไม่ได้รับ persistent storage ผ่าน `navigator.storage.persist()`
+</Callout>
+
+export const quizFileSystemAccessOpfs = [
+  {
+    q: 'ทำไม showOpenFilePicker ต้องใช้ user gesture?',
+    options: [
+      'เป็น bug ของเบราว์เซอร์ที่จะแก้ในเวอร์ชันอนาคต',
+      'เพื่อป้องกัน script ที่เป็นอันตรายจากการอ่านไฟล์ในเครื่องผู้ใช้โดยไม่รู้ตัว',
+      'เพราะ OPFS ใช้ security model ที่แตกต่าง',
+      'User gesture จะเพิ่ม file quota',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'navigator.storage.getDirectory() คืนค่าอะไร?',
+    options: [
+      'Promise ที่ resolve เป็น FileSystemDirectoryHandle สำหรับ OPFS root',
+      'การอ้างอิง synchronous ไปยังโฟลเดอร์ Downloads ของผู้ใช้',
+      'Promise ที่แสดง OS file picker',
+      'รายการ directory ของ localStorage keys ของ origin',
+    ],
+    answer: 0,
+  },
+  {
+    q: 'หลังจากเรียก fileHandle.createWritable() และเขียนข้อมูลแล้ว ต้องทำอะไรก่อนที่ข้อมูลจะมองเห็นได้ใน future reads?',
+    options: [
+      'เรียก fileHandle.flush()',
+      'เรียก writable.close()',
+      'ไม่ต้องทำอะไร — writes เป็น durable ทันที',
+      'โหลดหน้าซ้ำ',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'ข้อใดอธิบาย OPFS storage persistence ได้ถูกต้อง?',
+    options: [
+      'ข้อมูลหายเมื่อปิดแท็บ',
+      'ข้อมูลอยู่รอดหลังรีสตาร์ทเบราว์เซอร์ แต่อาจถูก evict ภายใต้แรงกดดันพื้นที่จัดเก็บ เว้นแต่ persist() ได้รับการอนุมัติ',
+      'ข้อมูลถาวรและเบราว์เซอร์ไม่สามารถลบได้',
+      'ข้อมูลแชร์ระหว่างทุก origin',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="cross-tab-and-files/file-system-access-opfs" questions={quizFileSystemAccessOpfs} />
+
+<ProgressTracker client:visible id="cross-tab-and-files/file-system-access-opfs" />

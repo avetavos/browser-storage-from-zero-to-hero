@@ -1,0 +1,144 @@
+---
+title: 'The Web Storage API'
+description: 'setItem, getItem, removeItem, clear, key(i), and length — the complete API.'
+sidebar:
+  order: 3
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## The complete API
+
+Both `localStorage` and `sessionStorage` implement the same `Storage` interface. Every method and property below applies to both — just swap the object name.
+
+### `setItem(key, value)`
+
+Stores a string value under a string key. If the key already exists the value is **overwritten** (there is no separate "update" method).
+
+```js
+localStorage.setItem('demo:theme', 'dark');
+localStorage.setItem('demo:theme', 'light'); // overwrites — now 'light'
+```
+
+### `getItem(key)`
+
+Returns the stored string for the given key, or **`null`** (not `undefined`) if the key does not exist.
+
+```js
+const theme = localStorage.getItem('demo:theme');  // 'light'
+const missing = localStorage.getItem('demo:nope'); // null
+```
+
+Always guard against `null` before using the returned value.
+
+### `removeItem(key)`
+
+Deletes a single key/value pair. Calling it on a key that does not exist is a no-op — no error is thrown.
+
+```js
+localStorage.removeItem('demo:theme');
+console.log(localStorage.getItem('demo:theme')); // null
+```
+
+### `clear()`
+
+Deletes **all** key/value pairs in the store for the current origin. Use with caution on `localStorage` — it wipes every key set by every script on the origin.
+
+```js
+localStorage.clear();
+console.log(localStorage.length); // 0
+```
+
+### `key(index)`
+
+Returns the key name at the given numeric index (0-based), or `null` if the index is out of range. The ordering is not guaranteed to be insertion order — treat it as implementation-defined.
+
+```js
+localStorage.setItem('demo:a', '1');
+localStorage.setItem('demo:b', '2');
+console.log(localStorage.key(0)); // 'demo:a' or 'demo:b' — order varies
+```
+
+### `length`
+
+A read-only property that returns the number of key/value pairs currently stored. Use it to iterate all keys:
+
+```js
+for (let i = 0; i < localStorage.length; i++) {
+  const k = localStorage.key(i);
+  console.log(k, localStorage.getItem(k));
+}
+```
+
+## Runnable: the full API in action
+
+export const apiCode = `localStorage.setItem('demo:user', 'Ada');
+console.log('get:', localStorage.getItem('demo:user'));
+console.log('length:', localStorage.length);
+localStorage.removeItem('demo:user');
+console.log('after remove:', localStorage.getItem('demo:user'));`;
+
+<StorageRunner client:visible code={apiCode} />
+
+## Reading a missing key returns null
+
+This is one of the most common bugs with Web Storage: confusing `null` with a stored value.
+
+```js
+// Nothing stored yet
+const val = localStorage.getItem('demo:nonexistent');
+console.log(val);        // null
+console.log(val === null); // true — use === null check, not falsy !val
+```
+
+Be careful: the string `"null"` is a valid stored value that is truthy. Always use `=== null` rather than `!val` to distinguish "key absent" from "key present with an empty or falsy value".
+
+## Iterating all keys
+
+```js
+localStorage.setItem('demo:one', '1');
+localStorage.setItem('demo:two', '2');
+
+for (let i = 0; i < localStorage.length; i++) {
+  const key = localStorage.key(i);
+  console.log(key, '->', localStorage.getItem(key));
+}
+
+// Clean up
+localStorage.removeItem('demo:one');
+localStorage.removeItem('demo:two');
+```
+
+<Callout title="Key point">
+There is no "update" method — `setItem` overwrites any existing value for that key. A missing key always reads back as `null`, never `undefined`. Check `=== null` to distinguish an absent key from a stored empty string.
+</Callout>
+
+export const quizTheApi = [
+  {
+    q: 'What does localStorage.getItem("missing-key") return when the key has never been set?',
+    options: ['undefined', 'null', '""', 'It throws a ReferenceError'],
+    answer: 1,
+  },
+  {
+    q: 'You call localStorage.setItem("x", "first") then localStorage.setItem("x", "second"). What is the stored value?',
+    options: ['"first"', '"second"', '"first,second"', 'It throws because the key already exists'],
+    answer: 1,
+  },
+  {
+    q: 'What does localStorage.key(index) return when index is out of range?',
+    options: ['undefined', 'null', 'It throws a RangeError', '""'],
+    answer: 1,
+  },
+  {
+    q: 'Which method removes ALL key/value pairs in localStorage for the current origin?',
+    options: ['localStorage.removeAll()', 'localStorage.clear()', 'localStorage.reset()', 'localStorage.delete()'],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="web-storage/the-api" questions={quizTheApi} />
+
+<ProgressTracker client:visible id="web-storage/the-api" />

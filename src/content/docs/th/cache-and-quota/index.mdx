@@ -1,0 +1,124 @@
+---
+title: 'Cache API และ Storage Quota'
+description: 'Cache Storage เก็บคู่ Request–Response; Storage Manager รายงานและควบคุม quota'
+sidebar:
+  order: 1
+---
+
+import Mermaid from '../../../../components/Mermaid.astro';
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## โมดูลนี้เกี่ยวกับอะไร
+
+โมดูลนี้ครอบคลุม browser API ที่เกี่ยวข้องกันสองตัว ได้แก่
+
+- **Cache API** — กลไกการจัดเก็บข้อมูลสำหรับคู่ `Request`/`Response` ออกแบบมาเพื่อแคช HTTP response และ static asset โดยเฉพาะ เพื่อให้สามารถให้บริการแบบออฟไลน์หรือโดยไม่ต้องเข้าถึงเครือข่าย
+- **Storage Manager** — อินเทอร์เฟซ `navigator.storage` ที่รายงานปริมาณพื้นที่ดิสก์ที่ origin ปัจจุบันใช้อยู่ และ quota ที่ได้รับอนุญาต นอกจากนี้ยังให้คุณร้องขอ *persistent* storage เพื่อป้องกันไม่ให้เบราว์เซอร์ลบข้อมูลเมื่อดิสก์เต็ม
+
+### Cache API
+
+Cache API อยู่ภายใต้ global object `caches` คุณเปิด cache ที่มีชื่อ จัดเก็บคู่ `Request`/`Response` ลงไป แล้วดึงกลับมาในภายหลังโดยจับคู่กับ URL ของ request การใช้งานที่พบบ่อยที่สุดคือภายใน Service Worker ซึ่ง worker จะดักจับ network request และส่ง response จาก cache เมื่อไม่มีการเชื่อมต่อเครือข่าย
+
+```js
+const cache = await caches.open('my-app-v1');
+await cache.put('/api/data.json', new Response('{"ok":true}'));
+const response = await cache.match('/api/data.json');
+console.log(await response.text()); // {"ok":true}
+```
+
+Cache API ถูกใช้ร่วมกับ Service Workers เป็นหลักสำหรับกลยุทธ์ออฟไลน์และ PWA ดูรูปแบบการแคชด้วย Service Worker ได้ที่ [PWA course](https://avetavos.github.io/pwa-from-zero-to-hero/en/service-workers/)
+
+### Storage Manager
+
+`navigator.storage` ให้ข้อมูล quota และการ eviction:
+
+```js
+const { usage, quota } = await navigator.storage.estimate();
+console.log(`Using ${usage} of ${quota} bytes`);
+
+const isPersistent = await navigator.storage.persisted();
+console.log('Persistent:', isPersistent);
+```
+
+## แผนภาพภาพรวม
+
+export const overviewDiagram = `flowchart LR
+  Browser -->|caches.open / put / match| CacheAPI[Cache API\nstores Request/Response pairs]
+  CacheAPI -->|served by| SW[Service Workers]
+  Browser -->|estimate / persist / persisted| SM[Storage Manager\nusage · quota · eviction control]`;
+
+<Mermaid code={overviewDiagram} title="Cache API เก็บคู่ Request/Response สำหรับ Service Workers; Storage Manager รายงาน usage และ quota" />
+
+## สิ่งที่โมดูลนี้ครอบคลุม
+
+| บทเรียน | สิ่งที่จะได้เรียนรู้ |
+|---|---|
+| **หน้านี้** | ภาพรวมระดับสูงของ Cache API และ Storage Manager |
+| `cache-api` | เมธอดทั้งหมดของ Cache API: open, put, add, addAll, match, delete, keys |
+| `storage-manager` | `estimate()`, `persist()`, และ `persisted()` อย่างละเอียด |
+| `eviction-and-persistence` | Best-effort vs persistent storage และเมื่อใดที่เบราว์เซอร์จะลบข้อมูล |
+| `cache-vs-indexeddb` | คู่มือการตัดสินใจ: Cache API vs IndexedDB vs localStorage |
+
+## ลองเลย: เปิด cache และจัดเก็บ response
+
+export const overviewCode = `(async () => {
+  // Open (or create) a named cache
+  const cache = await caches.open('demo-overview-v1');
+
+  // Store a synthetic Response under a URL key
+  await cache.put('/demo/hello', new Response('Hello from Cache API!'));
+
+  // Retrieve it by URL
+  const response = await cache.match('/demo/hello');
+  if (response) {
+    const text = await response.text();
+    console.log('Matched response:', text);
+  } else {
+    console.log('No match found');
+  }
+
+  // Clean up
+  await caches.delete('demo-overview-v1');
+  console.log('Cache deleted. Keys remaining:', await caches.keys());
+})();`;
+
+<StorageRunner client:visible code={overviewCode} />
+
+<Callout title="จุดสำคัญ">
+Cache API เก็บคู่ `Request`/`Response` ไม่ใช่ข้อมูลทั่วไป ออกแบบมาสำหรับการจัดเก็บในรูปแบบ HTTP: URL จับคู่กับ response สำหรับข้อมูลแอปพลิเคชันที่มีโครงสร้าง เช่น ข้อมูลผู้ใช้หรือออบเจกต์การตั้งค่า ให้ใช้ IndexedDB แทน
+</Callout>
+
+export const quizCacheAndQuotaIndex = [
+  {
+    q: 'Cache API จัดเก็บอะไร?',
+    options: [
+      'JavaScript object ทั่วไป',
+      'คู่ Request/Response',
+      'คู่ key/value ที่เป็นสตริง',
+      'ข้อมูลไบนารีเท่านั้น',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'global object ใดเป็นจุดเข้าถึง Cache API?',
+    options: ['window.cache', 'navigator.cache', 'caches', 'CacheStorage.global'],
+    answer: 2,
+  },
+  {
+    q: 'navigator.storage.estimate() คืนค่าอะไร?',
+    options: [
+      'จำนวน cache ที่เปิดอยู่',
+      'ออบเจกต์ที่มี usage และ quota เป็นหน่วย byte',
+      'ค่า boolean ที่บอกว่า storage เป็น persistent หรือไม่',
+      'รายการชื่อ cache ทั้งหมด',
+    ],
+    answer: 1,
+  },
+];
+
+<Quiz client:visible id="cache-and-quota/index" questions={quizCacheAndQuotaIndex} />
+
+<ProgressTracker client:visible id="cache-and-quota/index" />

@@ -1,0 +1,196 @@
+---
+title: 'ไลบรารี idb: IndexedDB แบบ Promise'
+description: 'ใช้ wrapper idb เพื่อเปิดฐานข้อมูล, put, get และ getAll ด้วยไวยากรณ์ async/await ที่อ่านง่าย — ไม่ต้องใช้ callback'
+sidebar:
+  order: 4
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## ทำไมต้องใช้ไลบรารี wrapper?
+
+IndexedDB API ดิบนั้นขับเคลื่อนด้วย callback ทั้งหมด ทุกการดำเนินการ — ไม่ว่าจะเป็นการเปิดฐานข้อมูล การเขียนระเบียน หรือการอ่านข้อมูลกลับมา — ล้วนต้องการให้คุณรับฟังเหตุการณ์ `onsuccess` และ `onerror` และซ้อนการดำเนินการถัดไปไว้ภายใน callback ก่อนหน้า โค้ดจริงจึงกลายเป็นพีระมิดของ handler ที่ซ้อนกัน
+
+ไลบรารี [`idb`](https://github.com/jakearchibald/idb) โดย Jake Archibald เป็น wrapper ขนาดเล็ก (~1 KB เมื่อบีบอัด) ที่จำลอง IndexedDB API ทั้งหมด แต่คืนค่า **Promise** สำหรับทุกการดำเนินการ ซึ่งหมายความว่าคุณสามารถใช้ `async/await` ได้ตลอด เหมือนกับที่คุณใช้กับ `fetch` หรือ API สมัยใหม่อื่น ๆ
+
+## การเปิดฐานข้อมูลด้วย `openDB`
+
+```js
+import { openDB } from 'https://esm.sh/idb@8';
+
+const db = await openDB('my-database', 1, {
+  upgrade(db) {
+    db.createObjectStore('tasks', { keyPath: 'id' });
+  },
+});
+```
+
+`openDB` รับอาร์กิวเมนต์สามตัว:
+
+| อาร์กิวเมนต์ | ประเภท | จุดประสงค์ |
+|---|---|---|
+| `name` | string | ชื่อฐานข้อมูล (กำหนดขอบเขตตาม origin) |
+| `version` | number | เวอร์ชันของ schema — เพิ่มค่าเพื่อกระตุ้นการอัปเกรด |
+| `{ upgrade(db) }` | object | Callback ที่รันเมื่อ DB ถูกสร้างขึ้นหรือเวอร์ชันเพิ่มขึ้น |
+
+Callback `upgrade` เป็นสถานที่เดียวที่คุณสามารถสร้างหรือลบ object store ได้ มันจะถูกข้ามไปทั้งหมดในการเปิดครั้งถัดไปเมื่อเวอร์ชันไม่มีการเปลี่ยนแปลง
+
+## การเขียนระเบียนด้วย `db.put`
+
+```js
+await db.put('tasks', { id: 1, title: 'Buy groceries', done: false });
+await db.put('tasks', { id: 2, title: 'Write tests', done: true });
+```
+
+`db.put(storeName, value)` จะแทรกค่าหากยังไม่มี key นั้น หรือ **แทนที่** ค่าเดิมหากมีอยู่แล้ว key จะถูกอนุมานจาก `keyPath` ที่คุณกำหนดไว้เมื่อสร้าง store (ในตัวอย่างข้างต้นคือ `'id'`)
+
+## การอ่านระเบียนด้วย `db.get` และ `db.getAll`
+
+```js
+const task = await db.get('tasks', 1);
+// { id: 1, title: 'Buy groceries', done: false }
+
+const allTasks = await db.getAll('tasks');
+// [ { id: 1, ... }, { id: 2, ... } ]
+```
+
+- `db.get(storeName, key)` คืนค่าระเบียนเดียว (หรือ `undefined` เมื่อไม่พบ key)
+- `db.getAll(storeName)` คืนค่าอาร์เรย์ของระเบียนทั้งหมดใน store
+
+## การลบระเบียนด้วย `db.delete`
+
+```js
+await db.delete('tasks', 1);
+const remaining = await db.getAll('tasks');
+console.log(remaining.length); // 1
+```
+
+`db.delete(storeName, key)` ลบระเบียนสำหรับ key นั้น การเรียกใช้กับ key ที่ไม่มีอยู่จะไม่มีผลใด ๆ
+
+## รันได้เลย: idb ในการใช้งานจริง
+
+export const idbLibraryCode = `(async function() {
+  const { openDB } = await import('https://esm.sh/idb@8');
+
+  // Open (or create) the database
+  const db = await openDB('demo-advanced-idb', 1, {
+    upgrade(db) {
+      db.createObjectStore('tasks', { keyPath: 'id' });
+    },
+  });
+
+  // Write two records
+  await db.put('tasks', { id: 1, title: 'Buy groceries', done: false });
+  await db.put('tasks', { id: 2, title: 'Write tests', done: true });
+  console.log('Two tasks written.');
+
+  // Read one record by key
+  const task1 = await db.get('tasks', 1);
+  console.log('db.get(1):', JSON.stringify(task1));
+
+  // Read all records
+  const all = await db.getAll('tasks');
+  console.log('db.getAll():', JSON.stringify(all));
+  console.log('Count before delete:', all.length);
+
+  // Delete one record
+  await db.delete('tasks', 1);
+  const afterDelete = await db.getAll('tasks');
+  console.log('Count after delete:', afterDelete.length);
+
+  // Cleanup
+  db.close();
+  indexedDB.deleteDatabase('demo-advanced-idb');
+  console.log('Done — database cleaned up.');
+})();`;
+
+<StorageRunner client:visible code={idbLibraryCode} />
+
+<Callout title="ประเด็นสำคัญ">
+`idb` ห่อหุ้มทุกการดำเนินการ IndexedDB ด้วย Promise ทำให้คุณสามารถใช้ `async/await` แทน event callback ที่ซ้อนกัน Callback `upgrade` ภายใน `openDB` เป็นสถานที่เดียวในการสร้างหรือแก้ไข object store — มันจะรันเฉพาะเมื่อหมายเลขเวอร์ชันเพิ่มขึ้น
+</Callout>
+
+## เปรียบเทียบ IndexedDB ดิบกับ idb
+
+การดำเนินการ "เปิดฐานข้อมูลและเขียนระเบียน" เดียวกันมีลักษณะดังนี้เมื่อใช้ IndexedDB ดิบ:
+
+```js
+// Raw IndexedDB — callback style
+const request = indexedDB.open('my-db', 1);
+request.onupgradeneeded = (e) => {
+  e.target.result.createObjectStore('tasks', { keyPath: 'id' });
+};
+request.onsuccess = (e) => {
+  const db = e.target.result;
+  const tx = db.transaction('tasks', 'readwrite');
+  const store = tx.objectStore('tasks');
+  const putReq = store.put({ id: 1, title: 'Buy groceries', done: false });
+  putReq.onsuccess = () => console.log('Saved');
+};
+request.onerror = (e) => console.error(e.target.error);
+```
+
+และเมื่อใช้ `idb`:
+
+```js
+// idb — async/await style
+const db = await openDB('my-db', 1, {
+  upgrade(db) {
+    db.createObjectStore('tasks', { keyPath: 'id' });
+  },
+});
+await db.put('tasks', { id: 1, title: 'Buy groceries', done: false });
+console.log('Saved');
+```
+
+ทั้งสองทำสิ่งเดียวกันทุกประการ เวอร์ชัน `idb` สั้นกว่า อ่านง่ายกว่า และข้อผิดพลาดจะแสดงเป็น rejected Promise ที่คุณสามารถดักจับด้วย `try/catch` มาตรฐาน
+
+export const quizIdbLibrary = [
+  {
+    q: 'อาร์กิวเมนต์ตัวที่สามของ openDB() ใช้สำหรับอะไร?',
+    options: [
+      'ระบุโควต้าการจัดเก็บข้อมูลสำหรับฐานข้อมูล',
+      'ให้ upgrade callback ที่รันเมื่อฐานข้อมูลถูกสร้างหรือเวอร์ชันเพิ่มขึ้น',
+      'กำหนดโหมด transaction เริ่มต้นสำหรับการดำเนินการทั้งหมด',
+      'ระบุชื่อ object store ที่ต้องการเปิด',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'db.put(storeName, value) ทำอะไรเมื่อ key นั้นมีอยู่แล้วใน store?',
+    options: [
+      'แสดงข้อผิดพลาดเพราะ key มีอยู่แล้ว',
+      'สร้างระเบียนที่สองด้วย key เดียวกัน',
+      'แทนที่ระเบียนที่มีอยู่ด้วยค่าใหม่',
+      'คืนค่า false โดยไม่แก้ไข store',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'เมธอด idb ใดที่คืนค่าระเบียนทั้งหมดใน object store เป็นอาร์เรย์?',
+    options: [
+      'db.get(storeName)',
+      'db.getAll(storeName)',
+      'db.getAll(storeName, key)',
+      'db.list(storeName)',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'ข้อได้เปรียบหลักของไลบรารี idb เมื่อเทียบกับ IndexedDB API ดิบคืออะไร?',
+    options: [
+      'มันจัดเก็บข้อมูลในรูปแบบที่เร็วกว่า IndexedDB ดิบ',
+      'มันอ่านและเขียนข้อมูลแบบ synchronous โดยไม่ต้องใช้โค้ด async',
+      'มันห่อหุ้มทุกการดำเนินการด้วย Promise ทำให้ใช้ async/await แทน nested callback ได้',
+      'มันเพิ่มโควต้าการจัดเก็บข้อมูลที่มีให้กับ origin',
+    ],
+    answer: 2,
+  },
+];
+
+<Quiz client:visible id="indexeddb-advanced/idb-library" questions={quizIdbLibrary} />
+
+<ProgressTracker client:visible id="indexeddb-advanced/idb-library" />

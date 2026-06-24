@@ -1,0 +1,132 @@
+---
+title: 'Same-origin policy and storage security'
+description: "How the browser's same-origin policy partitions storage by origin, why HTTPS matters, and the XSS risk of storing secrets in client-side storage."
+sidebar:
+  order: 3
+---
+
+import Mermaid from '../../../../components/Mermaid.astro';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## What is an origin?
+
+An **origin** is the combination of three components:
+
+1. **Scheme** — `https` or `http`
+2. **Host** — the domain or IP address
+3. **Port** — explicit (`:8080`) or implicit (443 for HTTPS, 80 for HTTP)
+
+All three must match for two URLs to be considered the same origin. The table below shows examples relative to `https://example.com`:
+
+| URL | Same origin? | Reason |
+|---|---|---|
+| `https://example.com/page` | Yes | Identical scheme, host, port |
+| `https://example.com:443/x` | Yes | Port 443 is implicit for HTTPS |
+| `http://example.com` | **No** | Different scheme |
+| `https://www.example.com` | **No** | Different host (subdomain) |
+| `https://example.com:8080` | **No** | Different port |
+| `https://api.example.com` | **No** | Different host |
+
+You can read the current page's origin in JavaScript:
+
+```js
+console.log(window.location.origin);
+// e.g. "https://example.com"
+```
+
+## How the same-origin policy isolates storage
+
+The browser enforces origin isolation for every client-side store: `localStorage`, `sessionStorage`, IndexedDB, the Cache API, and OPFS are all partitioned by origin. A script running on `https://example.com` cannot read or write the storage of `https://other.com` — the browser simply will not allow it.
+
+This is not something you configure; it is enforced at the platform level with no opt-out.
+
+export const originDiagram = `flowchart LR
+  subgraph OriginA["Origin A — https://example.com"]
+    direction TB
+    SA1[(localStorage)]
+    SA2[(IndexedDB)]
+    SA3[(Cache API)]
+  end
+  subgraph OriginB["Origin B — https://other.com"]
+    direction TB
+    SB1[(localStorage)]
+    SB2[(IndexedDB)]
+    SB3[(Cache API)]
+  end
+  OriginA -.->|blocked by SOP| OriginB`;
+
+<Mermaid code={originDiagram} title="Each origin has its own isolated storage partition — cross-origin reads are blocked" />
+
+## HTTP vs HTTPS: different origins, different stores
+
+Because the scheme is part of the origin, `http://example.com` and `https://example.com` are **two different origins** with completely separate storage buckets. Data written to `localStorage` over HTTP will not be visible over HTTPS and vice versa.
+
+This is a common source of confusion during local development: if you test over HTTP and then switch to HTTPS (or the reverse), any previously stored data will appear to vanish. It has not been deleted — it is stored under a different origin key.
+
+## Cross-origin iframes
+
+A page can embed an `<iframe>` from a different origin. That iframe's scripts run in the context of the iframe's origin, so they read and write that origin's storage — not the parent page's storage. There is no way for the parent and the iframe to share `localStorage` directly across different origins.
+
+## The XSS risk: never store secrets in Web Storage
+
+Cross-site scripting (XSS) is an attack where malicious JavaScript is injected into and executed on your page. Any script that runs on your origin — including injected scripts — can read your entire `localStorage` and `sessionStorage` with a single call:
+
+```js
+// An attacker's injected script can do this:
+const stolen = JSON.stringify(localStorage);
+// then exfiltrate `stolen` to an attacker-controlled server
+```
+
+This means you must **never** store access tokens, refresh tokens, API keys, or passwords in `localStorage` or `sessionStorage`. If an attacker finds any XSS vector (a third-party script, a misconfigured CSP, an unsanitised DOM insertion), they can silently drain every secret stored there.
+
+### Use HttpOnly cookies for session tokens instead
+
+Cookies with the `HttpOnly` flag cannot be read by JavaScript at all — not even by injected scripts. The browser attaches them to requests but hides them from `document.cookie`. Combined with `Secure` (HTTPS-only) and `SameSite=Strict` or `SameSite=Lax`, HttpOnly cookies are the correct place for session tokens.
+
+```js
+// This is what the server sets — JS cannot read it:
+// Set-Cookie: session=abc123; HttpOnly; Secure; SameSite=Lax
+```
+
+<Callout title="Security warning">
+Never store access tokens, refresh tokens, or any secret credential in `localStorage` or `sessionStorage`. JavaScript running on the same origin — including XSS payloads — can read the entire store. Use `HttpOnly` cookies for session tokens: they are invisible to JavaScript and cannot be stolen via XSS.
+</Callout>
+
+export const quizSameOrigin = [
+  {
+    q: 'Which three components together define a browser origin?',
+    options: [
+      'Domain, path, and query string',
+      'Scheme, host, and port',
+      'Protocol, domain, and cookie name',
+      'Host, port, and referrer',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'A page stores data in localStorage over http://example.com. The site migrates to HTTPS. What happens to that data?',
+    options: [
+      'The data is automatically migrated to the HTTPS origin',
+      'The data is deleted by the browser on the first HTTPS visit',
+      'The data is still present but under the http:// origin, invisible to the https:// origin',
+      'HTTPS and HTTP share the same localStorage partition',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'Why should session tokens not be stored in localStorage?',
+    options: [
+      'localStorage is too small to hold tokens',
+      'localStorage is cleared on every page refresh',
+      'An XSS attack can read the entire localStorage via JavaScript',
+      'Tokens stored in localStorage expire after 24 hours',
+    ],
+    answer: 2,
+  },
+];
+
+<Quiz client:visible id="intro-storage-landscape/same-origin-and-security" questions={quizSameOrigin} />
+
+<ProgressTracker client:visible id="intro-storage-landscape/same-origin-and-security" />

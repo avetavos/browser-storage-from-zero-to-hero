@@ -1,0 +1,108 @@
+---
+title: 'Cross-Tab & Files'
+description: 'Coordinate work across browser tabs and persist files with BroadcastChannel, Web Locks, and the File System Access / OPFS APIs.'
+sidebar:
+  order: 1
+---
+
+import Mermaid from '../../../../components/Mermaid.astro';
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## Coordinating across tabs and persisting files
+
+Modern web apps often run in multiple browser tabs simultaneously — a user may have the same dashboard open in two windows. When one tab updates data, how does the other find out? When the app needs to write a large file, how does it avoid clobbering work in a concurrent tab? This module answers both questions.
+
+The browser gives you four complementary APIs:
+
+- **BroadcastChannel** — publish/subscribe messaging across every tab (and worker) on the same origin.
+- **`storage` event** — fired on other tabs when `localStorage` is written; the original notification mechanism before BroadcastChannel.
+- **Web Locks** — a mutual-exclusion primitive that serialises access to a named resource, preventing race conditions.
+- **File System Access / OPFS** — read and write real files (or a private origin sandbox) with a streaming, async API.
+
+## How tabs communicate
+
+export const tabsDiagram = `flowchart LR
+  subgraph Origin["Same origin (scheme + host + port)"]
+    TabA["Tab A\\n(writer)"] -->|postMessage| BC["BroadcastChannel\\n'app-updates'"]
+    BC -->|onmessage| TabB["Tab B\\n(listener)"]
+    BC -->|onmessage| TabC["Tab C\\n(listener)"]
+    TabA -->|setItem| LS[(localStorage)]
+    LS -->|storage event| TabB
+    LS -->|storage event| TabC
+  end`;
+
+<Mermaid code={tabsDiagram} title="BroadcastChannel and the storage event both deliver messages to every other tab on the same origin" />
+
+## What this module covers
+
+| Lesson | What you will learn |
+|---|---|
+| **This page** | The four cross-tab and file APIs and when to reach for each one |
+| `broadcastchannel` | `new BroadcastChannel(name)`, `postMessage`, `onmessage`, `close`; vs the `storage` event |
+| `web-locks` | `navigator.locks.request`, exclusive vs shared mode, `ifAvailable`, `locks.query()` |
+| `cross-tab-state` | Combining BroadcastChannel + localStorage/IndexedDB for shared state; leader election with Web Locks |
+| `file-system-access-opfs` | `showOpenFilePicker` / `showSaveFilePicker` (user gesture required) and OPFS `navigator.storage.getDirectory()` |
+
+## Quick comparison
+
+| API | Delivery | Requires gesture | Works in workers | Persistent |
+|---|---|---|---|---|
+| BroadcastChannel | other tabs | no | yes | no |
+| `storage` event | other tabs | no | no | no |
+| Web Locks | same tab | no | yes | no |
+| File System Access | — | yes (picker) | no | yes |
+| OPFS | — | no | yes | yes |
+
+## Your first cross-tab message
+
+The snippet below creates a BroadcastChannel and immediately posts and receives a message in the same page. In a real app the sender and receiver are in separate tabs.
+
+export const ctIndexCode = `// Both sender and receiver use the same channel name.
+const ch = new BroadcastChannel('demo:intro');
+
+// Listen for messages (in this demo: same-tab echo)
+ch.onmessage = (e) => {
+  console.log('Received:', JSON.stringify(e.data));
+  ch.close();
+};
+
+// Send a message — in another tab this would arrive via onmessage there
+ch.postMessage({ type: 'PING', ts: Date.now() });
+console.log('Message posted. Waiting for echo...');
+// NOTE: cross-tab delivery requires a real second tab open on the same origin.`;
+
+<StorageRunner client:visible code={ctIndexCode} />
+
+<Callout title="Key point">
+BroadcastChannel messages do NOT fire in the tab that called `postMessage` — only in other tabs and workers sharing the same channel name. The snippet above receives its own message because both sender and receiver are in the same script; in production they live in separate tabs.
+</Callout>
+
+export const quizCrossTabIndex = [
+  {
+    q: 'Which API delivers messages to every other tab open on the same origin without requiring a user gesture?',
+    options: ['Web Locks', 'BroadcastChannel', 'showOpenFilePicker', 'IndexedDB'],
+    answer: 1,
+  },
+  {
+    q: 'The `storage` event fires when localStorage is written. Which tab receives it?',
+    options: [
+      'The tab that wrote the value',
+      'Every other tab on the same origin',
+      'Every tab including the writer',
+      'Only the most recently opened tab',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'Which API requires a user gesture (like a button click) before it can show a file picker?',
+    options: ['BroadcastChannel', 'Web Locks', 'File System Access showOpenFilePicker', 'OPFS getDirectory'],
+    answer: 2,
+  },
+];
+
+<Quiz client:visible id="cross-tab-and-files/index" questions={quizCrossTabIndex} />
+
+<ProgressTracker client:visible id="cross-tab-and-files/index" />

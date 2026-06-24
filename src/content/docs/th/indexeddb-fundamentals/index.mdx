@@ -1,0 +1,137 @@
+---
+title: 'IndexedDB คืออะไร?'
+description: 'ฐานข้อมูลออบเจกต์แบบ async ที่รองรับ transaction ในเบราว์เซอร์ — ออกแบบมาสำหรับข้อมูลที่มีโครงสร้างขนาดใหญ่และแอปออฟไลน์'
+sidebar:
+  order: 1
+---
+
+import Mermaid from '../../../../components/Mermaid.astro';
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## IndexedDB คืออะไร?
+
+IndexedDB คือ API ระดับต่ำที่ฝังอยู่ในเบราว์เซอร์สมัยใหม่ทุกตัว ช่วยให้คุณจัดเก็บข้อมูลที่มีโครงสร้างจำนวนมากบนฝั่งไคลเอนต์ได้ รวมถึงไฟล์และ blob ต่างจาก `localStorage` และ `sessionStorage` ตรงที่ IndexedDB มีคุณสมบัติดังนี้
+
+- **Asynchronous** — ทุกการทำงานไม่บล็อกและใช้ event หรือ Promise
+- **Transactional** — การอ่านและเขียนเกิดขึ้นภายใน transaction จึงรับประกันความสอดคล้องของข้อมูลแม้เกิดข้อผิดพลาดกลางทาง
+- **Object-oriented** — จัดเก็บออบเจกต์ JavaScript ได้โดยตรง ไม่จำกัดแค่สตริง
+- **Indexed** — กำหนด index บน property ของออบเจกต์ได้ และค้นหาได้อย่างมีประสิทธิภาพ
+- **Large quota** — เบราว์เซอร์มักอนุญาตให้ใช้พื้นที่หลายร้อย MB ถึง GB (ขึ้นอยู่กับการเจรจากับเบราว์เซอร์ ไม่ถูกจำกัดที่ 5–10 MB)
+
+## IndexedDB เทียบกับ Web Storage
+
+| คุณสมบัติ | localStorage / sessionStorage | IndexedDB |
+|---|---|---|
+| รูปแบบ API | Synchronous | Asynchronous (event / Promise) |
+| ประเภทค่า | สตริงเท่านั้น | ออบเจกต์ที่มีโครงสร้าง, blob, ไฟล์ |
+| โควต้าพื้นที่ | ~5–10 MB | หลายร้อย MB ถึง GB |
+| การค้นหา | ค้นหาด้วย key เท่านั้น | key + index บน property ใดก็ได้ |
+| Transaction | ไม่มี | ACID transaction เต็มรูปแบบ |
+| เรียกใช้จาก worker | sessionStorage: ไม่ได้; localStorage: จำกัด | ใช้ได้เต็มที่ใน Web Worker |
+
+หลักการง่าย ๆ คือ ใช้ Web Storage สำหรับการตั้งค่าหรือค่าคอนฟิกขนาดเล็ก หันมาใช้ IndexedDB เมื่อต้องจัดเก็บเรคอร์ดที่มีโครงสร้าง ข้อมูลขนาดใหญ่ รองรับออฟไลน์ หรือค้นหานอกเหนือจาก key เดียว
+
+## โครงสร้างของฐานข้อมูล IndexedDB
+
+ฐานข้อมูล IndexedDB แต่ละตัวมีชื่อและหมายเลขเวอร์ชัน ภายในฐานข้อมูลจะมี **object store** อย่างน้อยหนึ่งอัน คล้ายกับตารางในฐานข้อมูลทั่วไป แต่ละ object store เก็บ **record** ซึ่งเป็นออบเจกต์ JavaScript ที่ระบุตัวตนด้วย **key**
+
+export const idbDiagram = `flowchart LR
+  DB["Database\n(name + version)"]
+  OS1["Object Store\n'users'"]
+  OS2["Object Store\n'posts'"]
+  R1["Record\n{id:1, name:'Ada'}"]
+  R2["Record\n{id:2, name:'Alan'}"]
+  R3["Record\n{id:1, title:'Hello'}"]
+  DB --> OS1
+  DB --> OS2
+  OS1 --> R1
+  OS1 --> R2
+  OS2 --> R3`;
+
+<Mermaid code={idbDiagram} title="โครงสร้าง IndexedDB: database → object stores → records" />
+
+## เมื่อไหร่ควรใช้ IndexedDB
+
+ใช้ IndexedDB เมื่อมีเงื่อนไขข้อใดข้อหนึ่งต่อไปนี้
+
+- ต้องการจัดเก็บข้อมูล **มากกว่าสองสามกิโลไบต์** ต่อ origin
+- ข้อมูลมี **โครงสร้าง** (ออบเจกต์ที่มีหลาย field) และต้องการค้นหาหรือเรียงลำดับ
+- กำลังสร้างแอป **offline-first หรือ PWA** ที่ต้องการแคชการตอบสนองจากเครือข่ายหรือ sync queue
+- ต้องการจัดเก็บ **ข้อมูลไบนารี** เช่น รูปภาพ เสียง หรือ PDF blob
+- ต้องการเข้าถึง storage จาก **Web Worker หรือ Service Worker**
+
+คงใช้ `localStorage` สำหรับ flag ง่าย ๆ การตั้งค่าธีม หรือออบเจกต์ JSON ขนาดเล็กที่ access แบบ synchronous ได้สะดวกและข้อมูลพอดีในไม่กี่ KB
+
+## ภาพรวมของโมดูล
+
+โมดูลนี้จะพาคุณเรียนรู้ IndexedDB ตั้งแต่ต้นจนจบใน 5 บทเรียน
+
+| ลำดับ | บทเรียน | สิ่งที่จะได้เรียนรู้ |
+|---|---|---|
+| 1 | IndexedDB คืออะไร? (บทเรียนนี้) | แนวคิด โครงสร้าง และเวลาที่ควรใช้ |
+| 2 | การเปิดฐานข้อมูล | `indexedDB.open`, versioning, `onupgradeneeded` |
+| 3 | Object Stores และ Keys | การสร้าง store, key path, auto-increment |
+| 4 | Transactions | read-only กับ read-write, การจัดการข้อผิดพลาด, การยกเลิก |
+| 5 | CRUD Operations | `add`, `put`, `get`, `getAll`, `delete`, cursor |
+
+## รันได้จริง: ตรวจสอบว่า IndexedDB พร้อมใช้งาน
+
+โค้ดด้านล่างเปิดฐานข้อมูล ยืนยันชื่อของมัน แล้วลบทิ้งเพื่อไม่ให้เหลือร่องรอย
+
+export const idbCheckCode = `const result = await new Promise((resolve, reject) => {
+  const req = indexedDB.open('demo-check', 1);
+  req.onsuccess = () => {
+    resolve(req.result.name);
+    req.result.close();
+  };
+  req.onerror = () => reject(req.error);
+});
+console.log('Opened DB:', result);
+indexedDB.deleteDatabase('demo-check');
+console.log('Cleanup done');`;
+
+<StorageRunner client:visible code={idbCheckCode} />
+
+<Callout title="IndexedDB เป็น async เสมอ">
+ทุกการทำงานของ IndexedDB ไม่ว่าจะเป็นการเปิด อ่าน เขียน หรือลบ จะคืนค่า request object ที่ผลลัพธ์มาผ่าน callback (`onsuccess`, `onerror`) การนำมาห่อด้วย Promise (หรือใช้ library อย่าง `idb`) ทำให้โค้ดอ่านและเข้าใจได้ง่ายขึ้นมาก ตัวอย่างทั้งหมดในโมดูลนี้ใช้รูปแบบ Promise wrapper ดังที่แสดงไว้ข้างต้น
+</Callout>
+
+export const quizIndexeddbFundamentals = [
+  {
+    q: 'ข้อใดคือความแตกต่างหลักระหว่าง IndexedDB กับ localStorage?',
+    options: [
+      'IndexedDB เป็น synchronous; localStorage เป็น asynchronous',
+      'IndexedDB เก็บได้แค่สตริง; localStorage เก็บออบเจกต์ได้',
+      'IndexedDB รองรับ transaction และเก็บออบเจกต์ที่มีโครงสร้างได้; localStorage เก็บได้แค่สตริงแบบ synchronous',
+      'IndexedDB มีโควต้าพื้นที่น้อยกว่า localStorage',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'Object store ใน IndexedDB คืออะไร?',
+    options: [
+      'ออบเจกต์ JavaScript ที่เก็บในหน่วยความจำ',
+      'คอนเทนเนอร์ที่มีชื่อภายในฐานข้อมูลสำหรับเก็บ record คล้ายกับตาราง',
+      'key-value store ที่รับเฉพาะค่าสตริง',
+      'cache entry ที่จัดการโดย Service Worker',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'สถานการณ์ใดเหมาะกับการใช้ IndexedDB มากกว่า localStorage?',
+    options: [
+      'บันทึกธีมสีที่ผู้ใช้ต้องการ',
+      'เก็บ flag ว่า tooltip ถูกปิดไปแล้วหรือยัง',
+      'แคชข้อมูลสินค้าหลายร้อยรายการพร้อมรูปภาพสำหรับการท่องเว็บแบบออฟไลน์',
+      'เก็บออบเจกต์ JSON คอนฟิกขนาดน้อยกว่า 1 KB',
+    ],
+    answer: 2,
+  },
+];
+
+<Quiz client:visible id="indexeddb-fundamentals/index" questions={quizIndexeddbFundamentals} />
+
+<ProgressTracker client:visible id="indexeddb-fundamentals/index" />

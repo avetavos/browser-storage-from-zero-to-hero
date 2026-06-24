@@ -1,0 +1,132 @@
+---
+title: 'SharedWorker'
+description: 'A SharedWorker is one worker instance shared across all tabs of the same origin — a lightweight in-browser service.'
+sidebar:
+  order: 4
+---
+
+import StorageRunner from '../../../../components/StorageRunner.tsx';
+import Callout from '../../../../components/Callout.astro';
+import Quiz from '../../../../components/Quiz.tsx';
+import ProgressTracker from '../../../../components/ProgressTracker.tsx';
+
+## What is a SharedWorker?
+
+A `SharedWorker` is a Web Worker that is shared across **all browsing contexts** (tabs, windows, iframes) of the same origin. Unlike a Dedicated Worker, which exists only for one page, a SharedWorker lives until all connected tabs close. Think of it as a lightweight in-browser "service" — it can hold shared state, deduplicate network requests, and synchronize data across tabs without a backend.
+
+## Key differences from a Dedicated Worker
+
+| | Dedicated Worker | SharedWorker |
+|---|---|---|
+| Instance per tab? | Yes — one per page | No — one shared across all tabs |
+| Constructor | `new Worker(url)` | `new SharedWorker(url)` |
+| Communication | `worker.postMessage` direct | `worker.port.postMessage` via MessagePort |
+| Worker receives connect? | No | Yes — `onconnect` event fires on each new tab |
+| Lifetime | Tied to the owning page | Until all connected tabs close |
+
+## The API
+
+There are four key steps to using a SharedWorker.
+
+**Step 1 — In the main thread:**
+
+```js
+const worker = new SharedWorker('shared-worker.js');
+worker.port.start();          // must call start() to activate the port
+worker.port.postMessage('hello');
+worker.port.onmessage = (e) => console.log(e.data);
+```
+
+**Step 2 — In the worker (`shared-worker.js`):**
+
+```js
+const ports = [];
+self.onconnect = (e) => {
+  const port = e.ports[0];
+  ports.push(port);
+  port.start();
+  port.onmessage = (ev) => {
+    // echo to all connected tabs
+    for (const p of ports) p.postMessage('echo: ' + ev.data);
+  };
+};
+```
+
+## Why SharedWorker needs multiple tabs
+
+The real power of `SharedWorker` is cross-tab shared state. Opening one tab barely demonstrates it — you need at least two. That is why the runnable below opens in StackBlitz, where you can open two browser panes pointing at the same URL.
+
+## Runnable: shared counter across tabs (StackBlitz)
+
+export const sharedWorkerCode = `// shared-worker.js (runs ONCE, shared by every tab)
+// var count = 0;
+// var ports = [];
+// self.onconnect = function(e) {
+//   var port = e.ports[0];
+//   ports.push(port);
+//   port.onmessage = function(ev) {
+//     if (ev.data === 'inc') count++;
+//     for (var i = 0; i < ports.length; i++) ports[i].postMessage({ count: count });
+//   };
+//   port.start();
+//   port.postMessage({ count: count });
+// };
+
+// main.js (runs in EACH tab)
+// var worker = new SharedWorker('shared-worker.js');
+// worker.port.onmessage = function(e) { console.log('count =', e.data.count); };
+// worker.port.start();
+// worker.port.postMessage('inc'); // increment from this tab`;
+
+<StorageRunner stackblitz client:visible code={sharedWorkerCode} />
+
+<Callout title="Key point">
+A `SharedWorker` has ONE instance per origin. Every tab that calls `new SharedWorker(url)` with the same URL connects to the SAME worker. The `onconnect` event fires once per tab. Call `port.start()` on BOTH the page and the worker side.
+</Callout>
+
+export const quizSharedWorker = [
+  {
+    q: "How many SharedWorker instances exist when three tabs on the same origin all call `new SharedWorker('sw.js')`?",
+    options: [
+      'Three — one per tab',
+      'Two — the first tab gets its own',
+      'One — all tabs connect to the same instance',
+      'Zero — SharedWorker is not yet supported',
+    ],
+    answer: 2,
+  },
+  {
+    q: 'Which event fires in the SharedWorker script when a new tab connects?',
+    options: [
+      'onmessage',
+      'onconnect',
+      'onport',
+      'onopen',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'Why must you call `port.start()` in a SharedWorker?',
+    options: [
+      'To create the port object',
+      'To activate the MessagePort so messages are not queued',
+      'To register the worker with the browser',
+      'To prevent the worker from terminating',
+    ],
+    answer: 1,
+  },
+  {
+    q: 'Which prop do you pass to StorageRunner to open a SharedWorker demo in StackBlitz?',
+    options: [
+      'inline',
+      'blob',
+      'stackblitz',
+      'shared',
+    ],
+    answer: 2,
+  },
+];
+
+<Quiz client:visible id="workers-sharedworker/sharedworker" questions={quizSharedWorker} />
+
+<ProgressTracker client:visible id="workers-sharedworker/sharedworker" />
