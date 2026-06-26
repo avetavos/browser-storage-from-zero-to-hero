@@ -15,6 +15,15 @@ export default defineConfig({
       title: 'Browser Storage & Data — From Zero to Hero',
       head: [
         { tag: 'script', attrs: { type: 'module', src: '/browser-storage-from-zero-to-hero/enhance.js' } },
+        { tag: 'link', attrs: { rel: 'manifest', href: '/browser-storage-from-zero-to-hero/manifest.webmanifest' } },
+        { tag: 'link', attrs: { rel: 'apple-touch-icon', href: '/browser-storage-from-zero-to-hero/apple-touch-icon.png' } },
+        { tag: 'link', attrs: { rel: 'icon', type: 'image/png', sizes: '192x192', href: '/browser-storage-from-zero-to-hero/icon-192.png' } },
+        { tag: 'meta', attrs: { name: 'theme-color', content: '#D97706' } },
+        { tag: 'meta', attrs: { name: 'mobile-web-app-capable', content: 'yes' } },
+        { tag: 'meta', attrs: { name: 'apple-mobile-web-app-capable', content: 'yes' } },
+        { tag: 'meta', attrs: { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' } },
+        { tag: 'meta', attrs: { name: 'apple-mobile-web-app-title', content: "Browser Storage & Data" } },
+        { tag: 'script', content: "if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/browser-storage-from-zero-to-hero/sw.js',{scope:'/browser-storage-from-zero-to-hero/'}).catch(function(){})})}" },
       ],
       defaultLocale: 'en',
       locales: {
