@@ -10,31 +10,33 @@ import Callout from '../../../../components/Callout.astro';
 import Quiz from '../../../../components/Quiz.tsx';
 import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
+ก่อนจะพึ่งพา cache หรือ IndexedDB สำหรับการทำงานออฟไลน์ คุณต้องรู้ว่าเหลือพื้นที่เท่าไรและข้อมูลจะถูก evict ได้ง่ายแค่ไหน Storage Manager API ตอบคำถามทั้งสองข้อนี้
+
 ## navigator.storage
 
-Object `navigator.storage` เป็นจุดเข้าถึง Storage Manager API ให้คุณมองเห็นได้ว่า origin ของคุณใช้พื้นที่ดิสก์ไปเท่าไร ได้รับ quota เท่าไรจากเบราว์เซอร์ และข้อมูลของคุณได้รับการป้องกันจากการ eviction หรือไม่
+Object `navigator.storage` เป็นจุดเข้าถึง Storage Manager API ให้คุณมองเห็นได้ว่า origin ของคุณใช้พื้นที่ดิสก์ไปเท่าไร ได้รับ quota เท่าไรจาก browser และข้อมูลของคุณได้รับการป้องกันจากการ eviction หรือไม่
 
-เมธอดทั้งสามคืนค่า Promise และใช้ร่วมกับ `await`
+method ทั้งสามคืนค่า Promise และใช้ร่วมกับ `await`
 
 ### `navigator.storage.estimate()`
 
-คืนค่าออบเจกต์ที่มีสองฟิลด์:
+คืนค่า object ที่มีสองฟิลด์:
 
 - `usage` — จำนวน byte ที่ origin ใช้อยู่ขณะนี้ ครอบคลุมกลไกการจัดเก็บทั้งหมด (Cache API, IndexedDB, localStorage ฯลฯ)
-- `quota` — จำนวน byte โดยประมาณที่เบราว์เซอร์ยินดีให้ origin นี้ใช้
+- `quota` — จำนวน byte โดยประมาณที่ browser ยินดีให้ origin นี้ใช้
 
 ```js
 const { usage, quota } = await navigator.storage.estimate();
 console.log('Using', usage, 'of', quota, 'bytes');
 ```
 
-ค่าที่ได้เป็นค่าประมาณ เบราว์เซอร์อาจปัดค่าเพื่อป้องกันการ fingerprinting
+ค่าที่ได้เป็นค่าประมาณ browser อาจปัดค่าเพื่อป้องกันการ fingerprinting
 
 ### `navigator.storage.persist()`
 
-ร้องขอให้เบราว์เซอร์ให้ *persistent* storage แก่ origin ปัจจุบัน คืนค่า `Promise<boolean>`:
+ร้องขอให้ browser ให้ *persistent* storage แก่ origin ปัจจุบัน คืนค่า `Promise<boolean>`:
 
-- `true` — ได้รับ persistent storage เบราว์เซอร์จะไม่ evict ข้อมูลของ origin โดยอัตโนมัติ
+- `true` — ได้รับ persistent storage browser จะไม่ evict ข้อมูลของ origin โดยอัตโนมัติ
 - `false` — คำขอถูกปฏิเสธ storage ยังคงเป็น best-effort และอาจถูก evict ได้
 
 ```js
@@ -80,6 +82,26 @@ export const storageManagerCode = `(async () => {
 <Callout title="จุดสำคัญ">
 `navigator.storage.estimate()` รายงาน usage ของ **storage ทั้งหมด** ของ origin ไม่ใช่แค่ Cache API IndexedDB, Service Worker registration และ API อื่น ๆ ล้วนนับรวมใน quota เดียวกัน ตรวจสอบในแอปที่ production ซึ่ง cache asset ขนาดใหญ่หรือเก็บข้อมูลออฟไลน์จำนวนมาก
 </Callout>
+
+## Trade-offs
+
+| ตัวเลือก | Benefit | Cost |
+|---------|---------|------|
+| เรียก `estimate()` ก่อนเริ่ม cache ข้อมูลจำนวนมาก | รู้ล่วงหน้าว่าเหลือ quota เท่าไร ป้องกันการเขียนล้มเหลวกลางทาง | เป็นค่าประมาณเท่านั้น browser อาจปัดเลขเพื่อกัน fingerprinting ทำให้ไม่แม่นยำ 100% |
+| เรียก `persist()` เพื่อป้องกันการ evict | ข้อมูลไม่ถูกลบอัตโนมัติเมื่อดิสก์ตึง เหมาะกับแอปออฟไลน์ | ต้องพึ่ง heuristic ของ browser ในการอนุมัติ และเพิ่ม friction เล็กน้อยให้ flow เริ่มต้นแอป |
+| ใช้ best-effort storage โดยไม่ขอ persist | zero-friction ไม่ต้องรอเงื่อนไขใด ๆ | เสี่ยงถูก evict โดยไม่มีการแจ้งเตือนล่วงหน้า |
+
+## Common Mistakes
+
+- **ไม่เช็ค `navigator.storage.persisted()` ก่อนสรุปว่าข้อมูลปลอดภัยแล้ว** — แค่เรียก `persist()` ครั้งเดียวไม่ได้แปลว่าสำเร็จเสมอไป ต้อง verify ผลลัพธ์จริงก่อนไว้ใจ
+- **มองข้ามว่า `usage` จาก `estimate()` รวมทุก storage mechanism** — ไม่ใช่แค่ Cache API เท่านั้น แต่รวม IndexedDB, localStorage และอื่น ๆ ของ origin เดียวกันด้วย เวลา debug quota ใกล้เต็มต้องเช็คทุกกลไก ไม่ใช่แค่ตัวที่เพิ่งเขียนโค้ด
+- **เก็บ opaque response จำนวนมากแล้วแปลกใจว่า quota หมดเร็วผิดปกติ** — opaque response นับขนาดเต็มจริง (มักหลาย MB ต่อรายการ) เข้า usage แม้จะอ่าน body ไม่ได้
+
+> 💡 Real World Example
+>
+> **Twitter Lite** — เรียก `estimate()` เพื่อ monitor การใช้ quota ของ app shell cache และ `persist()` เพื่อป้องกันการ evict ระหว่างช่วง engagement ต่ำ
+>
+> **Wikipedia** — ตรวจสอบ `persisted()` ก่อนอนุญาตให้ผู้ใช้บันทึกบทความจำนวนมากไว้อ่านออฟไลน์ เพื่อยืนยันว่าข้อมูลจะไม่ถูกลบทิ้งกลางทาง
 
 export const quizStorageManager = [
   {

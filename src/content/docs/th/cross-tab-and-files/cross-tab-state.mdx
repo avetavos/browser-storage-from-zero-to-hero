@@ -67,7 +67,7 @@ async function runAsLeader() {
 runAsLeader();
 ```
 
-เมื่อ leader tab ปิด เบราว์เซอร์ปล่อย lock และ callback ของแท็บถัดไปในคิวจะทำงาน — leader handoff อัตโนมัติโดยไม่ต้องเขียน code เพิ่ม
+เมื่อ leader tab ปิด browser ปล่อย lock และ callback ของแท็บถัดไปในคิวจะทำงาน — leader handoff อัตโนมัติโดยไม่ต้องเขียน code เพิ่ม
 
 ## รันได้: shared counter sketch
 
@@ -108,6 +108,26 @@ console.log('Done. Counter cleaned up.');`;
 <Callout title="ประเด็นสำคัญ">
 Lock จะทำให้ write เป็น serial แต่ไม่ block read Read ทำได้อย่างปลอดภัยนอก lock ตราบเท่าที่แอปรับได้กับค่าที่อาจ stale เล็กน้อย สำหรับ read-then-write ที่ต้องการความแม่นยำสูง (check-then-act) ให้ทั้ง read และ write อยู่ใน lock callback เดียวกัน
 </Callout>
+
+## Trade-offs
+
+| ตัวเลือก | Benefit | Cost |
+|---------|---------|------|
+| รวม 3 primitive (`localStorage` + `BroadcastChannel` + Web Locks) | ได้ shared-state layer ที่ทั้ง persistent, real-time และปลอดภัยจาก race condition | ซับซ้อนกว่าการใช้ primitive เดียว ต้องดูแลทั้งสาม concept พร้อมกันและ debug ยากขึ้น |
+| broadcast-on-write โดยไม่มี lock | เขียน code ง่าย ไม่ต้องรอ queue | เสี่ยง race condition เมื่อสองแท็บเขียนทับกันแบบ overlapping ในเวลาใกล้กัน |
+| leader election ด้วย Web Locks | มีแท็บเดียวทำงานหนัก เช่น polling API ประหยัด resource และลด duplicate request | ถ้า leader tab ค้างโดยไม่ปล่อย lock แท็บอื่นจะไม่มีวันได้เป็น leader |
+
+## Common Mistakes
+
+- **พึ่งพา `storage` event เพื่อ sync state ภายในแท็บเดียวกับที่เขียนเอง** — event นี้ยิงเฉพาะแท็บอื่นเท่านั้น แท็บที่เขียนต้องอัปเดต UI ของตัวเองด้วย code แยกต่างหาก
+- **ไม่ wrap read-then-write (check-then-act) ไว้ใน lock callback เดียวกัน** — ถ้า read อยู่นอก lock race condition ยังเกิดได้แม้จะใช้ Web Locks อยู่แล้ว
+- **ปล่อยให้ leader tab ทำงานหนักโดยไม่มี fallback เมื่อทุกแท็บถูกปิด** — leader election ต้องเริ่มใหม่ทุกครั้งที่เปิดแท็บแรก ไม่มีแท็บใด "จำ" สถานะก่อนหน้าไว้ ต้องพึ่ง `localStorage` เป็นตัวกู้คืน state
+
+> 💡 Real World Example
+>
+> **Google Docs** — sync edit state, cursor position และ presence indicator ข้ามแท็บที่เปิดเอกสารเดียวกันด้วย pattern คล้าย broadcast-on-write
+>
+> **Notion** — ใช้ leader-election pattern ให้แท็บเดียวรับผิดชอบ sync กับ server แล้ว broadcast ผลลัพธ์ไปยังแท็บอื่น ลด duplicate network request จากหลายแท็บพร้อมกัน
 
 export const quizCrossTabState = [
   {

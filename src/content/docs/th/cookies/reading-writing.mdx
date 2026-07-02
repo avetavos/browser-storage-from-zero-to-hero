@@ -1,5 +1,5 @@
 ---
-title: 'การอ่านและเขียนคุกกี้'
+title: 'การอ่านและเขียน cookie'
 description: 'document.cookie สำหรับอ่านทั้งหมด ตั้งค่าหนึ่ง และ helper สำหรับ get/set/delete ตามชื่อ'
 sidebar:
   order: 3
@@ -14,7 +14,7 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
 `document.cookie` ไม่ทำงานเหมือน property JavaScript ทั่วไป มันมีพฤติกรรมที่แตกต่างกันโดยสิ้นเชิงขึ้นอยู่กับว่าคุณกำลังอ่านหรือเขียน
 
-**การอ่าน** จะคืนคุกกี้ทั้งหมดสำหรับหน้าปัจจุบันเป็นสตริงเดียวคั่นด้วยเซมิโคลอน:
+**การอ่าน** จะคืน cookie ทั้งหมดสำหรับหน้าปัจจุบันเป็น string เดียวคั่นด้วยเซมิโคลอน:
 
 ```js
 // ถ้าตั้งค่าคุกกี้สามชิ้น:
@@ -22,18 +22,18 @@ console.log(document.cookie);
 // "theme=dark; user=Alice; lang=en"
 ```
 
-**การเขียน** จะตั้งค่า (หรืออัปเดต) คุกกี้เพียงหนึ่งชิ้น — ไม่ได้แทนที่คุกกี้ทั้งหมด:
+**การเขียน** จะตั้งค่า (หรืออัปเดต) cookie เพียงหนึ่งชิ้น — ไม่ได้แทนที่ cookie ทั้งหมด:
 
 ```js
 document.cookie = 'theme=light; Max-Age=86400; SameSite=Lax';
 // อัปเดตเฉพาะ theme — คุกกี้อื่นไม่เปลี่ยนแปลง
 ```
 
-ความไม่สมมาตรนี้คือส่วนที่น่าประหลาดใจที่สุดของ cookies API การเขียนไปยัง `document.cookie` เหมือนกับการเรียกฟังก์ชัน `setCookie()` มากกว่าการกำหนดค่าให้ property สตริง
+ความไม่สมมาตรนี้คือส่วนที่น่าประหลาดใจที่สุดของ cookies API การเขียนไปยัง `document.cookie` เหมือนกับการเรียกฟังก์ชัน `setCookie()` มากกว่าการกำหนดค่าให้ property string
 
-## การตั้งค่าคุกกี้
+## การตั้งค่า cookie
 
-ไวยากรณ์สำหรับตั้งค่าคุกกี้คือสตริงที่เริ่มด้วย name=value ตามด้วย attribute ที่เป็นตัวเลือก คั่นด้วยเซมิโคลอน:
+ไวยากรณ์สำหรับตั้งค่า cookie คือ string ที่เริ่มด้วย name=value ตามด้วย attribute ที่เป็นตัวเลือก คั่นด้วยเซมิโคลอน:
 
 ```js
 // Session cookie (ไม่มี Expires/Max-Age — ลบเมื่อเบราว์เซอร์ปิด)
@@ -46,11 +46,11 @@ document.cookie = 'demo_pref=dark; Max-Age=86400; SameSite=Lax';
 document.cookie = 'demo_pref=dark; Max-Age=86400; Path=/app; SameSite=Lax';
 ```
 
-ควรใส่ `SameSite=Lax` เป็นอย่างน้อยสำหรับคุกกี้ที่ตั้งฝั่ง client เสมอ เบราว์เซอร์สมัยใหม่ default เป็น `Lax` สำหรับคุกกี้ที่ไม่มี `SameSite` แต่การระบุชัดเจนปลอดภัยกว่า
+ควรใส่ `SameSite=Lax` เป็นอย่างน้อยสำหรับ cookie ที่ตั้งฝั่ง client เสมอ browser สมัยใหม่ default เป็น `Lax` สำหรับ cookie ที่ไม่มี `SameSite` แต่การระบุชัดเจนปลอดภัยกว่า
 
-## การอ่านคุกกี้ตามชื่อ
+## การอ่าน cookie ตามชื่อ
 
-เนื่องจากการอ่าน `document.cookie` คืนคุกกี้ทั้งหมดเป็นสตริงเดียว คุณต้อง parse เองเพื่อหาคุกกี้ที่ต้องการตามชื่อ:
+เนื่องจากการอ่าน `document.cookie` คืน cookie ทั้งหมดเป็น string เดียว คุณต้อง parse เองเพื่อหา cookie ที่ต้องการตามชื่อ:
 
 ```js
 function getCookie(name) {
@@ -67,9 +67,9 @@ var theme = getCookie('demo_pref'); // 'dark' หรือ null
 
 สังเกต `decodeURIComponent` — ค่าที่ตั้งด้วย `encodeURIComponent` ต้องถูก decode ตอนอ่านด้วย
 
-## การลบคุกกี้
+## การลบ cookie
 
-ไม่สามารถลบคุกกี้ได้ด้วยการกำหนดสตริงว่าง การลบคุกกี้ทำได้โดยการตั้งค่าใหม่พร้อม `Max-Age=0` (หรือ `Expires` ที่ผ่านมาแล้ว):
+ไม่สามารถลบ cookie ได้ด้วยการกำหนด string ว่าง การลบ cookie ทำได้โดยการตั้งค่าใหม่พร้อม `Max-Age=0` (หรือ `Expires` ที่ผ่านมาแล้ว):
 
 ```js
 function deleteCookie(name) {
@@ -132,8 +132,27 @@ console.log('After delete:', getCookie('demo_user'));`;
 <StorageRunner client:visible code={readingWritingCode} />
 
 <Callout title="document.cookie ไม่ทำงานเหมือน property ทั่วไป">
-การอ่าน `document.cookie` คืนคุกกี้ทั้งหมดเป็นสตริงใหญ่ชิ้นเดียว การเขียนจะตั้งค่าคุกกี้เพียงชิ้นเดียว — ไม่ล้างคุกกี้อื่น เพื่อลบคุกกี้ต้องตั้งค่าใหม่พร้อม `Max-Age=0` ควรใช้ `encodeURIComponent` ตอนตั้งค่าและ `decodeURIComponent` ตอนอ่านเสมอเพื่อรองรับอักขระพิเศษ
+การอ่าน `document.cookie` คืน cookie ทั้งหมดเป็น string ใหญ่ชิ้นเดียว การเขียนจะตั้งค่า cookie เพียงชิ้นเดียว — ไม่ล้าง cookie อื่น เพื่อลบ cookie ต้องตั้งค่าใหม่พร้อม `Max-Age=0` ควรใช้ `encodeURIComponent` ตอนตั้งค่าและ `decodeURIComponent` ตอนอ่านเสมอเพื่อรองรับอักขระพิเศษ
 </Callout>
+
+## Trade-offs
+
+| ตัวเลือก | Benefit | Cost |
+|---------|---------|------|
+| เขียน cookie ทีละชิ้นผ่าน `document.cookie` | อัปเดตค่าเดียวได้โดยไม่กระทบ cookie อื่น ไม่ต้องจัดการ state ทั้งก้อน | ต้อง parse string เองทุกครั้งที่ต้องการอ่านค่าตามชื่อ ไม่มี API แบบ key-value ให้ใช้ตรงๆ |
+| ใช้ `encodeURIComponent`/`decodeURIComponent` ห่อค่า | ป้องกันค่าที่มีเซมิโคลอนหรืออักขระพิเศษทำให้ parsing พัง | เพิ่มขั้นตอนที่ต้องจำทุกครั้ง ลืมด้านใดด้านหนึ่งแล้วค่าจะอ่านผิดแบบเงียบๆ |
+
+## Common Mistakes
+
+- **ลบ cookie ด้วยการกำหนด string ว่าง (`document.cookie = 'name=';`)** — วิธีนี้ไม่ลบ cookie จริง ต้องตั้งค่าใหม่พร้อม `Max-Age=0` (หรือ `Expires` ที่ผ่านมาแล้ว) เท่านั้นถึงจะลบได้
+- **ลืม `encodeURIComponent` ตอนตั้งค่าหรือ `decodeURIComponent` ตอนอ่าน** — ค่าที่มีเซมิโคลอนหรืออักขระพิเศษจะทำให้ parsing แบบแยกด้วย `; ` พังหรือได้ค่าที่ผิดเพี้ยน
+- **เข้าใจผิดว่า `document.cookie = 'a=1'` จะล้าง cookie เดิมทั้งหมดแล้วตั้งใหม่** — การเขียนอัปเดตแค่ cookie ชื่อ `a` เท่านั้น cookie อื่นที่มีอยู่ก่อนไม่หายไปไหน
+
+> 💡 Real World Example
+>
+> **ระบบ theme/preference ฝั่ง client** — เว็บไซต์จำนวนมากใช้ helper แบบ `setCookie`/`getCookie` เก็บค่าอย่าง `theme=dark` เพื่อให้ preference คงอยู่ข้าม session โดยไม่ต้อง login
+>
+> **Cookie consent banner** — เว็บไซต์ที่ต้องขอความยินยอมผู้ใช้มักเขียน cookie เช่น `consent=accepted` ผ่าน `document.cookie` โดยตรงหลังผู้ใช้กดปุ่มยอมรับ เพื่อไม่ต้องแสดง banner ซ้ำในครั้งถัดไป
 
 export const quizReadingWriting = [
   {

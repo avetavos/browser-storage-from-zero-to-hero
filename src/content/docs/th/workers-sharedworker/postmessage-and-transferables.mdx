@@ -75,6 +75,25 @@ console.log('After transfer, byteLength:', buf.byteLength, '(detached — 0)');`
 Transferables เป็น zero-copy เมื่อ transfer `ArrayBuffer` แล้ว ฝั่งผู้ส่งจะ detached — `byteLength` จะกลายเป็น 0 ห้ามอ่านหรือเขียน buffer หลังจาก transfer แล้ว
 </Callout>
 
+## Trade-offs
+
+| ตัวเลือก | Benefit | Cost |
+|---------|---------|------|
+| Structured clone (ค่าเริ่มต้น) | ใช้งานง่าย ไม่ต้องจัดการ ownership เอง รองรับหลาย type | คัดลอกข้อมูลทั้งหมด ต้นทุนเวลาและ memory แปรตามขนาด buffer |
+| Transferables (`postMessage(data, [buffer])`) | Zero-copy โอน ownership แบบ pointer เร็วมากสำหรับ buffer ขนาดใหญ่ | ฝั่งต้นทาง detached ทันที ต้องออกแบบโค้ดไม่ให้แตะ buffer เดิมอีก |
+
+## Common Mistakes
+
+- **Clone `ArrayBuffer` ขนาดใหญ่โดยไม่จำเป็น** — ถ้าไม่ต้องใช้ buffer ต้นฉบับต่อแล้ว ให้ transfer แทนด้วย `postMessage(data, [buffer])` จะเร็วกว่าและประหยัด memory มากกว่าปล่อยให้ structured clone คัดลอกทั้งก้อน
+- **พยายามอ่านหรือเขียน buffer หลัง transfer แล้ว** — buffer จะ detached ทันที (`byteLength` เป็น 0) การเข้าถึงมันอีกไม่ throw error แต่ได้ค่าว่างเปล่า ต้องเปลี่ยน reference ไปใช้ buffer ใหม่ที่ฝั่งรับสร้างขึ้นแทน
+- **ลืมว่าอาร์กิวเมนต์ที่สองของ `postMessage` ต้องเป็น array** — การส่ง buffer เดี่ยวๆ โดยไม่ห่อด้วย `[]` จะทำให้ transfer ไม่เกิดขึ้น และข้อมูลจะถูก clone ตามปกติแทน
+
+> 💡 Real World Example
+>
+> **Figma** — ใช้ Web Worker ประมวลผลงานหนักอย่างการ render และ geometry calculation โดย transfer `ArrayBuffer` ของ document data ระหว่างเธรดเพื่อหลีกเลี่ยงต้นทุนการ clone ที่จะกระทบ frame rate
+>
+> **Squoosh** (เครื่องมือบีบอัดภาพของ Google) — ส่ง pixel data เป็น transferable `ArrayBuffer` เข้า-ออก codec worker แทนการ clone ทำให้บีบอัดภาพขนาดใหญ่ได้โดยไม่ค้าง UI
+
 export const quizTransferables = [
   {
     q: 'postMessage ใช้ algorithm ใดในการคัดลอกข้อมูลโดยค่าเริ่มต้น?',

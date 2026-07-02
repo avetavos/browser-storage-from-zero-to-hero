@@ -12,7 +12,7 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
 ## การกำหนดเวอร์ชัน Schema ใน IndexedDB
 
-ฐานข้อมูล IndexedDB ทุกตัวมี **หมายเลขเวอร์ชัน** เป็นจำนวนเต็ม เมื่อคุณเรียก `indexedDB.open(name, version)` ด้วยเวอร์ชันที่สูงกว่าที่จัดเก็บอยู่ในปัจจุบัน เบราว์เซอร์จะยิงเหตุการณ์ `upgradeneeded` ก่อน `success` นี่คือ **สถานที่เดียว** ที่คุณสามารถสร้างหรือลบ object store และ index ได้
+database IndexedDB ทุกตัวมี **หมายเลขเวอร์ชัน** เป็นจำนวนเต็ม เมื่อคุณเรียก `indexedDB.open(name, version)` ด้วยเวอร์ชันที่สูงกว่าที่จัดเก็บอยู่ในปัจจุบัน browser จะยิงเหตุการณ์ `upgradeneeded` ก่อน `success` นี่คือ **สถานที่เดียว** ที่คุณสามารถสร้างหรือลบ object store และ index ได้
 
 ```js
 const request = indexedDB.open('my-db', 2);
@@ -24,11 +24,11 @@ request.onupgradeneeded = (event) => {
 };
 ```
 
-คุณสมบัติสำคัญคือ `event.oldVersion`: มันบอกให้คุณรู้ว่าฐานข้อมูลอยู่ที่เวอร์ชันใด **ก่อน** การเปิดครั้งนี้ ฐานข้อมูลที่สร้างใหม่จะรายงาน `oldVersion === 0`
+คุณสมบัติสำคัญคือ `event.oldVersion`: มันบอกให้คุณรู้ว่า database อยู่ที่เวอร์ชันใด **ก่อน** การเปิดครั้งนี้ database ที่สร้างใหม่จะรายงาน `oldVersion === 0`
 
 ## รูปแบบ migration: การตรวจสอบ `if (oldVersion < N)` แบบต่อเนื่อง
 
-แทนที่จะใช้ `if/else` เพียงอันเดียว ให้ใช้การตรวจสอบแบบน้อยกว่าต่อเนื่องกัน เพื่อให้ฐานข้อมูลที่อยู่ในเวอร์ชันก่อนหน้าใด ๆ รัน upgrade ทั้งหมดที่ขาดหายไป:
+แทนที่จะใช้ `if/else` เพียงอันเดียว ให้ใช้การตรวจสอบแบบน้อยกว่าต่อเนื่องกัน เพื่อให้ database ที่อยู่ในเวอร์ชันก่อนหน้าใด ๆ รัน upgrade ทั้งหมดที่ขาดหายไป:
 
 ```js
 request.onupgradeneeded = (event) => {
@@ -51,9 +51,9 @@ request.onupgradeneeded = (event) => {
 
 ผู้ใช้ที่อัปเกรดจาก v0 จะรัน **ทั้งสอง** บล็อก ผู้ใช้ที่อัปเกรดจาก v1 จะรันเฉพาะบล็อกที่สอง ผู้ใช้ที่อยู่บน v2 อยู่แล้วจะไม่รันบล็อกใดเลย
 
-## การจัดเก็บออบเจกต์ `Blob` และ `File`
+## การจัดเก็บ object `Blob` และ `File`
 
-หนึ่งในข้อได้เปรียบที่ยิ่งใหญ่ที่สุดของ IndexedDB เหนือ Web Storage คือความสามารถในการจัดเก็บค่า JavaScript ที่ **structured-cloneable** — รวมถึงออบเจกต์ `Blob` และ `File` — **โดยไม่ต้องทำ serialisation ใด ๆ**
+หนึ่งในข้อได้เปรียบที่ยิ่งใหญ่ที่สุดของ IndexedDB เหนือ Web Storage คือความสามารถในการจัดเก็บค่า JavaScript ที่ **structured-cloneable** — รวมถึง object `Blob` และ `File` — **โดยไม่ต้องทำ serialisation ใด ๆ**
 
 ```js
 // Create a Blob in memory
@@ -75,11 +75,11 @@ getReq.onsuccess = async () => {
 };
 ```
 
-เทคนิคเดียวกันนี้ใช้ได้กับออบเจกต์ `File` (ซึ่งเป็น subclass ของ `Blob`), `ArrayBuffer`, `ImageBitmap` และประเภทอื่น ๆ ที่ structured-cloneable
+เทคนิคเดียวกันนี้ใช้ได้กับ object `File` (ซึ่งเป็น subclass ของ `Blob`), `ArrayBuffer`, `ImageBitmap` และประเภทอื่น ๆ ที่ structured-cloneable
 
 ## ทดลองรัน: v2 migration และ Blob round-trip
 
-ตัวอย่างด้านล่างเปิด `demo-advanced-migrations` ที่ **เวอร์ชัน 2** หากฐานข้อมูลยังไม่มีอยู่ `onupgradeneeded` จะรันทั้งสองบล็อก migration (oldVersion เป็น 0) จากนั้นจะจัดเก็บ record ผู้ใช้และ Blob ดึง Blob กลับมา และอ่านเนื้อหาข้อความก่อนทำการล้างข้อมูล
+ตัวอย่างด้านล่างเปิด `demo-advanced-migrations` ที่ **เวอร์ชัน 2** หาก database ยังไม่มีอยู่ `onupgradeneeded` จะรันทั้งสองบล็อก migration (oldVersion เป็น 0) จากนั้นจะจัดเก็บ record ผู้ใช้และ Blob ดึง Blob กลับมา และอ่านเนื้อหาข้อความก่อนล้างข้อมูล
 
 export const migrationsCode = `(async function () {
   // --- helpers to promisify IDB requests ---
@@ -163,10 +163,30 @@ export const migrationsCode = `(async function () {
 
 | แนวคิด | รายละเอียด |
 |---|---|
-| `event.oldVersion` | หมายเลขเวอร์ชันก่อนการเปิดครั้งนี้ `0` สำหรับฐานข้อมูลที่สร้างใหม่ |
+| `event.oldVersion` | หมายเลขเวอร์ชันก่อนการเปิดครั้งนี้ `0` สำหรับ database ที่สร้างใหม่ |
 | การตรวจสอบ `if (oldVersion < N)` แบบต่อเนื่อง | รับประกันว่า migration แบบเพิ่มทีละขั้นจะไม่ถูกข้ามไป |
 | `Blob` / `File` ใน IDB | จัดเก็บและดึงกลับโดยไม่ต้อง serialisation ใด ๆ |
 | `Blob.prototype.text()` | คืนค่า `Promise<string>` — ใช้ `await` |
+
+## Trade-offs
+
+| ตัวเลือก | Benefit | Cost |
+|---------|---------|------|
+| จัดเก็บ Blob โดยตรงใน IndexedDB | สะดวก ไม่ต้อง serialise เป็น base64 หรือ JSON ประหยัด CPU และขนาดข้อมูล | ไฟล์ขนาดใหญ่กินโควต้าของ origin อย่างรวดเร็ว อาจเผลอเกิน storage budget โดยไม่รู้ตัว |
+| อัปโหลดไฟล์ขึ้น server แล้วเก็บแค่ URL ใน IndexedDB | ควบคุมขนาด storage ฝั่ง client ได้ดีกว่า ไม่พึ่งพาโควต้าของ browser | ต้องพึ่ง network ตอนอ่านไฟล์ ใช้งาน offline ไม่ได้เต็มรูปแบบ |
+| การตรวจสอบ `if (oldVersion < N)` แบบต่อเนื่อง | รองรับผู้ใช้ที่อัปเกรดจากเวอร์ชันไหนก็ได้อย่างถูกต้อง | ต้องดูแล migration path เพิ่มขึ้นเรื่อยๆ ตามจำนวนเวอร์ชันที่ผ่านมา โค้ดยาวขึ้นตามเวลา |
+
+## Common Mistakes
+
+- **จัดเก็บ Blob ขนาดใหญ่โดยไม่ตรวจสอบโควต้าก่อน** — อาจทำให้ origin เกิน storage budget แบบเงียบๆ ควรเช็ค `navigator.storage.estimate()` ก่อนเขียนไฟล์ขนาดใหญ่
+- **เขียน migration ด้วย `if/else` เดี่ยวๆ แทนการตรวจสอบแบบต่อเนื่อง** — ทำให้ผู้ใช้ที่อัปเกรดข้ามหลายเวอร์ชันพลาด migration บางขั้นตอนไป ควรใช้ `if (oldVersion < N)` เรียงต่อกันเสมอ
+- **แปลง Blob เป็น base64 string ก่อนเก็บโดยไม่จำเป็น** — IndexedDB รองรับ structured clone ของ `Blob`/`File` อยู่แล้ว การแปลงเป็น base64 เพิ่ม overhead ทั้ง CPU และขนาดข้อมูลโดยไม่มีประโยชน์
+
+> 💡 Real World Example
+>
+> **Figma** — เก็บ asset และ thumbnail ของไฟล์ design เป็น Blob ใน local cache พร้อม migration schema แบบมีเวอร์ชันเมื่อโครงสร้างข้อมูล cache เปลี่ยนแปลงในแต่ละ release
+>
+> **Excalidraw** — จัดเก็บรูปภาพที่ผู้ใช้ paste เข้ามาบน canvas เป็น Blob โดยตรงใน IndexedDB ทำให้ภาพยังอยู่ครบแม้ปิด browser แล้วเปิดใหม่ โดยไม่ต้อง encode เป็น base64
 
 export const quizMigrationsAndBlobs = [
   {

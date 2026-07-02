@@ -1,6 +1,6 @@
 ---
 title: 'Quota และ persistent storage'
-description: "ใช้ navigator.storage.estimate() ตรวจสอบ quota และ usage, ขอ persistence ด้วย persist() และทำความเข้าใจการ evict ของเบราว์เซอร์ภายใต้ storage pressure"
+description: "ใช้ navigator.storage.estimate() ตรวจสอบ quota และ usage, ขอ persistence ด้วย persist() และทำความเข้าใจการ evict ของ browser ภายใต้ storage pressure"
 sidebar:
   order: 5
 ---
@@ -11,9 +11,9 @@ import Callout from '../../../../components/Callout.astro';
 import Quiz from '../../../../components/Quiz.tsx';
 import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
-## เบราว์เซอร์ให้ storage คุณเท่าไหร่?
+## browser ให้ storage คุณเท่าไหร่?
 
-เบราว์เซอร์ไม่ได้ให้ storage ไม่จำกัดแก่ทุก origin แต่จะจัดสรร **quota** ซึ่งเป็นจำนวนสูงสุดที่ origin อาจใช้ โดยพิจารณาจาก disk ที่มีอยู่และนโยบายเบราว์เซอร์ quota สำหรับ IndexedDB, Cache API และ OPFS มาจาก shared pool ที่เรียกว่า **"default" storage bucket**
+browser ไม่ได้ให้ storage ไม่จำกัดแก่ทุก origin แต่จะจัดสรร **quota** ซึ่งเป็นจำนวนสูงสุดที่ origin อาจใช้ โดยพิจารณาจาก disk ที่มีอยู่และนโยบาย browser quota สำหรับ IndexedDB, Cache API และ OPFS มาจาก shared pool ที่เรียกว่า **"default" storage bucket**
 
 `navigator.storage.estimate()` API คืนค่า snapshot ของปริมาณ quota ที่ origin ของคุณใช้ไปแล้ว
 
@@ -27,9 +27,9 @@ console.log('Usage :', (usage / 1024 / 1024).toFixed(2), 'MB');
 
 ## Best-effort กับ persistent storage
 
-โดยค่าเริ่มต้น ทุก origin จะได้รับ **best-effort** storage ภายใต้ disk ที่มีน้อย เบราว์เซอร์มีอิสระที่จะ evict ข้อมูล best-effort ได้ โดยไม่มีการแจ้งเตือน เพื่อเพิ่มพื้นที่ ลำดับการ evict มักเป็น origin ที่ใช้งานล่าสุดน้อยที่สุดก่อน
+โดยค่าเริ่มต้น ทุก origin จะได้รับ **best-effort** storage ภายใต้ disk ที่มีน้อย browser มีอิสระที่จะ evict ข้อมูล best-effort ได้ โดยไม่มีการแจ้งเตือน เพื่อเพิ่มพื้นที่ ลำดับการ evict มักเป็น origin ที่ใช้งานล่าสุดน้อยที่สุดก่อน
 
-คุณสามารถขอให้เบราว์เซอร์อัปเกรด origin ของคุณเป็น **persistent** storage ข้อมูล persistent จะไม่ถูก evict โดยไม่มีการกระทำที่ชัดเจนจากผู้ใช้ (การล้าง site data) ในการขอ:
+คุณสามารถขอให้ browser อัปเกรด origin ของคุณเป็น **persistent** storage ข้อมูล persistent จะไม่ถูก evict โดยไม่มีการกระทำที่ชัดเจนจากผู้ใช้ (การล้าง site data) ในการขอ:
 
 ```js
 const granted = await navigator.storage.persist();
@@ -43,14 +43,14 @@ const isPersisted = await navigator.storage.persisted();
 console.log('Already persistent:', isPersisted);
 ```
 
-### เบราว์เซอร์จะอนุมัติ persistence เมื่อไหร่?
+### browser จะอนุมัติ persistence เมื่อไหร่?
 
-เบราว์เซอร์ใช้ engagement heuristics ในการตัดสินใจว่าจะอนุมัติ request แบบเงียบ ๆ หรือแสดง permission prompt ปัจจัยที่เพิ่มโอกาสในการได้รับการอนุมัติโดยอัตโนมัติ ได้แก่:
+browser ใช้ engagement heuristics ในการตัดสินใจว่าจะอนุมัติ request แบบเงียบ ๆ หรือแสดง permission prompt ปัจจัยที่เพิ่มโอกาสในการได้รับการอนุมัติโดยอัตโนมัติ ได้แก่:
 
 - Site ถูก install เป็น PWA (เพิ่มใน Home Screen / ติดตั้งผ่าน browser UI)
 - ผู้ใช้เยี่ยมชม site บ่อยครั้ง
 - ผู้ใช้ bookmark site หรือมอบ permissions อื่น ๆ (push notifications, geolocation)
-- บางเบราว์เซอร์ (Firefox) จะถามผู้ใช้เสมอ เบราว์เซอร์ที่ใช้ Chromium อาจอนุมัติเงียบ ๆ
+- บาง browser (Firefox) จะถามผู้ใช้เสมอ browser ที่ใช้ Chromium อาจอนุมัติเงียบ ๆ
 
 ## storage durability สองระดับ
 
@@ -98,6 +98,26 @@ checkStorage();`;
 <Callout title="ประเด็นสำคัญ">
 Best-effort storage เหมาะสำหรับ caches และข้อมูลที่ไม่สำคัญ สำหรับข้อมูลที่แอปของคุณไม่สามารถสูญเสียได้ เช่น offline documents, user-generated content, saved game state ให้เรียก `navigator.storage.persist()` เร็ว ๆ ในช่วงต้น lifecycle ของแอป โดยเฉพาะหลังจากที่ผู้ใช้แสดงให้เห็นถึงการมีส่วนร่วมกับ site ของคุณ
 </Callout>
+
+## Trade-offs
+
+| ตัวเลือก | Benefit | Cost |
+|---------|---------|------|
+| Best-effort storage (default) | ไม่ต้องขอ permission จากผู้ใช้ ใช้งานได้ทันที | browser อาจ evict ข้อมูลเงียบ ๆ เมื่อ disk เหลือน้อย |
+| Persistent storage (`persist()`) | ข้อมูลปลอดภัยจนกว่าผู้ใช้จะล้าง site data เอง | ต้องพึ่ง engagement heuristics ของ browser ซึ่งควบคุมไม่ได้ทั้งหมด และบาง browser จะแสดง permission prompt ที่ผู้ใช้อาจปฏิเสธ |
+| เรียก `estimate()` ก่อนเขียนข้อมูลก้อนใหญ่ | รู้ headroom ที่เหลือ ป้องกัน `QuotaExceededError` กลางทาง | เพิ่ม async round-trip หนึ่งครั้งก่อนเริ่ม operation จริง |
+
+## Common Mistakes
+
+- **คิดว่า IndexedDB เท่ากับ "เก็บถาวรตลอดไป"** — โดย default ทุก origin ได้แค่ best-effort storage เท่านั้น ต้องเรียก `navigator.storage.persist()` เพื่อขออัปเกรดเป็น persistent จริง ๆ
+- **ไม่เช็ก quota ก่อนเขียนข้อมูลก้อนใหญ่** — เขียนไปเรื่อย ๆ โดยไม่เรียก `navigator.storage.estimate()` ก่อน ทำให้เจอ `QuotaExceededError` แบบไม่ทันตั้งตัวเมื่อ disk เหลือน้อย
+- **สับสนระหว่าง `usage` ที่ได้จาก `estimate()` กับ `localStorage`** — ค่าที่คืนมาครอบคลุมแค่ IndexedDB, Cache API และ OPFS เท่านั้น ไม่รวม `localStorage` หรือ cookies ซึ่งมี limit แยกต่างหาก
+
+> 💡 Real World Example
+>
+> **Google Photos** — เรียก `navigator.storage.persist()` หลังผู้ใช้ install เป็น PWA เพื่อให้ cached thumbnails และ offline queue ไม่ถูก evict ระหว่างใช้งานแบบ offline
+>
+> **Notion / Google Docs offline mode** — เช็ก `navigator.storage.estimate()` ก่อน sync document ขนาดใหญ่ลง IndexedDB เพื่อเตือนผู้ใช้ล่วงหน้าเมื่อ quota ใกล้เต็ม แทนที่จะปล่อยให้ sync ล้มเหลวกลางทาง
 
 export const quizQuota = [
   {

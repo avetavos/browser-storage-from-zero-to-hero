@@ -11,18 +11,18 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
 ## Cookies
 
-Cookies ถูกนำมาใช้ตั้งแต่ปี 1994 และยังคงเป็น client-side store เพียงอย่างเดียวที่มีส่วนร่วมใน HTTP request cycle เบราว์เซอร์จะแนบ cookies ที่ตรงกันไปกับทุก request โดยอัตโนมัติ ทำให้เป็นกลไกมาตรฐานสำหรับ session tokens และการยืนยันตัวตนฝั่ง server
+Cookies ถูกนำมาใช้ตั้งแต่ปี 1994 และยังคงเป็น client-side store เพียงอย่างเดียวที่มีส่วนร่วมใน HTTP request cycle browser จะแนบ cookies ที่ตรงกันไปกับทุก request โดยอัตโนมัติ ทำให้เป็นกลไกมาตรฐานสำหรับ session tokens และการยืนยันตัวตนฝั่ง server
 
-- **ความจุ:** 4 KB ต่อ cookie เบราว์เซอร์จำกัด cookies รวมต่อ domain ไว้ที่ประมาณ 50 รายการ (แตกต่างกันตามเบราว์เซอร์)
+- **ความจุ:** 4 KB ต่อ cookie browser จำกัด cookies รวมต่อ domain ไว้ที่ประมาณ 50 รายการ (แตกต่างกันตาม browser)
 - **รูปแบบ API:** Synchronous อ่านผ่าน `document.cookie` (คืนค่าเป็น string ที่คั่นด้วย semicolon) เขียนโดยการกำหนดค่า string ในรูปแบบ `Set-Cookie` ให้กับ `document.cookie`
-- **Persistence:** ปรับแต่งได้ Session cookies หมดอายุเมื่อปิดเบราว์เซอร์ Persistent cookies มี attribute `Expires` หรือ `Max-Age`
+- **Persistence:** ปรับแต่งได้ Session cookies หมดอายุเมื่อปิด browser Persistent cookies มี attribute `Expires` หรือ `Max-Age`
 - **Use case หลัก:** Session tokens, identity ผู้ใช้, server-side feature flags และค่าใดก็ตามที่ server ต้องเห็นในทุก request
 
 ## localStorage
 
-`localStorage` เป็น persistent client-side store ที่ใช้งานง่ายที่สุด ข้อมูลจะคงอยู่แม้ปิดเบราว์เซอร์และแชร์ร่วมกันระหว่างทุก tab และ window บน origin เดียวกัน
+`localStorage` เป็น persistent client-side store ที่ใช้งานง่ายที่สุด ข้อมูลจะคงอยู่แม้ปิด browser และแชร์ร่วมกันระหว่างทุก tab และ window บน origin เดียวกัน
 
-- **ความจุ:** 5–10 MB ต่อ origin (5 MB เป็น limit ที่ปลอดภัยในทางปฏิบัติ ขึ้นกับเบราว์เซอร์)
+- **ความจุ:** 5–10 MB ต่อ origin (5 MB เป็น limit ที่ปลอดภัยในทางปฏิบัติ ขึ้นกับ browser)
 - **รูปแบบ API:** Synchronous — `localStorage.setItem(key, value)`, `localStorage.getItem(key)`, `localStorage.removeItem(key)`, `localStorage.clear()`
 - **Persistence:** ไม่มีวันหมดอายุ ข้อมูลคงอยู่จนกว่าผู้ใช้จะล้าง site data หรือโค้ดเรียก `clear()`
 - **Use case หลัก:** User preferences, theme settings, cached UI state และค่าเล็กน้อยที่ไม่ต้องส่งไปยัง server
@@ -38,9 +38,9 @@ Cookies ถูกนำมาใช้ตั้งแต่ปี 1994 และ
 
 ## IndexedDB
 
-IndexedDB เป็นฐานข้อมูล transactional เต็มรูปแบบภายในเบราว์เซอร์ เก็บ JavaScript objects ที่มีโครงสร้างได้ (ไม่ใช่แค่ strings) รองรับ secondary indexes และมี Promise-friendly async API (ผ่าน native event model หรือ libraries เช่น `idb`)
+IndexedDB เป็น database transactional เต็มรูปแบบภายใน browser เก็บ JavaScript objects ที่มีโครงสร้างได้ (ไม่ใช่แค่ strings) รองรับ secondary indexes และมี Promise-friendly async API (ผ่าน native event model หรือ libraries เช่น `idb`)
 
-- **ความจุ:** เบราว์เซอร์จัดสรร quota แบบ dynamic ในทางปฏิบัติ origins สามารถเก็บข้อมูลได้ตั้งแต่หลายร้อย megabytes ถึงหลาย gigabytes ขึ้นอยู่กับ disk ที่เหลือและนโยบายเบราว์เซอร์
+- **ความจุ:** browser จัดสรร quota แบบ dynamic ในทางปฏิบัติ origins สามารถเก็บข้อมูลได้ตั้งแต่หลายร้อย megabytes ถึงหลาย gigabytes ขึ้นอยู่กับ disk ที่เหลือและนโยบาย browser
 - **รูปแบบ API:** Asynchronous ทุก operation ไม่ block: `IDBObjectStore.put()`, `IDBObjectStore.get()`, cursor iteration ล้วน return `IDBRequest` objects (สามารถ wrap เป็น Promises ได้)
 - **Persistence:** Persistent โดย default (best-effort) สามารถอัปเกรดเป็น durable storage ได้ด้วย `navigator.storage.persist()`
 - **Use case หลัก:** Offline apps, datasets ขนาดใหญ่, records ที่ต้องการ query, draft storage, local-first applications
@@ -78,6 +78,27 @@ OPFS มอบพื้นที่ file system แบบ sandboxed และส
 <Callout title="ประเด็นสำคัญ">
 storage แบบ synchronous ทั้งสาม ได้แก่ cookies, `localStorage` และ `sessionStorage` มีความจุจำกัดและ block main thread สำหรับข้อมูลที่ใหญ่กว่าสองสามเมกะไบต์หรือเข้าถึงบ่อยครั้ง IndexedDB, Cache API หรือ OPFS จะให้บริการได้ดีกว่ามากโดยไม่เสี่ยงต่อ UI jank
 </Callout>
+
+## Trade-offs
+
+| ตัวเลือก | Benefit | Cost |
+|---------|---------|------|
+| Cookies | ส่งไปกับ HTTP request อัตโนมัติ เหมาะกับ server-side auth | ความจุแค่ 4 KB และเพิ่ม payload ให้ทุก request แม้ไม่จำเป็น |
+| `localStorage` / `sessionStorage` | API ง่าย ใช้งานได้ทันทีโดยไม่ต้อง setup | Synchronous, block main thread และความจุจำกัดแค่ 5–10 MB |
+| IndexedDB | รองรับข้อมูลจำนวนมาก, query ได้, async ไม่ block thread | API ซับซ้อนกว่า ต้องจัดการ transactions และ schema versioning เอง |
+| Cache API / OPFS | เหมาะกับ offline assets และ binary files ขนาดใหญ่ | ต้องใช้ร่วมกับ service worker หรือ Worker context จึงจะได้ประโยชน์เต็มที่ |
+
+## Common Mistakes
+
+- **ใช้ cookies เก็บข้อมูล UI state ทั่วไป** — cookies ถูกส่งไปกับทุก HTTP request ทำให้ request หนักขึ้นโดยไม่จำเป็น ทั้งที่ข้อมูลแบบนี้ไม่เกี่ยวกับ server เลย ควรใช้ `localStorage` แทน
+- **ใช้ `localStorage` เก็บ dataset ขนาดใหญ่ที่ต้อง query** — `localStorage` เก็บได้แค่ string, ไม่มี index และเป็น synchronous ทำให้ scale ไม่ได้ ควรย้ายไป IndexedDB ตั้งแต่ต้น
+- **ลืมว่าทุก store แบบ best-effort อาจถูก evict ได้** — คิดว่า IndexedDB หรือ Cache API เก็บถาวรเหมือน `localStorage` ทั้งที่ default เป็น best-effort และ browser อาจลบทิ้งได้เมื่อ disk เหลือน้อย
+
+> 💡 Real World Example
+>
+> **Gmail** — ใช้ IndexedDB เก็บ email สำหรับโหมด offline เพราะต้องการความจุมากและ query ที่ซับซ้อนกว่าที่ Web Storage รองรับได้
+>
+> **เว็บไซต์ e-commerce ทั่วไป** — ใช้ cookies เก็บ session token และ auth state เพราะต้องส่งไปยัง server ทุก request ในขณะที่ใช้ `localStorage` เก็บแค่ preference เช่น currency หรือ theme ที่ไม่เกี่ยวกับ server
 
 export const quizTheOptions = [
   {

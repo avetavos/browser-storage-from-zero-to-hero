@@ -1,6 +1,6 @@
 ---
-title: 'การเปิดฐานข้อมูล'
-description: 'วิธีเปิดฐานข้อมูล IndexedDB ด้วย indexedDB.open(), จัดการกับ onupgradeneeded, onsuccess, และ onerror รวมถึงการจัดการเวอร์ชัน'
+title: 'การเปิด database'
+description: 'วิธีเปิด database IndexedDB ด้วย indexedDB.open(), จัดการกับ onupgradeneeded, onsuccess, และ onerror รวมถึงการจัดการเวอร์ชัน'
 sidebar:
   order: 2
 ---
@@ -10,7 +10,7 @@ import Callout from '../../../../components/Callout.astro';
 import Quiz from '../../../../components/Quiz.tsx';
 import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
-## การเปิดฐานข้อมูลด้วย `indexedDB.open()`
+## การเปิด database ด้วย `indexedDB.open()`
 
 ต่างจาก `fetch()` ที่คืนค่าเป็น Promise, `indexedDB.open(name, version)` จะคืนค่าเป็น **`IDBOpenDBRequest`** — ไม่ใช่ Promise การโต้ตอบกับมันทำผ่านการกำหนด callback ให้กับ event handler
 
@@ -20,16 +20,16 @@ const request = indexedDB.open('my-database', 1);
 
 พารามิเตอร์ทั้งสองคือ:
 
-- **`name`** — สตริงที่ระบุตัวตนของฐานข้อมูลภายใน origin แต่ละ origin มี namespace แยกเป็นอิสระ
-- **`version`** — จำนวนเต็มบวก หากฐานข้อมูลยังไม่มีอยู่จะถูกสร้างที่เวอร์ชันนี้ หากมีอยู่แล้วในเวอร์ชันที่ต่ำกว่าจะเกิดการอัปเกรด
+- **`name`** — string ที่ระบุตัวตนของ database ภายใน origin แต่ละ origin มี namespace แยกเป็นอิสระ
+- **`version`** — จำนวนเต็มบวก หาก database ยังไม่มีอยู่จะถูกสร้างที่เวอร์ชันนี้ หากมีอยู่แล้วในเวอร์ชันที่ต่ำกว่าจะเกิดการอัปเกรด
 
-การละเว้น `version` จะใช้ค่าเริ่มต้นเป็นเวอร์ชัน `1` เมื่อสร้างใหม่ หรือเวอร์ชันปัจจุบันหากฐานข้อมูลมีอยู่แล้ว
+การละเว้น `version` จะใช้ค่าเริ่มต้นเป็นเวอร์ชัน `1` เมื่อสร้างใหม่ หรือเวอร์ชันปัจจุบันหาก database มีอยู่แล้ว
 
 ## Event handler ทั้งสาม
 
 ### `onupgradeneeded`
 
-เกิดขึ้นเมื่อสร้างฐานข้อมูลเป็นครั้งแรก **หรือ** เมื่อเวอร์ชันที่ร้องขอสูงกว่าเวอร์ชันที่จัดเก็บไว้ นี่คือที่ที่คุณกำหนด (หรือ migrate) schema — สร้าง object store เพิ่ม index หรือลบ store เก่า
+เกิดขึ้นเมื่อสร้าง database เป็นครั้งแรก **หรือ** เมื่อเวอร์ชันที่ร้องขอสูงกว่าเวอร์ชันที่จัดเก็บไว้ นี่คือที่ที่คุณกำหนด (หรือ migrate) schema — สร้าง object store เพิ่ม index หรือลบ store เก่า
 
 ```js
 request.onupgradeneeded = (event) => {
@@ -43,7 +43,7 @@ request.onupgradeneeded = (event) => {
 
 ### `onsuccess`
 
-เกิดขึ้นหลังจาก `onupgradeneeded` เสร็จสิ้น (หรือทันทีหากไม่ต้องการ upgrade) ฐานข้อมูลเปิดแล้วและพร้อมใช้งาน
+เกิดขึ้นหลังจาก `onupgradeneeded` เสร็จสิ้น (หรือทันทีหากไม่ต้องการ upgrade) database เปิดแล้วและพร้อมใช้งาน
 
 ```js
 request.onsuccess = (event) => {
@@ -54,7 +54,7 @@ request.onsuccess = (event) => {
 
 ### `onerror`
 
-เกิดขึ้นเมื่อคำขอเปิดฐานข้อมูลล้มเหลว — เช่น หากเบราว์เซอร์ของผู้ใช้อยู่ในโหมด private ที่มีการบล็อก storage หรือหาก tab อื่นถือ version-change transaction ที่ถูกบล็อก
+เกิดขึ้นเมื่อคำขอเปิด database ล้มเหลว — เช่น หาก browser ของผู้ใช้อยู่ในโหมด private ที่มีการบล็อก storage หรือหาก tab อื่นถือ version-change transaction ที่ถูกบล็อก
 
 ```js
 request.onerror = (event) => {
@@ -64,7 +64,7 @@ request.onerror = (event) => {
 
 ## Event `versionchange`
 
-หลังจากฐานข้อมูลเปิดแล้ว instance ของ `IDBDatabase` ของคุณสามารถรับ event `versionchange` ได้ สิ่งนี้เกิดขึ้นเมื่อ tab อื่น (หรือหน้าเดิมหลัง reload) เรียก `indexedDB.open()` ด้วยหมายเลขเวอร์ชันที่ **สูงกว่า**
+หลังจาก database เปิดแล้ว instance ของ `IDBDatabase` ของคุณสามารถรับ event `versionchange` ได้ สิ่งนี้เกิดขึ้นเมื่อ tab อื่น (หรือหน้าเดิมหลัง reload) เรียก `indexedDB.open()` ด้วยหมายเลขเวอร์ชันที่ **สูงกว่า**
 
 ```js
 db.onversionchange = () => {
@@ -75,7 +75,7 @@ db.onversionchange = () => {
 
 หากคุณไม่ปิด connection การ upgrade ในบริบทอื่นจะถูกบล็อกจนกว่าคุณจะปิด
 
-## รูปแบบการเปิดฐานข้อมูลแบบสมบูรณ์
+## รูปแบบการเปิด database แบบสมบูรณ์
 
 การห่อ API แบบ callback ด้วย `Promise` ทำให้ใช้ร่วมกับ `async/await` ได้:
 
@@ -130,6 +130,26 @@ console.log('Cleanup done');`;
 <Callout title="onupgradeneeded คือที่เดียวที่แก้ไข schema ได้">
 คุณสามารถเรียก `createObjectStore()`, `deleteObjectStore()` หรือสร้าง index ได้เฉพาะภายใน `onupgradeneeded` handler เท่านั้น การพยายามทำสิ่งเหล่านี้นอก upgrade transaction จะ throw `DOMException` หากต้องการเพิ่ม store ใหม่ ให้เพิ่มหมายเลขเวอร์ชัน — สิ่งนั้นจะ trigger `onupgradeneeded` อีกครั้ง โดยมีหมายเลขเวอร์ชันเก่าและใหม่ให้ใช้งานผ่าน `event.oldVersion` และ `event.newVersion`
 </Callout>
+
+## Trade-offs
+
+| ตัวเลือก | Benefit | Cost |
+|---------|---------|------|
+| Async แบบ event-based ของ `indexedDB.open` | ไม่ block main thread ระหว่างเปิด database ขนาดใหญ่ | ต้องเขียน callback สามชั้น (`onupgradeneeded`, `onsuccess`, `onerror`) แทนที่จะ `await` ตรง ๆ |
+| Version-based schema migration | ควบคุม schema เปลี่ยนแปลงได้ชัดเจนผ่าน `oldVersion`/`newVersion` | ต้องออกแบบ migration logic เองทุกครั้งที่เพิ่มเวอร์ชัน และเสี่ยงลืม handle `onblocked` |
+| wrap `open()` ด้วย `Promise` | ใช้ `async/await` เขียนโค้ดเป็นเส้นตรง อ่านง่ายขึ้นมาก | ซ่อนรายละเอียด event lifecycle ไป — debug ยากขึ้นถ้าลืม handle `onblocked` หรือ `onversionchange` |
+
+## Common Mistakes
+
+- **ไม่ handle event `onblocked`** — ถ้า tab อื่นเปิด connection เดิมค้างอยู่ การ upgrade เวอร์ชันจะค้างเงียบ ๆ โดยไม่มี error ใด ๆ ผู้ใช้จะเห็นหน้าเว็บค้างโดยไม่รู้สาเหตุ
+- **ลืมปิด connection ใน `onversionchange`** — ถ้าไม่เรียก `db.close()` เมื่อ tab อื่นร้องขอ upgrade การ upgrade นั้นจะถูกบล็อกไปเรื่อย ๆ จนกว่า tab นี้จะถูกปิดหรือ reload
+- **ไม่ผูก `onerror` กับ `request`** — เมื่อ `open()` ล้มเหลว เช่น ใน private mode ที่บล็อก storage error จะหายไปเงียบ ๆ โดยไม่มี log ใด ๆ ให้ debug
+
+> 💡 Real World Example
+>
+> **Google Docs** — ใช้ version number ควบคุม schema ของ object store สำหรับ offline editing และ handle `onversionchange` เพื่อปิด connection เก่าเมื่อ deploy schema ใหม่ผ่าน tab ที่ reload แล้ว
+>
+> **WhatsApp Web** — เปิด database ตอน login ครั้งแรกด้วย `indexedDB.open()` และใช้ `onupgradeneeded` สร้าง object store สำหรับ message history และ contact list ตั้งแต่เวอร์ชันแรก
 
 export const quizOpeningADb = [
   {

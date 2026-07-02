@@ -13,17 +13,17 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
 ## วิธีเก็บข้อมูลใน browser ทั้ง 5 แบบ
 
-เบราว์เซอร์สมัยใหม่มีระบบ storage ที่แตกต่างกันถึง 5 ระบบ แต่ละระบบแก้ปัญหาที่ต่างกัน มีขีดจำกัดด้านความจุที่ต่างกัน และมีรูปแบบ API ที่ต่างกัน ก่อนจะเจาะลึกแต่ละระบบ การเข้าใจภาพรวมทั้งหมดจะเป็นประโยชน์อย่างมาก
+browser สมัยใหม่มีระบบ storage ที่แตกต่างกันถึง 5 ระบบ แต่ละระบบแก้ปัญหาที่ต่างกัน มีขีดจำกัดด้านความจุที่ต่างกัน และมีรูปแบบ API ที่ต่างกัน ก่อนจะเจาะลึกแต่ละระบบ การเข้าใจภาพรวมทั้งหมดจะเป็นประโยชน์อย่างมาก
 
 **Cookies** เป็นกลไกที่เก่าแก่ที่สุด เป็น key/value strings ขนาดเล็ก (สูงสุด 4 KB ต่อชิ้น) ที่ถูกส่งโดยอัตโนมัติพร้อมทุก HTTP request ไปยัง domain ที่ตรงกัน หน้าที่หลักของมันคือการจัดการ session และการสื่อสารกับ server ไม่ใช่การเก็บข้อมูลในเครื่อง
 
 **Web Storage** (`localStorage` และ `sessionStorage`) เป็น synchronous key/value API ที่รองรับเฉพาะ strings มี quota โดยทั่วไปอยู่ที่ 5–10 MB ต่อ origin `localStorage` เก็บข้อมูลไว้ตลอดไป ส่วน `sessionStorage` จะล้างข้อมูลเมื่อ tab ถูกปิด ทั้งคู่ block main thread ทุกครั้งที่เรียกใช้
 
-**IndexedDB** เป็นฐานข้อมูลแบบ transactional, asynchronous, object-oriented ที่มีในทุกเบราว์เซอร์ รองรับข้อมูล structured ได้หลายร้อย megabytes (หรือมากกว่า) รองรับ indexes และ cursors และไม่ block main thread เหมาะสำหรับข้อมูล structured ในเครื่องปริมาณมาก
+**IndexedDB** เป็น database แบบ transactional, asynchronous, object-oriented ที่มีในทุก browser รองรับข้อมูล structured ได้หลายร้อย megabytes (หรือมากกว่า) รองรับ indexes และ cursors และไม่ block main thread เหมาะสำหรับข้อมูล structured ในเครื่องปริมาณมาก
 
 **Cache API** เก็บ HTTP request/response pairs ออกแบบมาสำหรับ service workers เพื่อรองรับ offline-first apps และกลยุทธ์ caching ที่ละเอียด entries คือ `Response` objects เต็มรูปแบบ ไม่ใช่แค่ strings
 
-**Origin Private File System (OPFS)** เป็น sandboxed file-system API ที่เพิ่มเข้ามาในเบราว์เซอร์สมัยใหม่ ให้ origin มีพื้นที่ส่วนตัวในการสร้าง อ่าน และเขียนไฟล์ รวมถึงผ่าน synchronous interface ใน Web Workers โดยไม่ต้องขอ permission
+**Origin Private File System (OPFS)** เป็น sandboxed file-system API ที่เพิ่มเข้ามาใน browser สมัยใหม่ ให้ origin มีพื้นที่ส่วนตัวในการสร้าง อ่าน และเขียนไฟล์ รวมถึงผ่าน synchronous interface ใน Web Workers โดยไม่ต้องขอ permission
 
 ## Decision tree: เลือก storage แบบไหน?
 
@@ -56,7 +56,7 @@ export const decisionTree = `flowchart TD
 
 ## ตรวจสอบ storage quota ที่มีอยู่
 
-`navigator.storage.estimate()` รายงานว่า origin ของคุณใช้ storage ไปเท่าไหร่ และเบราว์เซอร์พร้อมจะให้เท่าไหร่ รันโค้ดด้านล่างเพื่อดูตัวเลขของคุณเอง
+`navigator.storage.estimate()` รายงานว่า origin ของคุณใช้ storage ไปเท่าไหร่ และ browser พร้อมจะให้เท่าไหร่ รันโค้ดด้านล่างเพื่อดูตัวเลขของคุณเอง
 
 export const estimateCode = `navigator.storage.estimate().then((estimate) => {
   const usedMB = (estimate.usage / 1024 / 1024).toFixed(2);

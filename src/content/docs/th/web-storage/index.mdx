@@ -13,14 +13,14 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
 ## Web Storage คืออะไร?
 
-Web Storage API มอบ key/value store แบบ synchronous ให้ทุก origin บนเว็บถึงสองตัวที่ฝังมาในเบราว์เซอร์ ได้แก่ `localStorage` และ `sessionStorage` ทั้งคู่ใช้ interface เรียบง่ายแบบเดียวกัน — คุณเรียก `setItem`, `getItem`, `removeItem` และ `clear` — และทั้งคู่จะเก็บทุก value เป็น string เสมอ ไม่มี schema ไม่มี indexing และไม่มี overhead แบบ async
+Web Storage API มอบ key/value store แบบ synchronous ให้ทุก origin บนเว็บถึงสองตัวที่ฝังมาใน browser ได้แก่ `localStorage` และ `sessionStorage` ทั้งคู่ใช้ interface เรียบง่ายแบบเดียวกัน — คุณเรียก `setItem`, `getItem`, `removeItem` และ `clear` — และทั้งคู่จะเก็บทุก value เป็น string เสมอ ไม่มี schema ไม่มี indexing และไม่มี overhead แบบ async
 
-Web Storage เป็นแบบ **origin-scoped**: หน้าเว็บที่ `https://example.com` ไม่สามารถอ่าน storage ของ `https://other.com` ได้ ข้อจำกัดนี้ถูกบังคับโดย same-origin policy ของเบราว์เซอร์ ไม่ใช่จากโค้ดที่คุณเขียน
+Web Storage เป็นแบบ **origin-scoped**: หน้าเว็บที่ `https://example.com` ไม่สามารถอ่าน storage ของ `https://other.com` ได้ ข้อจำกัดนี้ถูกบังคับโดย same-origin policy ของ browser ไม่ใช่จากโค้ดที่คุณเขียน
 
 ความแตกต่างหลักระหว่าง store ทั้งสองคือ **อายุของข้อมูล (lifetime) และขอบเขตของแท็บ (tab scope)**:
 
 - `localStorage` — ข้อมูลอยู่ถาวร (จนกว่าจะถูกลบอย่างชัดเจน) และถูกแชร์ข้ามทุกแท็บและทุกหน้าต่างที่เปิดอยู่บน origin เดียวกัน
-- `sessionStorage` — ข้อมูลอยู่เฉพาะตลอดอายุของแท็บเบราว์เซอร์ (หรือหน้าต่าง) เดียวเท่านั้น การปิดแท็บจะล้างข้อมูลทิ้ง และแท็บอื่นมองไม่เห็นข้อมูลนี้
+- `sessionStorage` — ข้อมูลอยู่เฉพาะตลอดอายุของแท็บ browser (หรือหน้าต่าง) เดียวเท่านั้น การปิดแท็บจะล้างข้อมูลทิ้ง และแท็บอื่นมองไม่เห็นข้อมูลนี้
 
 ## เปรียบเทียบ localStorage กับ sessionStorage แบบรวบรัด
 
@@ -54,7 +54,7 @@ export const overviewDiagram = `flowchart LR
 
 ## ตัวอย่างรันได้ตัวแรกของคุณ
 
-โค้ดด้านล่างจะเขียน value ลง `localStorage` อ่านกลับมา แล้วเคลียร์ทิ้งเพื่อไม่ให้ค้างอยู่ใน storage ของเบราว์เซอร์ข้ามการโหลดหน้า
+โค้ดด้านล่างจะเขียน value ลง `localStorage` อ่านกลับมา แล้วเคลียร์ทิ้งเพื่อไม่ให้ค้างอยู่ใน storage ของ browser ข้ามการโหลดหน้า
 
 export const firstRunCode = `// Write
 localStorage.setItem('demo:greeting', 'Hello, Web Storage!');

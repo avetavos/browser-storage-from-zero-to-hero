@@ -15,7 +15,7 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
 JavaScript ทำงานแบบ single-threaded นั่นคือ ทุกสคริปต์ การอัปเดต DOM การคำนวณ layout และ event handler ล้วนทำงานบนเธรดเดียวกัน เมื่อรัน computation ที่หนัก เช่น การ parse ไฟล์ขนาดใหญ่ การคำนวณ hash หรือการประมวลผลภาพ UI จะ "แช่แข็ง" ตลอดช่วงเวลานั้น — scroll หยุด animation กระตุก และ click ไม่ตอบสนอง
 
-Web Workers ช่วยให้โยนงานหนักไปยัง background thread ได้ เบราว์เซอร์จะสร้าง JS environment แยกต่างหากพร้อม event loop ของตัวเอง เธรดหลักและ worker สื่อสารกันผ่าน `postMessage` และ `onmessage` โดยค่าเริ่มต้นทั้งสองเธรดจะไม่แชร์ memory ดังนั้นจึงไม่มีปัญหา race condition
+Web Workers ช่วยให้โยนงานหนักไปยัง background thread ได้ browser จะสร้าง JS environment แยกต่างหากพร้อม event loop ของตัวเอง เธรดหลักและ worker สื่อสารกันผ่าน `postMessage` และ `onmessage` โดยค่าเริ่มต้นทั้งสองเธรดจะไม่แชร์ memory ดังนั้นจึงไม่มีปัญหา race condition
 
 export const overviewDiagram = `flowchart LR
   MT["Main Thread\n(UI, events)"]

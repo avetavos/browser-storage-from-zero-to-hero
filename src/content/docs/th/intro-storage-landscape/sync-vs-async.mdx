@@ -13,11 +13,11 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
 ## Main thread เป็น execution lane เดียวของ JavaScript
 
-เบราว์เซอร์รัน JavaScript, layout และ painting บน main thread เดียว เมื่อ JavaScript call ใดใช้เวลานานในการ return มันจะหน่วงทุกอย่างที่เหลือ animations จะกระตุก clicks จะไม่ตอบสนอง และเบราว์เซอร์อาจแสดงคำเตือน "page not responding" ปัญหานี้เรียกว่า **jank**
+browser รัน JavaScript, layout และ painting บน main thread เดียว เมื่อ JavaScript call ใดใช้เวลานานในการ return มันจะหน่วงทุกอย่างที่เหลือ animations จะกระตุก clicks จะไม่ตอบสนอง และ browser อาจแสดงคำเตือน "page not responding" ปัญหานี้เรียกว่า **jank**
 
 ## Synchronous storage: Web Storage และ cookies
 
-`localStorage`, `sessionStorage` และ `document.cookie` ล้วนเป็น **synchronous** เมื่อคุณเรียก `localStorage.getItem('key')` เบราว์เซอร์จะอ่านจาก disk คืนค่า และโค้ดของคุณจึงจะดำเนินต่อ script ของคุณไม่สามารถทำอะไรอื่นระหว่างรอ
+`localStorage`, `sessionStorage` และ `document.cookie` ล้วนเป็น **synchronous** เมื่อคุณเรียก `localStorage.getItem('key')` browser จะอ่านจาก disk คืนค่า และโค้ดของคุณจึงจะดำเนินต่อ script ของคุณไม่สามารถทำอะไรอื่นระหว่างรอ
 
 สำหรับการอ่านเล็กน้อยครั้งเดียว ผลกระทบนี้แทบมองไม่เห็น แต่ปัญหาจะเกิดขึ้นเมื่อ:
 
@@ -40,7 +40,7 @@ console.log('1 000 writes took ' + elapsed.toFixed(2) + ' ms');
 
 ## Asynchronous storage: IndexedDB และ Cache API
 
-IndexedDB และ Cache API เป็น **asynchronous** ทุก operation คืน Promise (หรือยิง event) และโค้ดของคุณดำเนินต่อทันที I/O จริงเกิดขึ้นนอก main thread เมื่อผลลัพธ์พร้อม เบราว์เซอร์จะเรียก callback หรือ resolve Promise ของคุณ
+IndexedDB และ Cache API เป็น **asynchronous** ทุก operation คืน Promise (หรือยิง event) และโค้ดของคุณดำเนินต่อทันที I/O จริงเกิดขึ้นนอก main thread เมื่อผลลัพธ์พร้อม browser จะเรียก callback หรือ resolve Promise ของคุณ
 
 ```js
 // return ทันที — การเขียนเกิดขึ้นใน background
@@ -97,6 +97,26 @@ console.log('Remaining demo keys in localStorage:',
 <Callout title="เคล็ดลับด้านประสิทธิภาพ">
 หาก pattern การเข้าถึง storage ของคุณเกี่ยวข้องกับ objects ขนาดใหญ่ การเขียนบ่อยครั้ง หรือเกิดขึ้นภายใน scroll หรือ animation callback ให้เปลี่ยนไปใช้ IndexedDB โมเดล async ที่ทำงานนอก thread จะรักษา main thread ให้ว่างสำหรับ rendering และ input handling ขจัด jank ที่ synchronous Web Storage อาจทำให้เกิดขึ้น
 </Callout>
+
+## Trade-offs
+
+| ตัวเลือก | Benefit | Cost |
+|---------|---------|------|
+| Synchronous (Web Storage / cookies) | API เรียบง่าย เขียนโค้ดบรรทัดเดียวได้ผลลัพธ์ทันที ไม่ต้อง `await` | block main thread ทุกครั้งที่เรียก ทำให้เกิด jank เมื่อข้อมูลใหญ่หรือเรียกถี่ |
+| Asynchronous (IndexedDB / Cache API) | ไม่ block main thread รองรับข้อมูลขนาดใหญ่และ operation จำนวนมากได้อย่างลื่นไหล | โค้ดซับซ้อนขึ้น ต้องจัดการ Promise/callback และ error handling เพิ่ม |
+| OPFS `createSyncAccessHandle()` ใน Worker | ให้ synchronous I/O ที่เร็วมากโดยไม่กระทบ main thread | ใช้ได้เฉพาะใน Web Worker เท่านั้น ต้องออกแบบสถาปัตยกรรมแยก thread ตั้งแต่ต้น |
+
+## Common Mistakes
+
+- **วนลูปเขียน `localStorage` จำนวนมากใน hot path** — เช่นทุก keystroke หรือ scroll event ทำให้ main thread ถูก block ซ้ำ ๆ จนเกิด jank ที่ผู้ใช้สัมผัสได้จริง
+- **คิดว่า async แปลว่าเร็วกว่าเสมอ** — asynchronous storage ไม่ block thread ก็จริง แต่ operation เดี่ยว ๆ อาจใช้เวลานานกว่า synchronous call เล็กน้อยเพราะมี overhead ของ event loop และ IPC
+- **ลืมว่า `document.cookie` ก็เป็น synchronous เหมือนกัน** — หลายคนโฟกัสแค่ `localStorage` แต่การ parse cookie string ยาว ๆ บน hot code path ก็ block main thread ไม่ต่างกัน
+
+> 💡 Real World Example
+>
+> **Gmail offline mode** — ใช้ IndexedDB (async) เก็บ email ที่ sync ไว้สำหรับใช้งาน offline เพราะข้อมูลมีปริมาณมากเกินกว่าที่ synchronous API จะรับมือได้โดยไม่ทำให้ UI ค้าง
+>
+> **Twitter Lite (PWA)** — เลือกใช้ IndexedDB และ Cache API แทน `localStorage` สำหรับ cache ข้อมูล timeline เพื่อให้ scrolling และ interaction ยังคงลื่นไหลแม้ cache จะมีขนาดใหญ่
 
 export const quizSyncAsync = [
   {

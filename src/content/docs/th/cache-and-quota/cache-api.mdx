@@ -10,9 +10,11 @@ import Callout from '../../../../components/Callout.astro';
 import Quiz from '../../../../components/Quiz.tsx';
 import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
-## เมธอดทั้งหมดของ Cache API
+เวลาต้องคุมเองว่าจะ cache request ไหน ใช้กลยุทธ์อะไร และเมื่อไรจะลบทิ้ง — service worker เพียงอย่างเดียวไม่พอ ต้องมี API ที่จัดการคู่ `Request`/`Response` ได้โดยตรง นี่คือหน้าที่ของ Cache API
 
-Cache API เข้าถึงได้ผ่าน global object `caches` ด้านล่างนี้คือเมธอดทั้งหมดที่คุณจะใช้
+## method ทั้งหมดของ Cache API
+
+Cache API เข้าถึงได้ผ่าน global object `caches` ด้านล่างนี้คือ method ทั้งหมดที่คุณจะใช้
 
 ### `caches.open(name)`
 
@@ -117,6 +119,26 @@ export const cacheApiCode = `(async () => {
 <Callout title="จุดสำคัญ">
 `cache.addAll` เป็นแบบ atomic: request ทุกรายการต้องสำเร็จ หรือจะไม่มีการจัดเก็บใด ๆ เลย ใช้สำหรับ pre-cache asset ที่สำคัญในช่วง Service Worker install ถ้า asset ใด 404 การติดตั้งทั้งหมดจะล้มเหลว ซึ่งมักเป็นพฤติกรรมที่ถูกต้อง
 </Callout>
+
+## Trade-offs
+
+| ตัวเลือก | Benefit | Cost |
+|---------|---------|------|
+| ใช้ `cache.put()` เก็บ opaque response (cross-origin, no-cors) | ใช้งานได้กับ resource จาก CDN หรือ third-party ที่ไม่มี CORS header | นับ quota ที่ขนาดเต็มจริง แม้จะอ่าน body ไม่ได้ ทำให้ quota หมดเร็วโดยไม่รู้ตัว |
+| ใช้ `cache.addAll()` แบบ atomic สำหรับ pre-cache | รับประกันว่า asset ที่ประกาศ install ครบทุกตัวหรือไม่มีเลย ป้องกัน state ที่ asset ขาดหาย | ถ้า asset ตัวเดียว 404 การติดตั้งทั้งหมดล้มเหลว ต้องออกแบบ error handling ให้รอบคอบ |
+| ตั้งชื่อ cache แบบมี version (เช่น `demo-cache-v2`) | เปลี่ยน strategy หรืออัปเดต asset ได้โดยไม่ปนกับ cache เก่า | ต้องเขียนโค้ดลบ cache version เก่าเองใน `activate` event ไม่งั้น storage โตไม่มีที่สิ้นสุด |
+
+## Common Mistakes
+
+- **เก็บ opaque response ไว้ใน cache แล้วคิดว่าไม่กินพื้นที่เพราะอ่าน body ไม่ได้** — browser นับขนาดเต็มของ opaque response (มักหลาย MB ต่อรายการ) เข้า quota เหมือน response ปกติ
+- **ไม่เคยลบ cache version เก่าเมื่อ deploy ใหม่** — ทุกครั้งที่เปลี่ยนชื่อ cache (เช่น v1 → v2) ต้องเรียก `caches.delete()` กับชื่อเก่าใน `activate` event ไม่งั้น storage สะสมไม่มีวันจบ
+- **ใช้ `cache.add()`/`addAll()` กับ request โดยไม่เช็ค response status ก่อน** — method เหล่านี้เก็บ response ทุกสถานะรวมถึง error page ที่ server อาจส่งมาโดยไม่ throw ต้องตรวจสอบเองถ้าต้องการความชัวร์
+
+> 💡 Real World Example
+>
+> **Wikipedia** — offline reading mode ใช้ Cache API ร่วมกับ Service Worker เพื่อเก็บบทความและ asset ไว้ให้เปิดอ่านได้แม้ไม่มีเน็ต
+>
+> **Twitter Lite** — ใช้ app-shell caching ผ่าน Cache API เก็บ HTML/CSS/JS หลักไว้ ทำให้เปิดแอปครั้งถัดไปโหลดเกือบทันที ก่อนค่อยดึงข้อมูลสดจาก network
 
 export const quizCacheApi = [
   {

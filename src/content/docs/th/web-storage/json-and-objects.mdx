@@ -12,7 +12,7 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
 ## ทุกอย่างคือ string
 
-Web Storage เก็บได้เฉพาะ string เท่านั้น หากคุณส่งอย่างอื่นเข้าไปให้ `setItem` เบราว์เซอร์จะแปลงมันเป็น string ให้อย่างเงียบ ๆ:
+Web Storage เก็บได้เฉพาะ string เท่านั้น หากคุณส่งอย่างอื่นเข้าไปให้ `setItem` browser จะแปลงมันเป็น string ให้อย่างเงียบ ๆ:
 
 ```js
 localStorage.setItem('demo:num', 42);
@@ -103,6 +103,26 @@ localStorage.removeItem('demo:count');`;
 <Callout title="ประเด็นสำคัญ">
 ใช้ `JSON.stringify` ตอนเขียน และ `JSON.parse` ตอนอ่าน เพื่อเก็บรักษาโครงสร้างของ object และชนิด primitive ให้ตรวจสอบกัน `null` เสมอตอนอ่าน (key อาจไม่มีอยู่) และครอบ `JSON.parse` ด้วย `try/catch` (ค่าอาจไม่ใช่ JSON ที่ถูกต้อง)
 </Callout>
+
+## Trade-offs
+
+| ตัวเลือก | Benefit | Cost |
+|---------|---------|------|
+| `JSON.stringify`/`JSON.parse` | เก็บ object ซ้อนกันหลายชั้นและ array ได้ครบ ใช้ pattern เดียวกันทุกที่ | ต้อง parse ใหม่ทุกครั้งที่อ่าน เสีย CPU เพิ่มขึ้นตามขนาดข้อมูล |
+| เก็บเป็น string ดิบ (ไม่ stringify) | เร็วกว่า ไม่มี overhead ของการ serialise | ได้ค่ากลับมาผิดชนิดเสมอ (number/boolean กลายเป็น string) และ object กลายเป็น `"[object Object]"` |
+| helper `storageGet`/`storageSet` แบบ typed | โค้ดสั้นลง มี `try/catch` ป้องกัน corrupt data ในตัว | เพิ่ม layer เล็ก ๆ ที่ทีมต้องรู้จักและดูแลรักษา |
+
+## Common Mistakes
+
+- **ส่ง object เข้า `setItem` ตรง ๆ โดยไม่ stringify** — ได้ `"[object Object]"` กลับมา ให้ `JSON.stringify` ก่อนเขียนเสมอ
+- **เรียก `JSON.parse` โดยไม่มี `try/catch`** — ถ้าค่าที่เก็บไว้ไม่ใช่ JSON ที่ถูกต้อง (ถูกเขียนด้วยมือใน DevTools หรือมาจากโค้ดเวอร์ชันเก่า) แอปจะ crash ทันที
+- **คาดหวังว่า `Date` จะกลับมาเป็น `Date` object หลัง parse** — `JSON.stringify` แปลง `Date` เป็น ISO string เสมอ ต้องเรียก `new Date(str)` เองเพื่อกู้คืนชนิดเดิม
+
+> 💡 Real World Example
+>
+> **Notion / Google Docs** — ฟีเจอร์ autosave ฉบับร่างจะ `JSON.stringify` state ทั้งฟอร์ม (title, blocks, cursor position) แล้วเก็บลง `localStorage` เป็นระยะ เพื่อกู้คืนงานได้หากแท็บถูกปิดโดยไม่ตั้งใจ
+>
+> **Web app ที่มี dark mode / theme settings** — เก็บ object การตั้งค่าทั้งก้อน (`{ theme, fontSize, locale }`) ไว้ใน key เดียวด้วย `JSON.stringify` แล้วอ่านกลับมา parse ตอนแอป bootstrap เพื่อ apply ค่าก่อน render หน้าแรก
 
 export const quizJsonAndObjects = [
   {

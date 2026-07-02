@@ -1,6 +1,6 @@
 ---
-title: 'การวนซ้ำด้วย Cursors และ Ranges'
-description: 'เดินผ่านระเบียนใน IndexedDB ด้วย openCursor() ขยับด้วย cursor.continue() และกรองด้วย IDBKeyRange'
+title: 'การ iterate ด้วย Cursors และ Ranges'
+description: 'เดินผ่าน record ใน IndexedDB ด้วย openCursor() ขยับด้วย cursor.continue() และกรองด้วย IDBKeyRange'
 sidebar:
   order: 3
 ---
@@ -12,9 +12,9 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
 ## Cursor คืออะไร?
 
-การอ่านระเบียนเดียวด้วยคีย์ผ่าน `objectStore.get(key)` นั้นรวดเร็ว แต่บางครั้งคุณจำเป็นต้อง **เดินผ่านระเบียนจำนวนมาก** — เพื่อกรอง รวบรวม หรือแปลงข้อมูลระหว่างทาง นั่นคือสิ่งที่ cursor มีไว้เพื่อ
+การอ่าน record เดียวด้วยคีย์ผ่าน `objectStore.get(key)` นั้นรวดเร็ว แต่บางครั้งคุณจำเป็นต้อง **เดินผ่าน record จำนวนมาก** — เพื่อกรอง รวบรวม หรือแปลงข้อมูลระหว่างทาง นั่นคือสิ่งที่ cursor มีไว้เพื่อ
 
-Cursor ชี้ไปที่ระเบียนหนึ่งในแต่ละครั้ง คุณเปิดมันบน object store (หรือ index) ประมวลผลระเบียนปัจจุบัน จากนั้นเรียก `cursor.continue()` เพื่อเลื่อนไปยังระเบียนถัดไป เมื่อไม่มีระเบียนเหลืออีก cursor จะ resolve เป็น `null` ซึ่งเป็นสัญญาณว่าการวนซ้ำเสร็จสิ้นแล้ว
+Cursor ชี้ไปที่ record หนึ่งในแต่ละครั้ง คุณเปิดมันบน object store (หรือ index) ประมวลผล record ปัจจุบัน จากนั้นเรียก `cursor.continue()` เพื่อเลื่อนไปยัง record ถัดไป เมื่อไม่มี record เหลืออีก cursor จะ resolve เป็น `null` ซึ่งเป็นสัญญาณว่าการ iterate เสร็จสิ้นแล้ว
 
 ```js
 const request = objectStore.openCursor();
@@ -34,7 +34,7 @@ request.onsuccess = (event) => {
 
 `objectStore.openCursor(query, direction)` — ทั้งสองอาร์กิวเมนต์เป็นตัวเลือก
 
-- **`query`** — เป็น `IDBKeyRange` หรือคีย์เฉพาะ ละเว้น (หรือส่ง `null`) เพื่อวนซ้ำระเบียนทั้งหมด
+- **`query`** — เป็น `IDBKeyRange` หรือคีย์เฉพาะ ละเว้น (หรือส่ง `null`) เพื่อ iterate record ทั้งหมด
 - **`direction`** — `"next"` (ค่าเริ่มต้น เรียงจากน้อยไปมาก), `"prev"` (เรียงจากมากไปน้อย), `"nextunique"` หรือ `"prevunique"`
 
 ```js
@@ -50,9 +50,9 @@ objectStore.openCursor(IDBKeyRange.bound(2, 3));
 
 ## IDBKeyRange — การกรองด้วยคีย์
 
-`IDBKeyRange` ช่วยให้คุณระบุชุดย่อยของคีย์โดยไม่ต้องสแกนทุกระเบียน เมธอด factory ทั้งสี่ได้แก่:
+`IDBKeyRange` ช่วยให้คุณระบุชุดย่อยของคีย์โดยไม่ต้องสแกนทุก record method factory ทั้งสี่ได้แก่:
 
-| เมธอด | สิ่งที่จับคู่ |
+| method | สิ่งที่จับคู่ |
 |---|---|
 | `IDBKeyRange.only(value)` | คีย์เพียงหนึ่งเดียวที่ตรงกันพอดี |
 | `IDBKeyRange.lowerBound(lower, open?)` | คีย์ที่ ≥ lower (ส่ง `true` เพื่อไม่รวม lower เอง) |
@@ -68,7 +68,7 @@ IDBKeyRange.bound(10, 50)      // 10 <= key <= 50
 IDBKeyRange.bound(10, 50, true, true) // 10 < key < 50
 ```
 
-## การห่อการวนซ้ำ Cursor ด้วย Promise
+## การห่อการ iterate Cursor ด้วย Promise
 
 callback แบบ `onsuccess` ดิบๆ นั้นยุ่งยาก การห่อรูปแบบนี้ไว้ใน helper จะทำให้ใช้ร่วมกับ `async/await` ได้สะดวกขึ้น:
 
@@ -91,13 +91,13 @@ function iterateCursor(store, range = null) {
 }
 ```
 
-## ตัวอย่างรัน: วนซ้ำระเบียนทั้งหมด แล้ววนซ้ำตาม Range
+## ตัวอย่างรัน: iterate record ทั้งหมด แล้ว iterate ตาม Range
 
 การสาธิตด้านล่างนี้:
-1. เปิดฐานข้อมูลและเติมข้อมูลคะแนนผู้เล่นสี่ระเบียน
-2. ใช้ cursor เพื่อวนซ้ำระเบียน **ทั้งหมด** และแสดงผลแต่ละรายการ
-3. ใช้ `IDBKeyRange.bound(2, 3)` เพื่อวนซ้ำเฉพาะระเบียนที่มี `id` 2 และ 3
-4. ลบฐานข้อมูลหลังจากนั้นเพื่อไม่ให้เหลือร่องรอย
+1. เปิด database และเติมข้อมูลคะแนนผู้เล่นสี่ record
+2. ใช้ cursor เพื่อ iterate record **ทั้งหมด** และแสดงผลแต่ละรายการ
+3. ใช้ `IDBKeyRange.bound(2, 3)` เพื่อ iterate เฉพาะ record ที่มี `id` 2 และ 3
+4. ลบ database หลังจากนั้นเพื่อไม่ให้เหลือร่องรอย
 
 export const cursorsCode = `(async function() {
   // Helper: wrap an IDBRequest in a Promise
@@ -181,8 +181,28 @@ export const cursorsCode = `(async function() {
 <StorageRunner client:visible code={cursorsCode} />
 
 <Callout title="ประเด็นสำคัญ">
-Cursor ไม่ได้โหลดระเบียนทั้งหมดเข้าหน่วยความจำพร้อมกัน — มันเดินผ่านทีละรายการ ต้องเรียก `cursor.continue()` ภายใน handler ของ `onsuccess` เสมอเพื่อเลื่อนไปหน้า หากลืมเรียกจะทำให้การวนซ้ำหยุดนิ่งโดยไม่มีข้อผิดพลาด จับคู่ cursor กับ `IDBKeyRange` เพื่อหลีกเลี่ยงการสแกนระเบียนที่ไม่จำเป็น
+Cursor ไม่ได้โหลด record ทั้งหมดเข้าหน่วยความจำพร้อมกัน — มันเดินผ่านทีละรายการ ต้องเรียก `cursor.continue()` ภายใน handler ของ `onsuccess` เสมอเพื่อเลื่อนไปหน้า หากลืมเรียกจะทำให้การ iterate หยุดนิ่งโดยไม่มีข้อผิดพลาด จับคู่ cursor กับ `IDBKeyRange` เพื่อหลีกเลี่ยงการสแกน record ที่ไม่จำเป็น
 </Callout>
+
+## Trade-offs
+
+| ตัวเลือก | Benefit | Cost |
+|---------|---------|------|
+| ใช้ cursor + `IDBKeyRange` แทน `getAll()` | ประมวลผลทีละ record โดยไม่ต้องโหลดข้อมูลทั้งหมดเข้าหน่วยความจำพร้อมกัน เหมาะกับ dataset ขนาดใหญ่ | โค้ดซับซ้อนกว่า ต้องจัดการ callback และเรียก `continue()` เองทุกครั้ง |
+| ใช้ `getAll()` ตรงๆ | เขียนโค้ดสั้น อ่านง่าย ได้ผลลัพธ์เป็น array ทันที | โหลด record ทั้งหมดเข้าหน่วยความจำในครั้งเดียว ไม่เหมาะกับ store ขนาดใหญ่ |
+| กรองด้วย `IDBKeyRange` ก่อน iterate | ลดจำนวน record ที่ต้องสแกน ประหยัดเวลา | ต้องรู้โครงสร้างของคีย์ล่วงหน้าเพื่อสร้าง range ที่ถูกต้อง |
+
+## Common Mistakes
+
+- **ลืมเรียก `cursor.continue()` ภายใน handler ของ `onsuccess`** — การ iterate จะหยุดนิ่งเงียบๆ โดยไม่มี error ใดๆ ให้เห็น ต้องเรียกทุกครั้งที่ยังมี record เหลือ
+- **คิดว่า `IDBKeyRange.bound()` ไม่รวมขอบทั้งสองด้านโดยค่าเริ่มต้น** — ค่าเริ่มต้นคือรวมทั้ง lower และ upper ต้องส่ง `true` ในอาร์กิวเมนต์ที่สามหรือสี่อย่างชัดเจนถ้าต้องการ exclusive
+- **เปิด cursor ใหม่ทุกครั้งที่ต้องการ record ถัดไป** — cursor ตัวเดียวสามารถเลื่อนไปเรื่อยๆ ด้วย `continue()` ไม่จำเป็นต้องเปิดใหม่ ทำแบบนั้นจะเสีย performance และทำให้โค้ดสับสน
+
+> 💡 Real World Example
+>
+> **Figma** — ใช้ cursor เพื่อ iterate ผ่าน object จำนวนมากใน local cache ของไฟล์ design โดยไม่ต้องโหลดทั้งหมดเข้าหน่วยความจำในคราวเดียว ช่วยให้ canvas render ได้ลื่นแม้ไฟล์มีขนาดใหญ่
+>
+> **Excalidraw** — เมื่อ persist ข้อมูลภาพวาดไว้ฝั่ง client จะใช้ `IDBKeyRange` กรอง element เฉพาะช่วงที่ต้องการแสดงผล แทนที่จะดึงทุก record ออกมาทั้งหมด
 
 export const quizCursorsAndRanges = [
   {

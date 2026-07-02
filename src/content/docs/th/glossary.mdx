@@ -1,0 +1,89 @@
+---
+title: Glossary
+description: คำศัพท์ browser storage ที่ใช้ตลอด course นี้ — รักษา terminology ภาษาอังกฤษตามที่ developer ใช้จริง
+sidebar:
+  order: 99
+---
+
+import Callout from '../../../components/Callout.astro';
+import ProgressTracker from '../../../components/ProgressTracker.tsx';
+
+## Core Storage Concepts
+
+| English | Thai Style | หมายเหตุ |
+|---------|-----------|---------|
+| Origin | origin | scheme + host + port ที่ใช้แยก storage แต่ละเว็บออกจากกัน |
+| Same-origin | same-origin | นโยบายที่จำกัดให้ storage เข้าถึงได้เฉพาะจาก origin เดียวกัน |
+| Quota | quota | พื้นที่ storage ที่ origin หนึ่งได้รับอนุญาตให้ใช้ |
+| Eviction | eviction | การที่ browser ลบข้อมูลออกโดยอัตโนมัติเมื่อพื้นที่ดิสก์ไม่พอ |
+| Persistent storage | persistent storage | โหมด storage ที่ browser จะไม่ลบข้อมูลโดยอัตโนมัติ |
+| Best-effort storage | best-effort storage | โหมด storage เริ่มต้นที่ browser อาจลบข้อมูลได้โดยไม่แจ้งเตือน |
+| Synchronous / Asynchronous | sync / async | ว่า API นั้น block main thread หรือไม่ |
+
+## Web Storage & Cookies
+
+| English | Thai Style | หมายเหตุ |
+|---------|-----------|---------|
+| localStorage | `localStorage` | key-value store แบบ string, sync, อยู่รอดข้าม session |
+| sessionStorage | `sessionStorage` | key-value store แบบ string, sync, จำกัดแค่แท็บเดียว |
+| Cookie | cookie | คู่ `name=value` ที่ browser แนบไปกับทุก HTTP request โดยอัตโนมัติ |
+| Storage event | storage event | event ที่ยิงข้ามแท็บเมื่อ `localStorage` เปลี่ยนแปลง |
+| SameSite | SameSite | attribute ของ cookie ที่ควบคุมว่าจะส่งไปกับ cross-site request หรือไม่ |
+| HttpOnly | HttpOnly | attribute ที่ป้องกันไม่ให้ JavaScript อ่าน cookie ได้ |
+
+## IndexedDB
+
+| English | Thai Style | หมายเหตุ |
+|---------|-----------|---------|
+| Database | database | หน่วยเก็บข้อมูลระดับบนสุดของ IndexedDB ต่อ origin |
+| Object store | object store | คอนเทนเนอร์ที่เก็บ record คล้ายกับ table ใน SQL แต่ไม่บังคับ schema |
+| Record | record | JavaScript object หนึ่งชิ้นที่เก็บใน object store |
+| Transaction | transaction | กลุ่ม operation ที่ทำงานเป็น atomic unit เดียว |
+| Index | index | โครงสร้างที่ทำให้ query บน field อื่นนอกจาก key ได้เร็วขึ้น |
+| Cursor | cursor | ตัวเดินผ่าน record ทีละรายการโดยไม่โหลดทั้งหมดเข้าหน่วยความจำ |
+| Key range | key range | ช่วงของ key ที่ใช้กรอง cursor หรือ query |
+| `idb` library | `idb` library | wrapper ที่ห่อ IndexedDB callback API ให้เป็น Promise-based |
+
+## Cache API & Quota
+
+| English | Thai Style | หมายเหตุ |
+|---------|-----------|---------|
+| Cache API | Cache API | API ที่เก็บคู่ `Request`/`Response` สำหรับ offline และ service worker |
+| Storage Manager | Storage Manager | API ที่ใช้ตรวจสอบและขอ persistent storage ผ่าน `navigator.storage` |
+| `persist()` | `persist()` | method ที่ขอให้ origin เข้าสู่โหมด persistent storage |
+| Opaque response | opaque response | response แบบ cross-origin ที่ browser ซ่อนรายละเอียดไว้ นับ quota เต็มขนาดจริง |
+
+## Cross-tab & Files
+
+| English | Thai Style | หมายเหตุ |
+|---------|-----------|---------|
+| BroadcastChannel | `BroadcastChannel` | API ส่งข้อความระหว่างแท็บ/หน้าต่างบน origin เดียวกัน |
+| Web Locks | Web Locks API | API ที่ใช้ล็อกทรัพยากรร่วมกันข้ามแท็บ |
+| OPFS | Origin Private File System (OPFS) | file system ส่วนตัวของ origin ที่เข้าถึงเร็วกว่า disk ทั่วไป |
+| File System Access API | File System Access API | API ที่ให้เว็บเข้าถึงไฟล์จริงบนเครื่องผู้ใช้ (พร้อม permission) |
+
+## Workers
+
+| English | Thai Style | หมายเหตุ |
+|---------|-----------|---------|
+| Web Worker | Web Worker | thread แยกต่างหากที่รันโค้ด JS โดยไม่บล็อก main thread |
+| SharedWorker | `SharedWorker` | worker ที่ใช้ร่วมกันได้ระหว่างหลายแท็บ/หน้าต่างของ origin เดียวกัน |
+| postMessage | `postMessage` | วิธีหลักในการส่งข้อมูลเข้า-ออก worker |
+| Transferable object | transferable object | object เช่น `ArrayBuffer` ที่ย้าย ownership แทนการ copy ตอนส่งผ่าน `postMessage` |
+| Structured clone | structured clone algorithm | อัลกอริทึมที่ browser ใช้ copy ข้อมูลเมื่อส่งผ่าน `postMessage` |
+
+## เมื่อ **ไม่** ควรใช้ literal Thai translation
+
+| หลีกเลี่ยง | ใช้แทน |
+|------------|--------|
+| ดำเนินการอ่าน/เขียนข้อมูล | อ่าน/เขียนข้อมูล หรือ operation |
+| คุกกี้, เบราว์เซอร์, ฐานข้อมูล | cookie, browser, database |
+| ออบเจกต์, สตริง, ระเบียน | object, string, record |
+| กระบวนการวนซ้ำ | iterate หรือ loop |
+| การจำลอง Object | model Object |
+
+<Callout title="ทำไมคำเหล่านี้ไม่แปลเป็นไทยทั้งหมด">
+Course นี้เก็บคำศัพท์ด้าน browser storage ไว้เป็นภาษาอังกฤษ เพราะเป็นคำที่ปรากฏตรง ๆ ใน DevTools, MDN, และโค้ดจริงที่ developer เห็นทุกวัน — `localStorage`, cookie, object store, transaction ไม่มีคำแปลไทยที่ใช้พูดคุยกันจริงในทีม engineering การแปลคำเหล่านี้ทั้งหมดจะยิ่งทำให้เข้าใจ error message และเอกสารต้นฉบับยากขึ้น ไม่ใช่ง่ายขึ้น
+</Callout>
+
+<ProgressTracker client:visible id="th/glossary" />

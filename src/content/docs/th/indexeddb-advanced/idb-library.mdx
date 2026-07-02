@@ -1,6 +1,6 @@
 ---
-title: 'ไลบรารี idb: IndexedDB แบบ Promise'
-description: 'ใช้ wrapper idb เพื่อเปิดฐานข้อมูล, put, get และ getAll ด้วยไวยากรณ์ async/await ที่อ่านง่าย — ไม่ต้องใช้ callback'
+title: 'Library idb: IndexedDB แบบ Promise'
+description: 'ใช้ wrapper idb เพื่อเปิด database, put, get และ getAll ด้วยไวยากรณ์ async/await ที่อ่านง่าย — ไม่ต้องใช้ callback'
 sidebar:
   order: 4
 ---
@@ -10,13 +10,13 @@ import Callout from '../../../../components/Callout.astro';
 import Quiz from '../../../../components/Quiz.tsx';
 import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
-## ทำไมต้องใช้ไลบรารี wrapper?
+## ทำไมต้องใช้ library wrapper?
 
-IndexedDB API ดิบนั้นขับเคลื่อนด้วย callback ทั้งหมด ทุกการดำเนินการ — ไม่ว่าจะเป็นการเปิดฐานข้อมูล การเขียนระเบียน หรือการอ่านข้อมูลกลับมา — ล้วนต้องการให้คุณรับฟังเหตุการณ์ `onsuccess` และ `onerror` และซ้อนการดำเนินการถัดไปไว้ภายใน callback ก่อนหน้า โค้ดจริงจึงกลายเป็นพีระมิดของ handler ที่ซ้อนกัน
+IndexedDB API ดิบนั้นขับเคลื่อนด้วย callback ทั้งหมด ทุก operation — ไม่ว่าจะเป็นการเปิด database การเขียน record หรือการอ่านข้อมูลกลับมา — ล้วนต้องการให้คุณรับฟังเหตุการณ์ `onsuccess` และ `onerror` และซ้อน operation ถัดไปไว้ภายใน callback ก่อนหน้า โค้ดจริงจึงกลายเป็นพีระมิดของ handler ที่ซ้อนกัน
 
-ไลบรารี [`idb`](https://github.com/jakearchibald/idb) โดย Jake Archibald เป็น wrapper ขนาดเล็ก (~1 KB เมื่อบีบอัด) ที่จำลอง IndexedDB API ทั้งหมด แต่คืนค่า **Promise** สำหรับทุกการดำเนินการ ซึ่งหมายความว่าคุณสามารถใช้ `async/await` ได้ตลอด เหมือนกับที่คุณใช้กับ `fetch` หรือ API สมัยใหม่อื่น ๆ
+library [`idb`](https://github.com/jakearchibald/idb) โดย Jake Archibald เป็น wrapper ขนาดเล็ก (~1 KB เมื่อบีบอัด) ที่จำลอง IndexedDB API ทั้งหมด แต่คืนค่า **Promise** สำหรับทุก operation ซึ่งหมายความว่าคุณสามารถใช้ `async/await` ได้ตลอด เหมือนกับที่คุณใช้กับ `fetch` หรือ API สมัยใหม่อื่น ๆ
 
-## การเปิดฐานข้อมูลด้วย `openDB`
+## การเปิด database ด้วย `openDB`
 
 ```js
 import { openDB } from 'https://esm.sh/idb@8';
@@ -32,13 +32,13 @@ const db = await openDB('my-database', 1, {
 
 | อาร์กิวเมนต์ | ประเภท | จุดประสงค์ |
 |---|---|---|
-| `name` | string | ชื่อฐานข้อมูล (กำหนดขอบเขตตาม origin) |
+| `name` | string | ชื่อ database (กำหนดขอบเขตตาม origin) |
 | `version` | number | เวอร์ชันของ schema — เพิ่มค่าเพื่อกระตุ้นการอัปเกรด |
 | `{ upgrade(db) }` | object | Callback ที่รันเมื่อ DB ถูกสร้างขึ้นหรือเวอร์ชันเพิ่มขึ้น |
 
 Callback `upgrade` เป็นสถานที่เดียวที่คุณสามารถสร้างหรือลบ object store ได้ มันจะถูกข้ามไปทั้งหมดในการเปิดครั้งถัดไปเมื่อเวอร์ชันไม่มีการเปลี่ยนแปลง
 
-## การเขียนระเบียนด้วย `db.put`
+## การเขียน record ด้วย `db.put`
 
 ```js
 await db.put('tasks', { id: 1, title: 'Buy groceries', done: false });
@@ -47,7 +47,7 @@ await db.put('tasks', { id: 2, title: 'Write tests', done: true });
 
 `db.put(storeName, value)` จะแทรกค่าหากยังไม่มี key นั้น หรือ **แทนที่** ค่าเดิมหากมีอยู่แล้ว key จะถูกอนุมานจาก `keyPath` ที่คุณกำหนดไว้เมื่อสร้าง store (ในตัวอย่างข้างต้นคือ `'id'`)
 
-## การอ่านระเบียนด้วย `db.get` และ `db.getAll`
+## การอ่าน record ด้วย `db.get` และ `db.getAll`
 
 ```js
 const task = await db.get('tasks', 1);
@@ -57,10 +57,10 @@ const allTasks = await db.getAll('tasks');
 // [ { id: 1, ... }, { id: 2, ... } ]
 ```
 
-- `db.get(storeName, key)` คืนค่าระเบียนเดียว (หรือ `undefined` เมื่อไม่พบ key)
-- `db.getAll(storeName)` คืนค่าอาร์เรย์ของระเบียนทั้งหมดใน store
+- `db.get(storeName, key)` คืนค่า record เดียว (หรือ `undefined` เมื่อไม่พบ key)
+- `db.getAll(storeName)` คืนค่าอาร์เรย์ของ record ทั้งหมดใน store
 
-## การลบระเบียนด้วย `db.delete`
+## การลบ record ด้วย `db.delete`
 
 ```js
 await db.delete('tasks', 1);
@@ -68,7 +68,7 @@ const remaining = await db.getAll('tasks');
 console.log(remaining.length); // 1
 ```
 
-`db.delete(storeName, key)` ลบระเบียนสำหรับ key นั้น การเรียกใช้กับ key ที่ไม่มีอยู่จะไม่มีผลใด ๆ
+`db.delete(storeName, key)` ลบ record สำหรับ key นั้น การเรียกใช้กับ key ที่ไม่มีอยู่จะไม่มีผลใด ๆ
 
 ## รันได้เลย: idb ในการใช้งานจริง
 
@@ -110,12 +110,12 @@ export const idbLibraryCode = `(async function() {
 <StorageRunner client:visible code={idbLibraryCode} />
 
 <Callout title="ประเด็นสำคัญ">
-`idb` ห่อหุ้มทุกการดำเนินการ IndexedDB ด้วย Promise ทำให้คุณสามารถใช้ `async/await` แทน event callback ที่ซ้อนกัน Callback `upgrade` ภายใน `openDB` เป็นสถานที่เดียวในการสร้างหรือแก้ไข object store — มันจะรันเฉพาะเมื่อหมายเลขเวอร์ชันเพิ่มขึ้น
+`idb` ห่อหุ้มทุก operation IndexedDB ด้วย Promise ทำให้คุณสามารถใช้ `async/await` แทน event callback ที่ซ้อนกัน Callback `upgrade` ภายใน `openDB` เป็นสถานที่เดียวในการสร้างหรือแก้ไข object store — มันจะรันเฉพาะเมื่อหมายเลขเวอร์ชันเพิ่มขึ้น
 </Callout>
 
 ## เปรียบเทียบ IndexedDB ดิบกับ idb
 
-การดำเนินการ "เปิดฐานข้อมูลและเขียนระเบียน" เดียวกันมีลักษณะดังนี้เมื่อใช้ IndexedDB ดิบ:
+operation "เปิด database และเขียน record" เดียวกันมีลักษณะดังนี้เมื่อใช้ IndexedDB ดิบ:
 
 ```js
 // Raw IndexedDB — callback style
@@ -147,6 +147,25 @@ console.log('Saved');
 ```
 
 ทั้งสองทำสิ่งเดียวกันทุกประการ เวอร์ชัน `idb` สั้นกว่า อ่านง่ายกว่า และข้อผิดพลาดจะแสดงเป็น rejected Promise ที่คุณสามารถดักจับด้วย `try/catch` มาตรฐาน
+
+## Trade-offs
+
+| ตัวเลือก | Benefit | Cost |
+|---------|---------|------|
+| IndexedDB ดิบ | ควบคุมได้เต็มที่ ไม่มี dependency เพิ่ม ทำงานตรงกับ spec ของ browser | โค้ดยุ่งยาก ซ้อน callback หลายชั้น debug ยาก |
+| `idb` library | Developer experience (DX) ดีกว่ามาก ใช้ `async/await` เขียนสั้น อ่านง่าย จับ error ด้วย `try/catch` ได้ตรงไปตรงมา | เพิ่ม dependency ขนาดเล็ก (~1 KB) ต้องโหลดผ่าน import และพึ่งพา library ภายนอก |
+
+## Common Mistakes
+
+- **สร้างหรือแก้ไข object store นอก callback `upgrade`** — จะไม่มีผลใดๆ เลย object store และ index เปลี่ยนแปลงได้เฉพาะภายใน `upgrade` เมื่อหมายเลขเวอร์ชันเพิ่มขึ้นเท่านั้น
+- **คิดว่า `idb` เปลี่ยนพฤติกรรมของ IndexedDB** — `idb` เป็นเพียง wrapper ที่ห่อ API เดิมด้วย Promise เท่านั้น ข้อจำกัดของ IndexedDB เช่น เรื่อง transaction lifetime หรือ upgrade transaction ยังคงเหมือนเดิมทุกประการ
+- **ลืมว่า `db.put()` แทนที่ record ทั้งก้อน** — หากต้องการอัปเดตแค่บาง field ต้อง `get()` มาก่อน แล้วค่อย merge ค่าใหม่ก่อน `put()` กลับไป ไม่เช่นนั้นข้อมูลเดิมจะหายไป
+
+> 💡 Real World Example
+>
+> **Spotify Web Player** — ใช้ pattern แบบ Promise-based คล้าย `idb` ในการ cache ข้อมูลเพลงและ metadata ฝั่ง client เพื่อรองรับการเล่นแบบ offline-ish เมื่อ network ไม่เสถียร
+>
+> **Excalidraw** — เลือกใช้ `idb` โดยตรงเพื่อลดความซับซ้อนของโค้ดที่ persist state ของ canvas ทำให้ทีมโฟกัสกับ logic ของแอปแทนที่จะจัดการ callback ของ IndexedDB เอง
 
 export const quizIdbLibrary = [
   {

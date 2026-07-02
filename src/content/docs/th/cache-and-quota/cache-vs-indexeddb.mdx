@@ -12,13 +12,13 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
 ## เลือก storage mechanism ที่เหมาะสม
 
-เบราว์เซอร์มี storage API หลักสามตัวสำหรับข้อมูลถาวร แต่ละตัวมีวัตถุประสงค์ต่างกันและเสริมกัน — สิ่งสำคัญคือต้องเลือกให้ถูกกรณี
+browser มี storage API หลักสามตัวสำหรับข้อมูลถาวร แต่ละตัวมีวัตถุประสงค์ต่างกันและเสริมกัน — สิ่งสำคัญคือต้องเลือกให้ถูกกรณี
 
 | Storage | เหมาะสำหรับ | ประเภทข้อมูล | Async? | ขนาดโดยประมาณ |
 |---|---|---|---|---|
 | **Cache API** | HTTP response, static asset | Request/Response | ใช่ | ขนาดใหญ่ (GB ได้) |
 | **IndexedDB** | ข้อมูลแอปที่มีโครงสร้าง, ข้อมูลออฟไลน์ | JS object, blob | ใช่ | ขนาดใหญ่ (GB ได้) |
-| **localStorage** | สตริง config ขนาดเล็ก, preferences | สตริงเท่านั้น | ไม่ (synchronous) | ~5 MB |
+| **localStorage** | string config ขนาดเล็ก, preferences | string เท่านั้น | ไม่ (synchronous) | ~5 MB |
 
 ## Cache API
 
@@ -40,13 +40,13 @@ IndexedDB จัดเก็บ JavaScript value ใด ๆ (object, array, blob
 
 ## localStorage
 
-`localStorage` จัดเก็บคู่ key/value ที่เป็นสตริงแบบ synchronous โดยบล็อก main thread ทุกครั้งที่อ่านหรือเขียน เหมาะสำหรับ:
+`localStorage` จัดเก็บคู่ key/value ที่เป็น string แบบ synchronous โดยบล็อก main thread ทุกครั้งที่อ่านหรือเขียน เหมาะสำหรับ:
 
 - Preference ขนาดเล็ก: เลือก theme, ภาษา, token เดียว
 - ค่าที่อ่านทุกครั้งที่โหลดหน้า โดยยอมรับการเข้าถึงแบบ synchronous
 - ข้อมูลที่มีขนาดไม่กี่ kilobyte
 
-ห้ามจัดเก็บออบเจกต์ขนาดใหญ่หรือเขียนบ่อยใน `localStorage` เนื่องจากจะทำให้ rendering หยุดชะงัก
+ห้ามจัดเก็บ object ขนาดใหญ่หรือเขียนบ่อยใน `localStorage` เนื่องจากจะทำให้ rendering หยุดชะงัก
 
 ## แผนภาพการตัดสินใจ
 
@@ -60,11 +60,31 @@ export const decisionDiagram = `flowchart TD
   C -->|Yes| LS[localStorage\nsetItem / getItem]
   C -->|No| IDB`;
 
-<Mermaid code={decisionDiagram} title="การตัดสินใจเลือก storage: HTTP response → Cache API, ข้อมูลที่มีโครงสร้าง → IndexedDB, สตริงขนาดเล็ก → localStorage" />
+<Mermaid code={decisionDiagram} title="การตัดสินใจเลือก storage: HTTP response → Cache API, ข้อมูลที่มีโครงสร้าง → IndexedDB, string ขนาดเล็ก → localStorage" />
 
 <Callout title="จุดสำคัญ">
 ใช้ Cache API สำหรับทุกสิ่งที่มีรูปแบบเหมือน HTTP response (URL + headers + body) ใช้ IndexedDB สำหรับ record ของแอปพลิเคชันและ blob ที่ต้องการ query หรืออัปเดต ใช้ localStorage เฉพาะสำหรับ string preference ขนาดเล็กที่ต้องอ่านแบบ synchronous เมื่อเริ่มต้น สำหรับกลยุทธ์ offline ใน PWA มักใช้ Cache API และ IndexedDB ร่วมกัน — asset ใน Cache API และข้อมูลแอปใน IndexedDB
 </Callout>
+
+## Trade-offs
+
+| ตัวเลือก | Benefit | Cost |
+|---------|---------|------|
+| Cache API สำหรับ HTTP response | จับคู่กับโมเดล `Request`/`Response` โดยตรง เหมาะกับ asset และ API response แบบ pre-cache | ไม่เหมาะกับข้อมูลที่มีโครงสร้าง (structured data) — ถ้าต้อง query หรือ index ควรใช้ IndexedDB แทน |
+| IndexedDB สำหรับข้อมูลแอป | query, index และ transaction รองรับข้อมูลซับซ้อนได้ | API ใช้งานยากกว่า ต้องจัดการ schema version และ object store เอง |
+| localStorage สำหรับ preference เล็ก ๆ | เขียนอ่านง่าย ใช้ syntax synchronous | บล็อก main thread ทุกครั้งที่เข้าถึง ไม่เหมาะกับข้อมูลขนาดใหญ่หรือเขียนถี่ |
+
+## Common Mistakes
+
+- **ใช้ Cache API เก็บข้อมูล JS object ทั่วไปโดยแปลงเป็น JSON string ใส่ใน Response เอง** — เพิ่มความซับซ้อนโดยไม่จำเป็น ถ้าข้อมูลไม่ใช่ HTTP request/response ควรใช้ IndexedDB ตั้งแต่แรก
+- **ใช้ localStorage เก็บข้อมูลขนาดใหญ่หรือ cache ทั้งชุด** — synchronous I/O ของ localStorage บล็อก main thread ทำให้ UI ค้าง ควรย้ายไป IndexedDB หรือ Cache API
+- **คิดว่า Cache API และ IndexedDB แข่งกัน ต้องเลือกอย่างใดอย่างหนึ่ง** — ในแอป PWA ส่วนใหญ่ใช้ร่วมกัน: Cache API เก็บ asset, IndexedDB เก็บข้อมูลแอป
+
+> 💡 Real World Example
+>
+> **Twitter Lite** — ใช้ Cache API เก็บ app shell (HTML/CSS/JS) ให้โหลดเร็ว และใช้ IndexedDB เก็บ timeline กับข้อมูลผู้ใช้ที่ต้อง query
+>
+> **Wikipedia** — โหมดอ่านออฟไลน์ใช้ Cache API เก็บหน้าบทความที่ผู้ใช้บันทึกไว้ ร่วมกับ Service Worker เพื่อ serve เนื้อหาโดยไม่ต้องพึ่ง network
 
 export const quizCacheVsIndexeddb = [
   {

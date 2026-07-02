@@ -9,21 +9,21 @@ import Callout from '../../../../components/Callout.astro';
 import Quiz from '../../../../components/Quiz.tsx';
 import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
-## ภาพรวมของ attribute คุกกี้
+## ภาพรวมของ attribute cookie
 
-Attribute ของคุกกี้ถูกเพิ่มหลังคู่ `name=value` คั่นด้วยเซมิโคลอน ช่วยควบคุมอายุ ขอบเขต ความปลอดภัยในการส่ง และพฤติกรรมข้ามเว็บไซต์
+Attribute ของ cookie ถูกเพิ่มหลังคู่ `name=value` คั่นด้วยเซมิโคลอน ช่วยควบคุมอายุ ขอบเขต ความปลอดภัยในการส่ง และพฤติกรรมข้ามเว็บไซต์
 
 ```http
 Set-Cookie: session=abc123; Max-Age=3600; Path=/; Secure; HttpOnly; SameSite=Strict
 ```
 
-มีเพียงคู่ `name=value` เท่านั้นที่จำเป็น ทุก attribute เป็นตัวเลือก แต่การละเว้น attribute ที่เกี่ยวข้องกับความปลอดภัย เช่น `SameSite` และ `Secure` จะทำให้คุกกี้เสี่ยงต่อการโจมตี
+มีเพียงคู่ `name=value` เท่านั้นที่จำเป็น ทุก attribute เป็นตัวเลือก แต่การละเว้น attribute ที่เกี่ยวข้องกับความปลอดภัย เช่น `SameSite` และ `Secure` จะทำให้ cookie เสี่ยงต่อการโจมตี
 
 ## Expires และ Max-Age — การควบคุมอายุ
 
-สอง attribute นี้ควบคุมว่าคุกกี้จะเป็น **session cookie** หรือ **persistent cookie**
+สอง attribute นี้ควบคุมว่า cookie จะเป็น **session cookie** หรือ **persistent cookie**
 
-**ไม่มี Expires/Max-Age** → session cookie เบราว์เซอร์ลบมันเมื่อ session แท็บ/หน้าต่างสิ้นสุด (พฤติกรรมการปิดเบราว์เซอร์แตกต่างกันตามเบราว์เซอร์และการตั้งค่า "restore session")
+**ไม่มี Expires/Max-Age** → session cookie browser ลบมันเมื่อ session แท็บ/หน้าต่างสิ้นสุด (พฤติกรรมการปิด browser แตกต่างกันตาม browser และการตั้งค่า "restore session")
 
 ```http
 Set-Cookie: pref=dark
@@ -41,59 +41,59 @@ Set-Cookie: pref=dark; Expires=Thu, 01 Jan 2027 00:00:00 GMT
 Set-Cookie: pref=dark; Max-Age=86400
 ```
 
-การตั้ง `Max-Age=0` (หรือค่าลบ) จะลบคุกกี้ทันที
+การตั้ง `Max-Age=0` (หรือค่าลบ) จะลบ cookie ทันที
 
 ## Path — ขอบเขต URL
 
-`Path` จำกัดว่า request URL ใดที่เบราว์เซอร์จะแนบคุกกี้ไปด้วย:
+`Path` จำกัดว่า request URL ใดที่ browser จะแนบ cookie ไปด้วย:
 
 ```http
 Set-Cookie: admin_token=xyz; Path=/admin
 ```
 
-เบราว์เซอร์จะส่งคุกกี้นี้เฉพาะ request ที่ path ขึ้นต้นด้วย `/admin` เท่านั้น Request ไปยัง `/` หรือ `/app` จะไม่รวมมัน
+browser จะส่ง cookie นี้เฉพาะ request ที่ path ขึ้นต้นด้วย `/admin` เท่านั้น Request ไปยัง `/` หรือ `/app` จะไม่รวมมัน
 
-ค่าเริ่มต้น: ถ้าไม่ระบุ เบราว์เซอร์จะใช้ path ของ URL ที่ตั้งคุกกี้ (มักเป็น `/`)
+ค่าเริ่มต้น: ถ้าไม่ระบุ browser จะใช้ path ของ URL ที่ตั้ง cookie (มักเป็น `/`)
 
 ## Domain — ขอบเขต host
 
-`Domain` ควบคุมว่า hostname ใดจะได้รับคุกกี้:
+`Domain` ควบคุมว่า hostname ใดจะได้รับ cookie:
 
 ```http
 Set-Cookie: pref=dark; Domain=.example.com
 ```
 
-จุดนำหน้า (`.example.com`) หมายความว่าคุกกี้จะถูกส่งไปยัง `example.com` และ subdomain ทั้งหมด (`api.example.com`, `www.example.com` ฯลฯ)
+จุดนำหน้า (`.example.com`) หมายความว่า cookie จะถูกส่งไปยัง `example.com` และ subdomain ทั้งหมด (`api.example.com`, `www.example.com` ฯลฯ)
 
-ถ้าไม่ระบุ `Domain` คุกกี้จะถูกส่งเฉพาะ host ที่ตั้งค่ามันเท่านั้น (ไม่มี subdomain)
+ถ้าไม่ระบุ `Domain` cookie จะถูกส่งเฉพาะ host ที่ตั้งค่ามันเท่านั้น (ไม่มี subdomain)
 
 ## Secure — เฉพาะ HTTPS
 
-`Secure` สั่งให้เบราว์เซอร์ส่งคุกกี้เฉพาะผ่านการเชื่อมต่อ HTTPS:
+`Secure` สั่งให้ browser ส่ง cookie เฉพาะผ่านการเชื่อมต่อ HTTPS:
 
 ```http
 Set-Cookie: session=abc; Secure
 ```
 
-หากไม่มี `Secure` คุกกี้จะถูกส่งผ่าน HTTP ธรรมดา ซึ่งอาจถูก intercept โดยผู้โจมตีบนเครือข่าย (man-in-the-middle) คุกกี้ที่มีข้อมูลสำคัญทั้งหมดต้องมี `Secure`
+หากไม่มี `Secure` cookie จะถูกส่งผ่าน HTTP ธรรมดา ซึ่งอาจถูก intercept โดยผู้โจมตีบนเครือข่าย (man-in-the-middle) cookie ที่มีข้อมูลสำคัญทั้งหมดต้องมี `Secure`
 
 ## HttpOnly — มองไม่เห็นจาก JavaScript
 
-`HttpOnly` คือหนึ่งใน attribute ด้านความปลอดภัยที่สำคัญที่สุด มันป้องกันไม่ให้ JavaScript อ่านคุกกี้ผ่าน `document.cookie`:
+`HttpOnly` คือหนึ่งใน attribute ด้านความปลอดภัยที่สำคัญที่สุด มันป้องกันไม่ให้ JavaScript อ่าน cookie ผ่าน `document.cookie`:
 
 ```http
 Set-Cookie: session=abc123; HttpOnly; Secure; SameSite=Strict
 ```
 
-ด้วย `HttpOnly` แม้ว่าผู้โจมตีจะฉีด JavaScript อันตรายเข้ามาในหน้าเว็บ (XSS) script นั้นก็ไม่สามารถขโมย session cookie ได้ คุกกี้ยังคงถูกส่งโดยอัตโนมัติพร้อม HTTP request — แค่ JavaScript ไม่สามารถอ่านหรือแก้ไขได้
+ด้วย `HttpOnly` แม้ว่าผู้โจมตีจะฉีด JavaScript อันตรายเข้ามาในหน้าเว็บ (XSS) script นั้นก็ไม่สามารถขโมย session cookie ได้ cookie ยังคงถูกส่งโดยอัตโนมัติพร้อม HTTP request — แค่ JavaScript ไม่สามารถอ่านหรือแก้ไขได้
 
-**คุกกี้ HttpOnly สามารถตั้งค่าได้โดย server เท่านั้นผ่าน `Set-Cookie` header** `document.cookie` ฝั่ง client ไม่สามารถตั้ง `HttpOnly` cookies ได้
+**cookie HttpOnly สามารถตั้งค่าได้โดย server เท่านั้นผ่าน `Set-Cookie` header** `document.cookie` ฝั่ง client ไม่สามารถตั้ง `HttpOnly` cookies ได้
 
 ## SameSite — การควบคุม cross-site request
 
-`SameSite` ควบคุมเมื่อใดที่คุกกี้จะถูกส่งใน cross-site request ช่วยป้องกัน CSRF (Cross-Site Request Forgery)
+`SameSite` ควบคุมเมื่อใดที่ cookie จะถูกส่งใน cross-site request ช่วยป้องกัน CSRF (Cross-Site Request Forgery)
 
-**`SameSite=Strict`** — คุกกี้ถูกส่งเฉพาะ same-site request (การนำทางและ request ที่เกิดจากเว็บไซต์เอง) ไม่เคยส่งบน cross-site request:
+**`SameSite=Strict`** — cookie ถูกส่งเฉพาะ same-site request (การนำทางและ request ที่เกิดจากเว็บไซต์เอง) ไม่เคยส่งบน cross-site request:
 
 ```http
 Set-Cookie: session=abc; SameSite=Strict
@@ -101,15 +101,15 @@ Set-Cookie: session=abc; SameSite=Strict
 
 ดีที่สุดสำหรับ session cookie — ป้องกัน CSRF สูงสุด
 
-**`SameSite=Lax`** (ค่าเริ่มต้นในเบราว์เซอร์สมัยใหม่) — คุกกี้ถูกส่งบน same-site request และการนำทางระดับบนสุดจากเว็บไซต์อื่น (เช่น คลิกลิงก์ไปยังเว็บไซต์ของคุณจากอีเมล) แต่ไม่ส่งบน cross-site subresource request (รูปภาพ, iframe, fetch):
+**`SameSite=Lax`** (ค่าเริ่มต้นใน browser สมัยใหม่) — cookie ถูกส่งบน same-site request และการนำทางระดับบนสุดจากเว็บไซต์อื่น (เช่น คลิกลิงก์ไปยังเว็บไซต์ของคุณจากอีเมล) แต่ไม่ส่งบน cross-site subresource request (รูปภาพ, iframe, fetch):
 
 ```http
 Set-Cookie: pref=dark; SameSite=Lax
 ```
 
-ความสมดุลที่ดีสำหรับคุกกี้ส่วนใหญ่
+ความสมดุลที่ดีสำหรับ cookie ส่วนใหญ่
 
-**`SameSite=None; Secure`** — คุกกี้ถูกส่งบน request ทั้งหมดรวมถึง cross-site ต้องใช้คู่กับ `Secure` ไม่เช่นนั้นเบราว์เซอร์จะปฏิเสธ จำเป็นสำหรับกรณีการใช้งาน cross-site ที่ถูกกฎหมาย (เช่น widget ฝังตัว, third-party authentication):
+**`SameSite=None; Secure`** — cookie ถูกส่งบน request ทั้งหมดรวมถึง cross-site ต้องใช้คู่กับ `Secure` ไม่เช่นนั้น browser จะปฏิเสธ จำเป็นสำหรับกรณีการใช้งาน cross-site ที่ถูกกฎหมาย (เช่น widget ฝังตัว, third-party authentication):
 
 ```http
 Set-Cookie: analytics_id=abc; SameSite=None; Secure
@@ -117,20 +117,40 @@ Set-Cookie: analytics_id=abc; SameSite=None; Secure
 
 ## คำแนะนำสำหรับ session cookie
 
-สำหรับคุกกี้ที่ใช้ยืนยันตัวตนผู้ใช้หรืออนุญาตการกระทำ ให้ใช้ security attribute ทั้งสาม:
+สำหรับ cookie ที่ใช้ยืนยันตัวตนผู้ใช้หรืออนุญาตการกระทำ ให้ใช้ security attribute ทั้งสาม:
 
 ```http
 Set-Cookie: session=abc123; Max-Age=3600; Path=/; Secure; HttpOnly; SameSite=Strict
 ```
 
 การรวมนี้:
-- ส่งคุกกี้เฉพาะผ่าน HTTPS (`Secure`)
+- ส่ง cookie เฉพาะผ่าน HTTPS (`Secure`)
 - บล็อกการเข้าถึง JavaScript ป้องกันการขโมยผ่าน XSS (`HttpOnly`)
-- ป้องกันคุกกี้ถูกส่งบน cross-site request บล็อก CSRF (`SameSite=Strict`)
+- ป้องกัน cookie ถูกส่งบน cross-site request บล็อก CSRF (`SameSite=Strict`)
 
-<Callout title="คุกกี้ HttpOnly มองไม่เห็นจาก JavaScript — นี่คือฟีเจอร์ ไม่ใช่บัก">
-`HttpOnly` หมายความว่า `document.cookie` จะไม่เคยคืนคุกกี้นั้น และ script ไม่สามารถอ่านหรือแก้ไขได้ นี่เป็นสิ่งที่ตั้งใจ: ช่วยปกป้อง session token จากการถูกขโมยโดย script ที่ถูกฉีดเข้ามา ถ้าคุณมองไม่เห็นคุกกี้ใน `document.cookie` ที่คุณรู้ว่า server ตั้งค่า นั่นเกือบจะแน่นอนว่ามัน `HttpOnly` — ตรงตามที่ออกแบบไว้
+<Callout title="cookie HttpOnly มองไม่เห็นจาก JavaScript — นี่คือฟีเจอร์ ไม่ใช่บัก">
+`HttpOnly` หมายความว่า `document.cookie` จะไม่เคยคืน cookie นั้น และ script ไม่สามารถอ่านหรือแก้ไขได้ นี่เป็นสิ่งที่ตั้งใจ: ช่วยปกป้อง session token จากการถูกขโมยโดย script ที่ถูกฉีดเข้ามา ถ้าคุณมองไม่เห็น cookie ใน `document.cookie` ที่คุณรู้ว่า server ตั้งค่า นั่นเกือบจะแน่นอนว่ามัน `HttpOnly` — ตรงตามที่ออกแบบไว้
 </Callout>
+
+## Trade-offs
+
+| ตัวเลือก | Benefit | Cost |
+|---------|---------|------|
+| `HttpOnly` | ป้องกัน session token ถูกขโมยผ่าน XSS เพราะ JavaScript อ่าน cookie นั้นไม่ได้เลย | JavaScript ฝั่ง client อ่านหรืออัปเดตค่า cookie นั้นเองไม่ได้ ต้องพึ่ง server เท่านั้น |
+| `SameSite=Strict` | ป้องกัน CSRF ได้สูงสุดเพราะไม่ส่ง cookie บน cross-site request เลย | ทำลาย flow ที่ต้องพึ่ง cookie ตอนนำทางข้ามเว็บไซต์ เช่นคลิกลิงก์จากอีเมลแล้วต้องยัง login อยู่ |
+| `SameSite=None; Secure` | รองรับ use case cross-site ที่ถูกกฎหมาย เช่น widget ฝังตัวหรือ third-party auth | เปิดช่องให้ cookie ถูกส่งบน cross-site request ทุกกรณี เพิ่มพื้นที่เสี่ยงต่อ CSRF ถ้าไม่มีการป้องกันอื่นเสริม |
+
+## Common Mistakes
+
+- **ไม่ระบุ `SameSite`/`Secure` เลย** — cookie จะเสี่ยงถูกส่งผ่าน HTTP ธรรมดา (ไม่มี `Secure`) และเสี่ยงต่อ CSRF มากขึ้นถ้า browser หรือ config เก่าไม่บังคับค่า default ที่ปลอดภัย
+- **ตั้ง `SameSite=None` โดยไม่มี `Secure` คู่กัน** — browser สมัยใหม่จะปฏิเสธ cookie นั้นทั้งชิ้นทันที ไม่ใช่แค่เตือน
+- **เก็บ auth token ไว้ใน cookie ที่ไม่ใช่ `HttpOnly`** — ทำลายจุดประสงค์หลักของการใช้ cookie เพื่อความปลอดภัย เพราะ script ที่ถูกฉีดเข้ามาผ่าน XSS จะอ่าน token นั้นออกไปได้ทันที
+
+> 💡 Real World Example
+>
+> **Session-based authentication** — บริการ login เกือบทั้งหมดตั้งค่า session cookie ด้วย `HttpOnly; Secure; SameSite=Strict` เพื่อให้ server ยืนยันตัวตนได้โดยที่ JavaScript แตะต้อง token ไม่ได้เลย
+>
+> **Third-party ad/analytics cookie** — ผู้ให้บริการโฆษณาที่ต้อง track ผู้ใช้ข้ามเว็บไซต์ผ่าน iframe ต้องใช้ `SameSite=None; Secure` เพราะเป็น cross-site request โดยธรรมชาติ
 
 export const quizAttributesSameSite = [
   {

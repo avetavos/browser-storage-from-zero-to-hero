@@ -1,6 +1,6 @@
 ---
-title: ทรานแซกชัน
-description: เรียนรู้ว่า IndexedDB transactions รวมการดำเนินการหลายขั้นตอนเป็นหน่วยอะตอมิกที่ทั้งหมดสำเร็จหรือล้มเหลวพร้อมกัน และการทำงานของ auto-commit
+title: Transaction
+description: เรียนรู้ว่า IndexedDB transactions รวม operation หลายขั้นตอนเป็น atomic unit ที่ทั้งหมดสำเร็จหรือล้มเหลวพร้อมกัน และการทำงานของ auto-commit
 sidebar:
   order: 4
 ---
@@ -10,15 +10,15 @@ import Callout from '../../../../components/Callout.astro';
 import Quiz from '../../../../components/Quiz.tsx';
 import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
-## ทรานแซกชันคืออะไร?
+## transaction คืออะไร?
 
-**ทรานแซกชัน** คือกลุ่มของการดำเนินการฐานข้อมูลที่ทำงานเป็นหน่วยอะตอมิกเดียว ซึ่งเป็นไปตามหลักการ ACID: การดำเนินการ **ทั้งหมด** ต้องสำเร็จ หรือไม่มีการดำเนินการใดเลยที่จะถูกนำไปใช้ หากการดำเนินการใดล้มเหลว ทรานแซกชันทั้งหมดจะถูก rollback กลับสู่สถานะก่อนที่จะเริ่มต้น
+**transaction** คือกลุ่มของ operation database ที่ทำงานเป็น atomic unit เดียว ซึ่งเป็นไปตามหลักการ ACID: operation **ทั้งหมด** ต้องสำเร็จ หรือไม่มี operation ใดเลยที่จะถูกนำไปใช้ หาก operation ใดล้มเหลว transaction ทั้งหมดจะถูก rollback กลับสู่สถานะก่อนที่จะเริ่มต้น
 
-ใน IndexedDB การอ่านและการเขียนทุกครั้งต้องเกิดขึ้นภายในทรานแซกชัน ไม่มีวิธีเข้าถึง object store โดยตรง — คุณต้องผ่านทรานแซกชันก่อนเสมอ
+ใน IndexedDB การอ่านและการเขียนทุกครั้งต้องเกิดขึ้นภายใน transaction ไม่มีวิธีเข้าถึง object store โดยตรง — คุณต้องผ่าน transaction ก่อนเสมอ
 
-## การเปิดทรานแซกชัน
+## การเปิด transaction
 
-ใช้ `db.transaction()` เพื่อเปิดทรานแซกชันใหม่ โดยรับสองอาร์กิวเมนต์: อาร์เรย์ของชื่อ store ที่ต้องการเข้าถึง และสตริง mode
+ใช้ `db.transaction()` เพื่อเปิด transaction ใหม่ โดยรับสองอาร์กิวเมนต์: อาร์เรย์ของชื่อ store ที่ต้องการเข้าถึง และ string mode
 
 ```js
 // ทรานแซกชันแบบอ่านอย่างเดียว — สำหรับการอ่านเท่านั้น
@@ -28,25 +28,25 @@ const tx = db.transaction(['storeName'], 'readonly');
 const tx = db.transaction(['storeName'], 'readwrite');
 ```
 
-เมื่อได้ทรานแซกชันแล้ว ให้เรียก `tx.objectStore('storeName')` เพื่อรับ reference ของ `IDBObjectStore` ที่จำเป็นสำหรับการออก request:
+เมื่อได้ transaction แล้ว ให้เรียก `tx.objectStore('storeName')` เพื่อรับ reference ของ `IDBObjectStore` ที่จำเป็นสำหรับการออก request:
 
 ```js
 const store = tx.objectStore('storeName');
 const request = store.get(42);
 ```
 
-## โหมดของทรานแซกชัน
+## โหมดของ transaction
 
 IndexedDB รองรับสองโหมด:
 
-- **`readonly`** — ทรานแซกชัน readonly หลายตัวบน store เดียวกันสามารถทำงานพร้อมกันได้ ใช้โหมดนี้เมื่อต้องการอ่านข้อมูลเท่านั้น
-- **`readwrite`** — ล็อกแบบ exclusive บน store แต่ละตัวที่ระบุไว้ ทรานแซกชัน readwrite ได้เพียงตัวเดียวเท่านั้นที่สามารถเข้าถึง store ที่กำหนดได้ในเวลาหนึ่ง ทรานแซกชันอื่นต้องรอจนกว่าจะเสร็จสิ้น
+- **`readonly`** — transaction readonly หลายตัวบน store เดียวกันสามารถทำงานพร้อมกันได้ ใช้โหมดนี้เมื่อต้องการอ่านข้อมูลเท่านั้น
+- **`readwrite`** — ล็อกแบบ exclusive บน store แต่ละตัวที่ระบุไว้ transaction readwrite ได้เพียงตัวเดียวเท่านั้นที่สามารถเข้าถึง store ที่กำหนดได้ในเวลาหนึ่ง transaction อื่นต้องรอจนกว่าจะเสร็จสิ้น
 
 ควรเลือก `readonly` เมื่อไม่จำเป็นต้องเขียนข้อมูลเสมอ — ช่วยให้เกิด parallelism ได้ดีขึ้นและหลีกเลี่ยงการล็อกที่ไม่จำเป็น
 
-## การรับฟัง Event ของทรานแซกชัน
+## การรับฟัง Event ของ transaction
 
-ทรานแซกชันจะ fire สาม event ที่ควรจัดการ:
+transaction จะ fire สาม event ที่ควรจัดการ:
 
 ```js
 tx.oncomplete = () => {
@@ -65,13 +65,13 @@ tx.onabort = () => {
 };
 ```
 
-`oncomplete` จะ fire หลังจาก request ทุกตัวภายในทรานแซกชันเสร็จสมบูรณ์และการเปลี่ยนแปลงถูกบันทึกลงดิสก์แล้วเท่านั้น นี่คือจุดที่เหมาะสมในการยืนยันกับผู้ใช้ว่าข้อมูลถูกบันทึกแล้ว
+`oncomplete` จะ fire หลังจาก request ทุกตัวภายใน transaction เสร็จสมบูรณ์และการเปลี่ยนแปลงถูกบันทึกลงดิสก์แล้วเท่านั้น นี่คือจุดที่เหมาะสมในการยืนยันกับผู้ใช้ว่าข้อมูลถูกบันทึกแล้ว
 
 ## พฤติกรรม Auto-Commit
 
-ทรานแซกชันของ IndexedDB ใช้ **auto-commit**: เมื่อ request ที่รอดำเนินการตัวสุดท้ายในทรานแซกชันเสร็จสิ้นและ JavaScript call stack กลับสู่ event loop โดยไม่มี request ใหม่เข้าคิว ทรานแซกชันจะ commit โดยอัตโนมัติ
+transaction ของ IndexedDB ใช้ **auto-commit**: เมื่อ pending request ตัวสุดท้ายใน transaction เสร็จสิ้นและ JavaScript call stack กลับสู่ event loop โดยไม่มี request ใหม่เข้าคิว transaction จะ commit โดยอัตโนมัติ
 
-ซึ่งหมายความว่าคุณต้องออก request ทั้งหมดใน **chain แบบ synchronous** — success handler ของ request หนึ่งจะ trigger request ถัดไป หากคุณ yield ไปยัง event loop ระหว่าง request (เช่น การ await `fetch()` หรือห่อ logic ใน `setTimeout`) ทรานแซกชันจะ commit ไปแล้วเมื่อ code ของคุณ resume และ request ใหม่ที่ออกต่อทรานแซกชันนั้นจะเกิด error
+ซึ่งหมายความว่าคุณต้องออก request ทั้งหมดใน **chain แบบ synchronous** — success handler ของ request หนึ่งจะ trigger request ถัดไป หากคุณ yield ไปยัง event loop ระหว่าง request (เช่น การ await `fetch()` หรือห่อ logic ใน `setTimeout`) transaction จะ commit ไปแล้วเมื่อ code ของคุณ resume และ request ใหม่ที่ออกต่อ transaction นั้นจะเกิด error
 
 ```js
 // ผิด — ห้ามทำแบบนี้
@@ -95,7 +95,7 @@ getReq.onsuccess = (e) => {
 
 ## ตัวอย่างที่รันได้
 
-โค้ดด้านล่างเปิดฐานข้อมูล สร้าง object store `items` เปิด readwrite transaction เพิ่ม record และรอ `oncomplete` ก่อนปิด
+โค้ดด้านล่างเปิด database สร้าง object store `items` เปิด readwrite transaction เพิ่ม record และรอ `oncomplete` ก่อนปิด
 
 export const transactionsCode = `
 const db = await new Promise((resolve, reject) => {
@@ -126,8 +126,28 @@ console.log('Cleanup done');
 <StorageRunner client:visible code={transactionsCode} />
 
 <Callout title="อย่า yield ภายใน transaction ที่ยังใช้งานอยู่">
-อย่าใช้ `await fetch()`, `await setTimeout()` หรือ call อื่นใดที่คืนการควบคุมไปยัง event loop ในขณะที่ transaction ยังเปิดอยู่ IndexedDB จะ auto-commit transaction ทันทีที่ call stack ว่างเปล่าโดยไม่มี request ที่รอดำเนินการ request ที่ตามมาทั้งหมดบน transaction นั้นจะล้มเหลวด้วย `TransactionInactiveError` ให้เก็บ read และ write ทั้งหมดไว้ใน synchronous call chain เดียว
+อย่าใช้ `await fetch()`, `await setTimeout()` หรือ call อื่นใดที่คืนการควบคุมไปยัง event loop ในขณะที่ transaction ยังเปิดอยู่ IndexedDB จะ auto-commit transaction ทันทีที่ call stack ว่างเปล่าโดยไม่มี pending request request ที่ตามมาทั้งหมดบน transaction นั้นจะล้มเหลวด้วย `TransactionInactiveError` ให้เก็บ read และ write ทั้งหมดไว้ใน synchronous call chain เดียว
 </Callout>
+
+## Trade-offs
+
+| ตัวเลือก | Benefit | Cost |
+|---------|---------|------|
+| ACID guarantee ของ transaction | operation ทั้งหมดสำเร็จหรือ rollback พร้อมกัน ข้อมูลไม่มีวันอยู่ในสถานะครึ่ง ๆ กลาง ๆ | ต้องเขียนทุก request แบบ synchronous chain เคร่งครัด ห้าม yield ไปยัง event loop กลางทาง |
+| `readonly` mode | รันพร้อมกันหลาย transaction บน store เดียวกันได้ เพิ่ม parallelism | ใช้เขียนข้อมูลไม่ได้เลย ต้องเปิด transaction ใหม่เป็น `readwrite` ถ้าต้องการเขียน |
+| `readwrite` mode | เขียนข้อมูลได้ พร้อม lock แบบ exclusive ป้องกัน race condition บน store เดียวกัน | transaction อื่นที่ต้องการ store เดียวกันต้องรอคิว ลด throughput ถ้าเปิดค้างไว้นาน |
+
+## Common Mistakes
+
+- **`await fetch()` หรือ `setTimeout` แทรกกลาง transaction** — เมื่อ call stack ว่างโดยไม่มี pending request transaction จะ auto-commit ทันที request ที่ตามมาจะ throw `TransactionInactiveError` แบบไม่ทันตั้งตัว
+- **ลืมระบุ object store บางตัวตอนเปิด `db.transaction()`** — เรียก `tx.objectStore('name')` กับ store ที่ไม่ได้อยู่ใน array แรกจะ throw `NotFoundError` แม้ store นั้นจะมีอยู่จริงใน database ก็ตาม
+- **ผูก UI update ไว้กับ `onsuccess` ของ request แทน `oncomplete` ของ transaction** — `onsuccess` แจ้งแค่ request เดียวสำเร็จ แต่ transaction อาจยังไม่ commit จริง หากมี request อื่นล้มเหลวภายหลัง ข้อมูลที่ UI แสดงจะไม่ตรงกับที่ถูก rollback ไป
+
+> 💡 Real World Example
+>
+> **Notion** — เปิด `readwrite` transaction ครอบคลุมหลาย object store พร้อมกัน (เช่น blocks กับ page metadata) เพื่อให้การอัปเดต block กับการอัปเดต timestamp ของหน้าเกิดขึ้นเป็น atomic unit เดียว
+>
+> **WhatsApp Web** — ใช้ `readonly` transaction แยกจาก `readwrite` transaction เพื่อให้การโหลดประวัติแชท (อ่านอย่างเดียว) ทำงานพร้อมกันได้หลาย request โดยไม่ไปบล็อกการบันทึกข้อความใหม่ที่เข้ามา
 
 export const quizTransactions = [
   {

@@ -13,17 +13,17 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
 storage ของทุก origin อยู่ในหนึ่งในสองโหมด:
 
-- **Best-effort** — โหมดเริ่มต้น เบราว์เซอร์ *อาจ* ลบข้อมูลจาก origin โดยไม่มีการแจ้งเตือนหากอุปกรณ์มีพื้นที่ดิสก์ไม่เพียงพอ
-- **Persistent** — เบราว์เซอร์จะ *ไม่* ลบข้อมูลของ origin โดยอัตโนมัติ ข้อมูลจะถูกลบเมื่อผู้ใช้ดำเนินการด้วยตัวเองเท่านั้น
+- **Best-effort** — โหมดเริ่มต้น browser *อาจ* ลบข้อมูลจาก origin โดยไม่มีการแจ้งเตือนหากอุปกรณ์มีพื้นที่ดิสก์ไม่เพียงพอ
+- **Persistent** — browser จะ *ไม่* ลบข้อมูลของ origin โดยอัตโนมัติ ข้อมูลจะถูกลบเมื่อผู้ใช้ลบเองเท่านั้น
 
 แอปพลิเคชันเว็บส่วนใหญ่ทำงานในโหมด best-effort ซึ่งเพียงพอสำหรับ cache ที่ไม่สำคัญ หากแอปของคุณต้องพึ่งพาข้อมูล cache เพื่อการทำงานออฟไลน์ คุณควรร้องขอ persistent storage
 
 ## เมื่อใดที่เกิด eviction?
 
-Eviction เป็นการตัดสินใจของเบราว์เซอร์ที่เกิดจาก storage pressure กระบวนการทั่วไปคือ:
+Eviction เป็นการตัดสินใจของ browser ที่เกิดจาก storage pressure ขั้นตอนทั่วไปคือ:
 
 1. อุปกรณ์มีพื้นที่ว่างน้อยลง
-2. เบราว์เซอร์ตัดสินใจว่าต้องคืน storage
+2. browser ตัดสินใจว่าต้องคืน storage
 3. เดินผ่าน origin ตามลำดับ **least-recently-used (LRU)** โดยประมาณ — origin ที่ไม่ได้เข้าชมมานานเป็นผู้สมัครก่อน
 4. origin แบบ best-effort ถูกล้าง; origin แบบ persistent ถูกปล่อยไว้
 
@@ -31,7 +31,7 @@ Eviction ส่งผลต่อ *storage ทั้งหมด* ของ orig
 
 ## วิธีที่ `persist()` ปกป้องข้อมูล
 
-การเรียก `navigator.storage.persist()` ส่งคำขอไปยังเบราว์เซอร์เพื่อย้าย origin ไปยังโหมด persistent เบราว์เซอร์อาจอนุมัติหรือไม่อนุมัติ:
+การเรียก `navigator.storage.persist()` ส่งคำขอไปยัง browser เพื่อย้าย origin ไปยังโหมด persistent browser อาจอนุมัติหรือไม่อนุมัติ:
 
 ```js
 const granted = await navigator.storage.persist();
@@ -42,7 +42,7 @@ if (granted) {
 }
 ```
 
-ปัจจัยที่มีอิทธิพลต่อการตัดสินใจของเบราว์เซอร์ ได้แก่ การที่ผู้ใช้ติดตั้ง PWA ไว้ที่ home screen คะแนน engagement ของ site และการที่ผู้ใช้ได้ให้สิทธิ์ permission อื่น ๆ ไว้แล้ว
+ปัจจัยที่มีอิทธิพลต่อการตัดสินใจของ browser ได้แก่ การที่ผู้ใช้ติดตั้ง PWA ไว้ที่ home screen คะแนน engagement ของ site และการที่ผู้ใช้ได้ให้สิทธิ์ permission อื่น ๆ ไว้แล้ว
 
 ## การตรวจสอบสถานะปัจจุบัน
 
@@ -66,8 +66,28 @@ if (!isAlreadyPersistent) {
 - สำหรับแอปที่ต้องทำงานออฟไลน์ ควรเก็บข้อมูล diagnostic ไว้ใน localStorage เพื่อตรวจจับการสูญเสียข้อมูลเมื่อโหลดหน้าครั้งถัดไป
 
 <Callout title="จุดสำคัญ">
-Persistent storage เป็นการรับประกันของเบราว์เซอร์ ไม่ใช่ JavaScript lock การเรียก `persist()` เป็นการ *ร้องขอ* การป้องกัน เบราว์เซอร์อาจปฏิเสธ ผู้ใช้ยังคงควบคุมขั้นสุดท้ายและสามารถล้าง storage ทั้งหมดผ่านการตั้งค่าเบราว์เซอร์ได้ตลอดเวลา
+Persistent storage เป็นการรับประกันของ browser ไม่ใช่ JavaScript lock การเรียก `persist()` เป็นการ *ร้องขอ* การป้องกัน browser อาจปฏิเสธ ผู้ใช้ยังคงควบคุมขั้นสุดท้ายและสามารถล้าง storage ทั้งหมดผ่านการตั้งค่า browser ได้ตลอดเวลา
 </Callout>
+
+## Trade-offs
+
+| ตัวเลือก | Benefit | Cost |
+|---------|---------|------|
+| อยู่ในโหมด best-effort (ค่าเริ่มต้น) | ไม่ต้องขอ permission จากผู้ใช้ ใช้งานได้ทันที เหมาะกับ cache ที่ไม่สำคัญ | browser อาจ evict ข้อมูลได้ตลอดเวลาโดยไม่แจ้งเตือนเมื่อดิสก์ตึง |
+| เรียก `navigator.storage.persist()` เพื่อขอ persistent storage | ข้อมูลปลอดภัยจากการ evict อัตโนมัติ เหมาะกับแอปที่พึ่งพาข้อมูลออฟไลน์ | ต้องผ่านเงื่อนไขของ browser (เช่น engagement, การติดตั้ง PWA) และอาจถูกปฏิเสธ ทำให้โค้ดต้อง handle ทั้งสองกรณี |
+| เช็ค `persisted()` ก่อนขอ `persist()` ทุกครั้ง | หลีกเลี่ยงการขอ permission ซ้ำซ้อนที่รบกวนผู้ใช้ | เพิ่ม async call หนึ่งจังหวะก่อนเริ่ม flow หลัก |
+
+## Common Mistakes
+
+- **สมมติว่า `persist()` คืนค่า `true` เสมอโดยไม่เช็คผลลัพธ์** — browser อาจปฏิเสธคำขอเงียบ ๆ ต้อง handle กรณี `false` และแจ้งเตือนผู้ใช้หรือ fallback ตามความเหมาะสม
+- **ไม่เคยเรียก `navigator.storage.persisted()` ก่อน `persist()`** — ทำให้เรียกขอ permission ซ้ำทุกครั้งที่โหลดแอป ทั้งที่อาจได้รับสิทธิ์ไปแล้ว
+- **เข้าใจว่า eviction ลบเฉพาะ cache ที่เก่าที่สุด** — จริง ๆ แล้ว browser ล้าง storage ทั้งหมดของ origin พร้อมกัน ทั้ง Cache API และ IndexedDB ไม่ได้เลือกลบทีละรายการ
+
+> 💡 Real World Example
+>
+> **Twitter Lite** — ขอ persistent storage เพื่อป้องกันไม่ให้ app shell ที่ cache ไว้ถูก evict ระหว่างที่ผู้ใช้ engagement ต่ำ
+>
+> **Wikipedia** — บทความที่ผู้ใช้บันทึกไว้อ่านออฟไลน์ต้องพึ่ง persistent storage ไม่งั้นอาจถูกลบทิ้งเมื่อดิสก์ของอุปกรณ์ใกล้เต็ม
 
 export const quizEvictionAndPersistence = [
   {

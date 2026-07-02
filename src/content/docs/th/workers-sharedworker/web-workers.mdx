@@ -12,7 +12,7 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
 ## การสร้าง Worker
 
-`new Worker(url)` รับ URL ที่ชี้ไปยังไฟล์ JavaScript เบราว์เซอร์จะดาวน์โหลดไฟล์นั้นและรันในเธรดพื้นหลังแยกต่างหาก ในบทเรียนเหล่านี้แทนที่จะต้อง host ไฟล์แยก เราจะสร้าง URL แบบ on-the-fly จาก Blob ซึ่งทำให้ทุกอย่างอยู่ในที่เดียวและรันได้ทันที
+`new Worker(url)` รับ URL ที่ชี้ไปยังไฟล์ JavaScript browser จะดาวน์โหลดไฟล์นั้นและรันในเธรดพื้นหลังแยกต่างหาก ในบทเรียนเหล่านี้แทนที่จะต้อง host ไฟล์แยก เราจะสร้าง URL แบบ on-the-fly จาก Blob ซึ่งทำให้ทุกอย่างอยู่ในที่เดียวและรันได้ทันที
 
 ```js
 // worker.js (separate file)
@@ -63,6 +63,26 @@ console.log('Worker started — result arrives asynchronously');`;
 <Callout title="ประเด็นสำคัญ">
 Workers ถูก isolate — ไม่สามารถเข้าถึง `window`, `document` หรือ DOM API ใดๆ ได้ เหมาะอย่างยิ่งสำหรับงาน CPU-intensive เช่น การประมวลผลภาพ การเข้ารหัส หรือการแปลงข้อมูลขนาดใหญ่
 </Callout>
+
+## Trade-offs
+
+| ตัวเลือก | Benefit | Cost |
+|---------|---------|------|
+| ประมวลผลใน Web Worker | ได้ true parallelism เธรดพื้นหลังแยกจาก main thread ทำให้ UI ไม่ค้างระหว่างงานหนัก | ต้นทุนการสื่อสารผ่าน `postMessage` (structured clone) และ overhead ของการสร้าง/ทำลาย worker |
+| ประมวลผลบน main thread โดยตรง | เรียบง่าย เข้าถึง DOM ได้ทันที ไม่มีต้นทุนการสื่อสารข้ามเธรด | งานหนักบล็อก UI thread ทำให้หน้าเว็บค้างหรือ frame drop |
+| Inline worker ผ่าน Blob URL | ไม่ต้อง host ไฟล์แยก รวมโค้ดไว้ที่เดียว deploy ง่าย | Debug ยากกว่าไฟล์จริงเพราะไม่มี source map/breakpoint ที่ตรงไปตรงมา |
+
+## Common Mistakes
+
+- **คาดว่า worker เข้าถึง DOM ได้** — worker ไม่มี `window`, `document` หรือ DOM API ใดๆ เลย เป็นความเข้าใจผิดที่พบบ่อยที่สุดของมือใหม่ ต้อง postMessage ผลลัพธ์กลับมาให้ main thread จัดการ DOM แทน
+- **ลืมเรียก `worker.terminate()`** — worker ที่ยังไม่ terminate จะค้างอยู่ใน memory และกิน CPU ต่อไปแม้งานจะเสร็จแล้ว ทำให้เกิด memory leak โดยเฉพาะถ้าสร้าง worker ใหม่ซ้ำๆ
+- **ใช้ worker กับงานสั้นๆ ที่ใช้เวลาน้อยกว่า 2-3 ms** — ต้นทุนของการสร้าง worker และ `postMessage` ไป-กลับสูงกว่าประโยชน์ที่ได้ ควรใช้ worker เฉพาะงานที่ใช้เวลานานพอจะคุ้มกับ overhead
+
+> 💡 Real World Example
+>
+> **Figma** — รัน rendering และการคำนวณ geometry ที่หนักหน่วงบน Web Worker แยกจาก main thread เพื่อให้ canvas ยังคง responsive ระหว่างที่ผู้ใช้แก้ไข design
+>
+> **Squoosh** (เครื่องมือบีบอัดภาพของ Google) — รัน codec การบีบอัดภาพ (เช่น MozJPEG, WebP) ทั้งหมดใน Web Worker เพื่อไม่ให้ UI ค้างระหว่างประมวลผลไฟล์ขนาดใหญ่
 
 export const quizWebWorkers = [
   {

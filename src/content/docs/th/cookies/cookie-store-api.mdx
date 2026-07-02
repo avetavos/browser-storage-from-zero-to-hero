@@ -14,19 +14,19 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
 `document.cookie` เป็น synchronous API ที่ออกแบบในช่วงกลางทศวรรษ 1990 มีจุดที่น่าหงุดหงิดสามอย่าง:
 
-1. **ต้อง parse เอง** — การอ่านคุกกี้ตามชื่อต้องแยกสตริงและวนลูป
+1. **ต้อง parse เอง** — การอ่าน cookie ตามชื่อต้องแยก string และวนลูป
 2. **การเขียนใช้ string** — ต้องสร้าง cookie string ด้วยตัวเอง
-3. **ไม่มี change event** — ไม่มีวิธีสังเกตเมื่อแท็บอื่นหรือ server เปลี่ยนคุกกี้
+3. **ไม่มี change event** — ไม่มีวิธีสังเกตเมื่อแท็บอื่นหรือ server เปลี่ยน cookie
 
 **Cookie Store API** แก้ปัญหาทั้งสามด้วย interface ที่สะอาดแบบ Promise-based
 
-## การรองรับของเบราว์เซอร์
+## การรองรับของ browser
 
-Cookie Store API มีใน Chrome และ Edge (เบราว์เซอร์ที่ใช้ Chromium) แต่ Firefox ยังไม่รองรับ ควรตรวจสอบการรองรับก่อนใช้เสมอ
+Cookie Store API มีใน Chrome และ Edge (browser ที่ใช้ Chromium) แต่ Firefox ยังไม่รองรับ ควรตรวจสอบการรองรับก่อนใช้เสมอ
 
-## cookieStore.get — อ่านคุกกี้ชิ้นเดียว
+## cookieStore.get — อ่าน cookie ชิ้นเดียว
 
-คืน Promise ที่ resolve เป็นออบเจกต์ `CookieListItem` หรือ `null` ถ้าคุกกี้ไม่มีอยู่:
+คืน Promise ที่ resolve เป็น object `CookieListItem` หรือ `null` ถ้า cookie ไม่มีอยู่:
 
 ```js
 const cookie = await cookieStore.get('theme');
@@ -36,11 +36,11 @@ if (cookie) {
 }
 ```
 
-ออบเจกต์ที่คืนยังมี property `domain`, `path`, `expires`, `secure`, `sameSite`, และ `httpOnly` ด้วย
+object ที่คืนยังมี property `domain`, `path`, `expires`, `secure`, `sameSite`, และ `httpOnly` ด้วย
 
-## cookieStore.set — เขียนคุกกี้
+## cookieStore.set — เขียน cookie
 
-รับคู่ name/value เป็นสตริง หรือออบเจกต์ options:
+รับคู่ name/value เป็น string หรือ object options:
 
 ```js
 // รูปแบบสั้น
@@ -55,24 +55,24 @@ await cookieStore.set({
 });
 ```
 
-คืน Promise ที่ resolve เมื่อคุกกี้ถูกเขียนแล้ว
+คืน Promise ที่ resolve เมื่อ cookie ถูกเขียนแล้ว
 
-## cookieStore.delete — ลบคุกกี้
+## cookieStore.delete — ลบ cookie
 
 ```js
 await cookieStore.delete('theme');
 ```
 
-คืน Promise ที่ resolve เมื่อคุกกี้ถูกลบ เทียบเท่ากับการตั้ง `Max-Age=0`
+คืน Promise ที่ resolve เมื่อ cookie ถูกลบ เทียบเท่ากับการตั้ง `Max-Age=0`
 
-## cookieStore.getAll — อ่านคุกกี้ทั้งหมด
+## cookieStore.getAll — อ่าน cookie ทั้งหมด
 
 ```js
 const allCookies = await cookieStore.getAll();
 allCookies.forEach(c => console.log(c.name, c.value));
 ```
 
-ต่างจาก `document.cookie` ตรงที่คืน array ของออบเจกต์จริงๆ — ไม่ต้อง parse สตริง
+ต่างจาก `document.cookie` ตรงที่คืน array ของ object จริงๆ — ไม่ต้อง parse string
 
 ## Change event
 
@@ -89,11 +89,11 @@ cookieStore.addEventListener('change', event => {
 });
 ```
 
-`event.changed` เป็น array ของคุกกี้ที่ถูกตั้งค่าหรืออัปเดต `event.deleted` เป็น array ของคุกกี้ที่ถูกลบ ทำงานข้ามแท็บสำหรับคุกกี้ที่ไม่ได้จำกัดขอบเขตไว้ที่แท็บเดียว
+`event.changed` เป็น array ของ cookie ที่ถูกตั้งค่าหรืออัปเดต `event.deleted` เป็น array ของ cookie ที่ถูกลบ ทำงานข้ามแท็บสำหรับ cookie ที่ไม่ได้จำกัดขอบเขตไว้ที่แท็บเดียว
 
 ## รูปแบบ feature-detect
 
-เนื่องจากการรองรับเบราว์เซอร์ยังไม่ครบ ควร feature-detect และ fallback ไปใช้ `document.cookie` เสมอ:
+เนื่องจากการรองรับ browser ยังไม่ครบ ควร feature-detect และ fallback ไปใช้ `document.cookie` เสมอ:
 
 ```js
 async function getTheme() {
@@ -143,8 +143,27 @@ run();`;
 <StorageRunner client:visible code={cookieStoreCode} />
 
 <Callout title="ใช้ Cookie Store API เมื่อรองรับ แต่ให้มี fallback เสมอ">
-Cookie Store API ทำให้โค้ดคุกกี้อ่านง่ายขึ้นมาก — async/await แทน string parsing, ออบเจกต์แทนสตริงคั่นด้วยเซมิโคลอน, และ reactive change event จนกว่า Firefox จะรองรับ ควร wrap การใช้งานด้วย feature-detect (`'cookieStore' in window`) และ fallback ไปใช้ `document.cookie` สำหรับความเข้ากันได้ข้ามเบราว์เซอร์อย่างเต็มรูปแบบ
+Cookie Store API ทำให้โค้ด cookie อ่านง่ายขึ้นมาก — async/await แทน string parsing, object แทน string คั่นด้วยเซมิโคลอน, และ reactive change event จนกว่า Firefox จะรองรับ ควร wrap การใช้งานด้วย feature-detect (`'cookieStore' in window`) และ fallback ไปใช้ `document.cookie` สำหรับความเข้ากันได้ข้าม browser อย่างเต็มรูปแบบ
 </Callout>
+
+## Trade-offs
+
+| ตัวเลือก | Benefit | Cost |
+|---------|---------|------|
+| Cookie Store API | โค้ดสั้นและอ่านง่ายกว่ามาก — `await cookieStore.get()` แทนการ split string เอง แถมมี `change` event ให้ฟังแบบ reactive | Firefox ยังไม่รองรับ ต้อง feature-detect และเขียน fallback ไปใช้ `document.cookie` เสมอ เพิ่มโค้ดสองชุดสำหรับ logic เดียวกัน |
+| `document.cookie` | รองรับทุก browser ไม่ต้องมี fallback | เป็น synchronous string API ต้อง parse เองทุกครั้ง ไม่มี change event ในตัว |
+
+## Common Mistakes
+
+- **เรียก `cookieStore.get()`/`.set()` โดยไม่ feature-detect ก่อน** — โค้ดจะพังทันทีบน Firefox เพราะ `cookieStore` ไม่มีอยู่ใน `window`
+- **ลืมว่า method ของ Cookie Store API เป็น async ทั้งหมด** — เขียนโค้ดราวกับว่าค่าคืนกลับมาแบบ synchronous แล้วได้ Promise object แทนค่าจริง ต้อง `await` เสมอ
+- **คาดหวังว่า `change` event จะทำงานเหมือนกันทุก browser และทุกสถานการณ์** — พฤติกรรมข้ามแท็บของ event นี้ยังไม่ได้มาตรฐานเดียวกันในทุก implementation ควรทดสอบจริงก่อนพึ่งพาเป็น core logic
+
+> 💡 Real World Example
+>
+> **แอปที่ sync ค่า theme/preference ข้ามแท็บ** — ใช้ `cookieStore.addEventListener('change', ...)` เพื่ออัปเดต UI ทันทีเมื่อผู้ใช้เปลี่ยนค่าในแท็บอื่น โดยไม่ต้อง poll หรือ reload
+>
+> **Progressive enhancement บนเว็บ production** — ทีมที่ต้องรองรับทั้ง Chrome/Edge และ Firefox มักเขียน wrapper function ที่ feature-detect `cookieStore` แล้ว fallback ไป `document.cookie` เพื่อให้โค้ด business logic เขียนครั้งเดียวใช้ได้ทุก browser
 
 export const quizCookieStoreApi = [
   {

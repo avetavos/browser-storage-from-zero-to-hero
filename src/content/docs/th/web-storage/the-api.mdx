@@ -10,6 +10,8 @@ import Callout from '../../../../components/Callout.astro';
 import Quiz from '../../../../components/Quiz.tsx';
 import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
+หลายคนใช้แค่ `setItem`/`getItem` แล้วเดา method ที่เหลือ ทำให้พลาดรายละเอียดอย่าง `key(i)` หรือพฤติกรรมของ `clear()` หน้านี้รวบ method และ property ทั้งหมดของ `Storage` interface ไว้ในที่เดียว
+
 ## API ครบทั้งชุด
 
 ทั้ง `localStorage` และ `sessionStorage` ต่างก็ implement interface `Storage` แบบเดียวกัน ทุก method และ property ด้านล่างนี้ใช้ได้กับทั้งคู่ — แค่สลับชื่อ object เท่านั้น
@@ -64,7 +66,7 @@ console.log(localStorage.key(0)); // 'demo:a' or 'demo:b' — order varies
 
 ### `length`
 
-property แบบอ่านอย่างเดียวที่คืนจำนวน key/value pair ที่เก็บอยู่ในปัจจุบัน ใช้มันเพื่อวนซ้ำทุก key:
+property แบบอ่านอย่างเดียวที่คืนจำนวน key/value pair ที่เก็บอยู่ในปัจจุบัน ใช้มันเพื่อ iterate ทุก key:
 
 ```js
 for (let i = 0; i < localStorage.length; i++) {
@@ -96,7 +98,7 @@ console.log(val === null); // true — use === null check, not falsy !val
 
 ระวัง: string `"null"` เป็นค่าที่เก็บได้อย่างถูกต้องและเป็น truthy ให้ใช้ `=== null` เสมอแทน `!val` เพื่อแยกแยะระหว่าง "ไม่มี key" กับ "มี key อยู่แต่ค่าว่างหรือเป็น falsy"
 
-## การวนซ้ำทุก key
+## การ iterate ทุก key
 
 ```js
 localStorage.setItem('demo:one', '1');
@@ -115,6 +117,26 @@ localStorage.removeItem('demo:two');
 <Callout title="ประเด็นสำคัญ">
 ไม่มี method "update" — `setItem` จะเขียนทับค่าใด ๆ ที่มีอยู่สำหรับ key นั้น key ที่ไม่มีอยู่จะอ่านกลับมาเป็น `null` เสมอ ไม่ใช่ `undefined` ให้ตรวจสอบ `=== null` เพื่อแยกแยะ key ที่ไม่มีอยู่ออกจาก empty string ที่เก็บไว้
 </Callout>
+
+## Trade-offs
+
+| ตัวเลือก | Benefit | Cost |
+|---------|---------|------|
+| API แบบ key/value เรียบง่าย (`setItem`/`getItem`) | เรียนรู้เร็ว ไม่ต้องตั้ง schema หรือ config ใด ๆ | ไม่มี query, index หรือ transaction ต้อง iterate เองด้วย `key(i)`/`length` หากต้องการค้นหา |
+| `clear()` ล้างทั้ง origin | ล้างข้อมูลทั้งหมดได้ในคำสั่งเดียว เหมาะกับ logout เต็มรูปแบบ | ล้าง key ของทุกสคริปต์บน origin นั้น ไม่ใช่แค่ของโค้ดที่เรียก เสี่ยงลบข้อมูลของ library อื่นโดยไม่ตั้งใจ |
+| คืนค่า `null` เมื่อ key ไม่มีอยู่ | ตรวจสอบง่ายด้วย `=== null` ไม่ต้องจัดการ `undefined` แยก | นักพัฒนาที่ใช้ `!value` แทน `=== null` จะแยกไม่ออกระหว่าง "ไม่มี key" กับ "ค่าที่เก็บไว้เป็น falsy" |
+
+## Common Mistakes
+
+- **เช็คค่าที่คืนมาด้วย `!value` แทน `=== null`** — string `"null"` หรือ `""` เป็น falsy แต่เป็นค่าที่เก็บไว้จริง ทำให้ logic ผิดพลาด
+- **เรียก `clear()` โดยคิดว่าจะล้างเฉพาะ key ของตัวเอง** — แต่มันล้างทุก key บน origin นั้น รวมถึงของ library หรือสคริปต์อื่นด้วย
+- **สมมติว่าลำดับของ `key(i)` ตรงกับลำดับที่ insert** — spec ไม่รับประกันลำดับนี้ ห้ามพึ่งพา index เพื่ออ้างอิงถึง key ตัวใดตัวหนึ่งโดยเฉพาะ
+
+> 💡 Real World Example
+>
+> **ฟอร์มยาว ๆ ที่ auto-save ฉบับร่าง** — เรียก `setItem` แบบ debounce ทุกครั้งที่ผู้ใช้พิมพ์ แล้วใช้ `getItem` ตอนโหลดหน้าเพื่อกู้คืนข้อมูลที่กรอกค้างไว้ ป้องกันข้อมูลหายเมื่อ refresh
+>
+> **แอปที่ต้อง debug ข้อมูลใน `localStorage`** — ใช้ `length` และ `key(i)` วน loop เพื่อ list ทุก key ที่แอปเก็บไว้ ช่วยตรวจสอบว่ามี key ขยะตกค้างจากฟีเจอร์เก่าหรือไม่
 
 export const quizTheApi = [
   {

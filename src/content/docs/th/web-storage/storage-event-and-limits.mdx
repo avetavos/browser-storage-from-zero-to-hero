@@ -13,7 +13,7 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
 ## storage event
 
-เมื่อหน้าเว็บหนึ่งเปลี่ยนแปลง `localStorage` เบราว์เซอร์จะยิง `storage` event ไปยัง **ทุกแท็บและทุกหน้าต่างอื่นที่เปิดอยู่บน origin เดียวกัน** — แต่ **ไม่** ยิงในแท็บที่ทำการเปลี่ยนแปลงนั้น ความไม่สมมาตรนี้ทำให้นักพัฒนาส่วนใหญ่ประหลาดใจในครั้งแรก
+เมื่อหน้าเว็บหนึ่งเปลี่ยนแปลง `localStorage` browser จะยิง `storage` event ไปยัง **ทุกแท็บและทุกหน้าต่างอื่นที่เปิดอยู่บน origin เดียวกัน** — แต่ **ไม่** ยิงในแท็บที่เปลี่ยนแปลงนั้น ความไม่สมมาตรนี้ทำให้นักพัฒนาส่วนใหญ่ประหลาดใจในครั้งแรก
 
 ```js
 // Register this listener in Tab B
@@ -34,7 +34,7 @@ property ของ `StorageEvent` มีดังนี้:
 | `key` | `string \| null` | key ที่เปลี่ยนแปลง เป็น `null` เมื่อมีการเรียก `clear()` |
 | `oldValue` | `string \| null` | ค่าก่อนหน้า หรือ `null` หาก key เพิ่งถูกสร้างใหม่ |
 | `newValue` | `string \| null` | ค่าใหม่ หรือ `null` หาก key ถูกลบ |
-| `url` | `string` | URL ของเอกสารที่ทำการเปลี่ยนแปลง |
+| `url` | `string` | URL ของเอกสารที่เปลี่ยนแปลง |
 | `storageArea` | `Storage \| null` | object `localStorage` (ไม่เคยเป็น `sessionStorage` — event นั้นยิงเฉพาะภายในแท็บเดียวกัน) |
 
 `storage` event ยิง **เฉพาะสำหรับ `localStorage`** เท่านั้น การเปลี่ยนแปลง `sessionStorage` จะไม่ส่งต่อข้ามแท็บ เพราะแต่ละแท็บมี session store ของตัวเองที่แยกขาดกัน
@@ -69,7 +69,7 @@ window.addEventListener('storage', (e) => {
 
 ## quota ราว ~5 MB
 
-ข้อกำหนด (specification) ของ Web Storage ไม่ได้บังคับขนาด quota ที่ตายตัว แต่เบราว์เซอร์ต่าง ๆ implement ที่ประมาณ **5 MB ต่อ origin** สำหรับ `localStorage` เหมือนกันทั่วไป (บางตัวให้ 10 MB; เบราว์เซอร์บนมือถืออาจให้น้อยกว่า)
+ข้อกำหนด (specification) ของ Web Storage ไม่ได้บังคับขนาด quota ที่ตายตัว แต่ browser ต่าง ๆ implement ที่ประมาณ **5 MB ต่อ origin** สำหรับ `localStorage` เหมือนกันทั่วไป (บางตัวให้ 10 MB; browser บนมือถืออาจให้น้อยกว่า)
 
 เมื่อคุณใช้เกิน quota `setItem` จะโยน `QuotaExceededError` (ซึ่งเป็น `DOMException`):
 
@@ -120,6 +120,26 @@ console.log('Cleaned up. demo:signal =', localStorage.getItem('demo:signal'));`;
 <Callout title="ประเด็นสำคัญ">
 `storage` event เป็นสัญญาณข้ามแท็บแบบเรียบง่ายสำหรับการเปลี่ยนแปลง `localStorage` — มันยิงใน **แท็บอื่นเท่านั้น** ไม่ใช่ในแท็บที่เขียน Web Storage ทำงานแบบ **synchronous** ดังนั้นจึงควรเลี่ยงการเก็บ blob ขนาดใหญ่ ให้ใช้ IndexedDB สำหรับอะไรก็ตามที่เกินไม่กี่ KB
 </Callout>
+
+## Trade-offs
+
+| ตัวเลือก | Benefit | Cost |
+|---------|---------|------|
+| `storage` event | ไม่ต้องพึ่ง library ภายนอก ใช้ browser API ล้วน ๆ สำหรับส่งสัญญาณข้ามแท็บ | ทำงานเฉพาะกับ `localStorage` เท่านั้น และไม่ยิงในแท็บที่เขียนเอง ต้องออกแบบ logic ให้รองรับความไม่สมมาตรนี้ |
+| quota ~5 MB ของ Web Storage | ขนาดเล็กพอที่ browser จะประมวลผล synchronous ได้เร็ว ไม่ต้องตั้งค่าอะไรเพิ่ม | เมื่อข้อมูลโตเกิน 5 MB ต้องย้ายไป IndexedDB ทั้งระบบ ซึ่งเปลี่ยน API และ mental model ทั้งหมด |
+| API แบบ synchronous | เขียนโค้ดง่าย ไม่ต้องจัดการ Promise หรือ callback | ค่าขนาดใหญ่จะบล็อก main thread ตรง ๆ ทำให้ UI ค้างระหว่างอ่าน/เขียน |
+
+## Common Mistakes
+
+- **เขียน `setItem` โดยไม่ครอบ `try/catch`** — เมื่อ quota เต็ม `setItem` จะโยน `QuotaExceededError` และถ้าไม่ดักไว้ แอปจะ crash ทันที
+- **คาดหวังว่า `storage` event จะยิงในแท็บที่เขียนเอง** — event นี้ยิงเฉพาะใน**แท็บอื่น**เท่านั้น ถ้าต้องการอัปเดต UI ในแท็บที่เขียนด้วย ต้องเรียก logic นั้นตรง ๆ แยกจาก listener
+- **เขียนลง `localStorage` ทุกครั้งที่มี keystroke** — เพราะทุก operation เป็น synchronous ทำให้เกิดการบล็อก main thread ถี่ ๆ จนรู้สึก jank ควร debounce ก่อนเขียนเสมอ
+
+> 💡 Real World Example
+>
+> **แอปแชทหรือระบบ auth หลายแท็บ** — ใช้ `storage` event เพื่อ broadcast การ logout ข้ามแท็บ เมื่อผู้ใช้ logout จากแท็บหนึ่ง ทุกแท็บอื่นจะ redirect ไปหน้า login ทันทีโดยไม่ต้อง poll หรือใช้ WebSocket
+>
+> **แอปจดโน้ต/editor ที่ทำ autosave** — ตรวจจับ `QuotaExceededError` แล้วเตือนผู้ใช้ให้ล้างฉบับร่างเก่า หรือ fallback ไปเก็บที่ IndexedDB แทนเมื่อ quota ของ `localStorage` เต็ม
 
 export const quizStorageEventAndLimits = [
   {

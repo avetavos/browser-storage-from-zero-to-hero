@@ -1,6 +1,6 @@
 ---
 title: 'SharedWorker'
-description: 'SharedWorker คือ worker instance เดียวที่ถูกแชร์ร่วมกันทุก tab ในต้นกำเนิดเดียวกัน — เหมือนบริการน้ำหนักเบาภายในเบราว์เซอร์'
+description: 'SharedWorker คือ worker instance เดียวที่ถูกแชร์ร่วมกันทุก tab ในต้นกำเนิดเดียวกัน — เหมือนบริการน้ำหนักเบาภายใน browser'
 sidebar:
   order: 4
 ---
@@ -12,7 +12,7 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
 ## SharedWorker คืออะไร?
 
-`SharedWorker` คือ Web Worker ที่ถูกแชร์ร่วมกันใน **browsing context ทั้งหมด** (tabs, windows, iframes) ที่มีต้นกำเนิดเดียวกัน ต่างจาก Dedicated Worker ที่มีอยู่เพียงสำหรับหน้าเดียว SharedWorker จะมีชีวิตอยู่จนกว่า tab ที่เชื่อมต่ออยู่ทั้งหมดจะปิด ให้คิดว่ามันเป็น "บริการ" น้ำหนักเบาภายในเบราว์เซอร์ — สามารถเก็บ state ที่แชร์ร่วมกัน ลดคำขอเครือข่ายที่ซ้ำกัน และซิงโครไนซ์ข้อมูลข้าม tab โดยไม่ต้องพึ่ง backend
+`SharedWorker` คือ Web Worker ที่ถูกแชร์ร่วมกันใน **browsing context ทั้งหมด** (tabs, windows, iframes) ที่มีต้นกำเนิดเดียวกัน ต่างจาก Dedicated Worker ที่มีอยู่เพียงสำหรับหน้าเดียว SharedWorker จะมีชีวิตอยู่จนกว่า tab ที่เชื่อมต่ออยู่ทั้งหมดจะปิด ให้คิดว่ามันเป็น "บริการ" น้ำหนักเบาภายใน browser — สามารถเก็บ state ที่แชร์ร่วมกัน ลดคำขอเครือข่ายที่ซ้ำกัน และซิงโครไนซ์ข้อมูลข้าม tab โดยไม่ต้องพึ่ง backend
 
 ## ความแตกต่างหลักจาก Dedicated Worker
 
@@ -54,7 +54,7 @@ self.onconnect = (e) => {
 
 ## ทำไม SharedWorker จึงต้องใช้หลาย tab
 
-พลังที่แท้จริงของ `SharedWorker` อยู่ที่การแชร์ state ข้าม tab การเปิด tab เดียวแทบไม่แสดงให้เห็นความสามารถนี้ — คุณต้องมีอย่างน้อยสอง tab จึงจะเห็นความแตกต่าง นั่นคือเหตุผลที่ตัวอย่างที่รันได้ด้านล่างเปิดใน StackBlitz ซึ่งคุณสามารถเปิดสองหน้าต่างเบราว์เซอร์ที่ชี้ไปยัง URL เดียวกันได้
+พลังที่แท้จริงของ `SharedWorker` อยู่ที่การแชร์ state ข้าม tab การเปิด tab เดียวแทบไม่แสดงให้เห็นความสามารถนี้ — คุณต้องมีอย่างน้อยสอง tab จึงจะเห็นความแตกต่าง นั่นคือเหตุผลที่ตัวอย่างที่รันได้ด้านล่างเปิดใน StackBlitz ซึ่งคุณสามารถเปิดสองหน้าต่าง browser ที่ชี้ไปยัง URL เดียวกันได้
 
 ## ตัวอย่างที่รันได้: ตัวนับแชร์ร่วมกันข้าม tab (StackBlitz)
 
@@ -83,6 +83,25 @@ export const sharedWorkerCode = `// shared-worker.js (runs ONCE, shared by every
 <Callout title="ประเด็นสำคัญ">
 `SharedWorker` มีเพียง ONE instance ต่อ origin ทุก tab ที่เรียก `new SharedWorker(url)` ด้วย URL เดียวกันจะเชื่อมต่อไปยัง worker เดียวกัน event `onconnect` จะยิงหนึ่งครั้งต่อ tab ต้องเรียก `port.start()` ทั้งฝั่งหน้าเว็บและฝั่ง worker
 </Callout>
+
+## Trade-offs
+
+| ตัวเลือก | Benefit | Cost |
+|---------|---------|------|
+| `SharedWorker` (instance เดียวทุก tab) | ประหยัด memory, แชร์ state และ coordination ข้าม tab ได้ทันที (เช่น connection เดียวสำหรับหลาย tab) | Debug ยากกว่า — DevTools ต้องเปิดแยกสำหรับ shared worker, และ historically iOS Safari ไม่รองรับหรือรองรับไม่สมบูรณ์ |
+| Dedicated Worker (instance ต่อ tab) | รองรับ browser ครบทุกตัว, debug ง่ายเพราะผูกกับหน้าเดียว | ใช้ memory มากขึ้นเมื่อเปิดหลาย tab พร้อมกัน ไม่มี state ที่แชร์ร่วมกันในตัว |
+
+## Common Mistakes
+
+- **พึ่งพา `SharedWorker` บน iOS Safari โดยไม่มี fallback** — support ของ `SharedWorker` บน iOS Safari ไม่แน่นอนในอดีต ควร feature-detect ด้วย `typeof SharedWorker !== 'undefined'` แล้ว fallback ไปใช้ Dedicated Worker หรือกลไกอื่น
+- **ลืมเรียก `port.start()`** — ทั้งฝั่งหน้าเว็บและฝั่ง worker ต้องเรียก `port.start()` ก่อน message ถึงจะไหลผ่าน MessagePort ไม่อย่างนั้น message จะถูก queue ค้างไว้เฉยๆ
+- **คาดว่า `onconnect` จะยิงแค่ครั้งเดียว** — `onconnect` ยิงทุกครั้งที่มี tab ใหม่มาเชื่อมต่อ ต้อง push port ใหม่เข้า list ที่มีอยู่แทนที่จะ overwrite ไม่งั้น tab เก่าจะหลุดจากการสื่อสาร
+
+> 💡 Real World Example
+>
+> **Slack** — ใช้ `SharedWorker` เพื่อรักษา WebSocket connection เดียวที่แชร์ร่วมกันทุก tab ที่เปิดอยู่ ลดจำนวน connection ไปยัง server และซิงค์สถานะ real-time ข้าม tab ได้ทันที
+>
+> **ระบบแดชบอร์ดหรือเครื่องมือ back-office ที่เปิดหลาย tab พร้อมกัน** — ใช้ `SharedWorker` แชร์ token การยืนยันตัวตนและแคช API response เดียวกันข้าม tab เพื่อลดจำนวนคำขอไปยัง server
 
 export const quizSharedWorker = [
   {

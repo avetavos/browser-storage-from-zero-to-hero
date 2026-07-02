@@ -93,6 +93,26 @@ console.log('postMessage called.');
 `BroadcastChannel` จะไม่ยิง `message` event ในแท็บที่ส่งในการใช้งาน multi-tab จริง — เฉพาะแท็บและ worker อื่นเท่านั้น echo ในหน้าเดียวกันข้างต้นทำงานได้ใน runner เพราะ sender และ receiver อยู่ใน JS context เดียวกัน อย่าพึ่งพา pattern นี้ใน production
 </Callout>
 
+## Trade-offs
+
+| ตัวเลือก | Benefit | Cost |
+|---------|---------|------|
+| `BroadcastChannel` | ส่งข้อความแบบ real-time ไปยังทุกแท็บ/worker ที่ join channel เดียวกัน โดยไม่ต้องเขียนลง storage ก่อน | ไม่มี built-in persistence — ถ้าไม่มีแท็บใด listen อยู่ตอนส่ง ข้อความจะหายไปเลย |
+| `storage` event | ใช้ persistence layer ที่มีอยู่แล้ว (`localStorage`) เป็น side effect โดยไม่ต้องตั้ง channel เพิ่ม | ส่งได้แค่ string และไม่ยิงในแท็บที่เขียนเอง ต้อง serialize/deserialize เอง |
+| `window.postMessage` ข้าม window reference | ควบคุม target ได้ละเอียด ส่งเฉพาะ window ที่มี reference อยู่ | ต้องถือ reference ของแต่ละ window ไว้เอง ใช้ยากเมื่อมีหลายแท็บที่เปิด-ปิดแบบไดนามิก |
+
+## Common Mistakes
+
+- **คิดว่า BroadcastChannel เก็บข้อความไว้รอผู้รับที่ join ทีหลัง** — ต้อง join channel ก่อนส่งข้อความเสมอ ถ้าแท็บผู้รับยังไม่ได้สร้าง `BroadcastChannel` ในตอนที่ส่ง ข้อความนั้นจะหายไปเงียบๆ
+- **ลืมเรียก `ch.close()` เมื่อ component unmount** — channel object และ listener จะค้างอยู่ใน memory กลายเป็น leak โดยเฉพาะใน SPA ที่ mount/unmount บ่อย
+- **คาดหวังว่าแท็บที่เรียก `postMessage` จะได้รับ event ของตัวเองด้วย** — BroadcastChannel ไม่ส่งข้อความกลับไปยัง sender เหมือนกับที่ `storage` event ก็ไม่ยิงในแท็บที่เขียน ต้องอัปเดต UI ของแท็บที่ส่งเองแยกต่างหาก
+
+> 💡 Real World Example
+>
+> **Google Docs** — ใช้ pattern คล้าย BroadcastChannel เพื่อ sync สถานะการแก้ไข เช่น cursor, selection และ presence indicator ข้ามแท็บที่เปิดเอกสารเดียวกัน
+>
+> **Slack web** — ใช้ cross-tab messaging เพื่อให้ notification badge และ unread count sync กันทุกแท็บ โดยไม่ต้อง poll server ซ้ำในแต่ละแท็บ
+
 export const quizBroadcastChannel = [
   {
     q: 'ส่งค่าประเภทใดได้บ้างผ่าน BroadcastChannel.postMessage()?',

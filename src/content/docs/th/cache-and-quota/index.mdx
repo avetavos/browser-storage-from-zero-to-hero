@@ -16,7 +16,7 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 โมดูลนี้ครอบคลุม browser API ที่เกี่ยวข้องกันสองตัว ได้แก่
 
 - **Cache API** — กลไกการจัดเก็บข้อมูลสำหรับคู่ `Request`/`Response` ออกแบบมาเพื่อแคช HTTP response และ static asset โดยเฉพาะ เพื่อให้สามารถให้บริการแบบออฟไลน์หรือโดยไม่ต้องเข้าถึงเครือข่าย
-- **Storage Manager** — อินเทอร์เฟซ `navigator.storage` ที่รายงานปริมาณพื้นที่ดิสก์ที่ origin ปัจจุบันใช้อยู่ และ quota ที่ได้รับอนุญาต นอกจากนี้ยังให้คุณร้องขอ *persistent* storage เพื่อป้องกันไม่ให้เบราว์เซอร์ลบข้อมูลเมื่อดิสก์เต็ม
+- **Storage Manager** — อินเทอร์เฟซ `navigator.storage` ที่รายงานปริมาณพื้นที่ดิสก์ที่ origin ปัจจุบันใช้อยู่ และ quota ที่ได้รับอนุญาต นอกจากนี้ยังให้คุณร้องขอ *persistent* storage เพื่อป้องกันไม่ให้ browser ลบข้อมูลเมื่อดิสก์เต็ม
 
 ### Cache API
 
@@ -57,9 +57,9 @@ export const overviewDiagram = `flowchart LR
 | บทเรียน | สิ่งที่จะได้เรียนรู้ |
 |---|---|
 | **หน้านี้** | ภาพรวมระดับสูงของ Cache API และ Storage Manager |
-| `cache-api` | เมธอดทั้งหมดของ Cache API: open, put, add, addAll, match, delete, keys |
+| `cache-api` | method ทั้งหมดของ Cache API: open, put, add, addAll, match, delete, keys |
 | `storage-manager` | `estimate()`, `persist()`, และ `persisted()` อย่างละเอียด |
-| `eviction-and-persistence` | Best-effort vs persistent storage และเมื่อใดที่เบราว์เซอร์จะลบข้อมูล |
+| `eviction-and-persistence` | Best-effort vs persistent storage และเมื่อใดที่ browser จะลบข้อมูล |
 | `cache-vs-indexeddb` | คู่มือการตัดสินใจ: Cache API vs IndexedDB vs localStorage |
 
 ## ลองเลย: เปิด cache และจัดเก็บ response
@@ -88,7 +88,7 @@ export const overviewCode = `(async () => {
 <StorageRunner client:visible code={overviewCode} />
 
 <Callout title="จุดสำคัญ">
-Cache API เก็บคู่ `Request`/`Response` ไม่ใช่ข้อมูลทั่วไป ออกแบบมาสำหรับการจัดเก็บในรูปแบบ HTTP: URL จับคู่กับ response สำหรับข้อมูลแอปพลิเคชันที่มีโครงสร้าง เช่น ข้อมูลผู้ใช้หรือออบเจกต์การตั้งค่า ให้ใช้ IndexedDB แทน
+Cache API เก็บคู่ `Request`/`Response` ไม่ใช่ข้อมูลทั่วไป ออกแบบมาสำหรับการจัดเก็บในรูปแบบ HTTP: URL จับคู่กับ response สำหรับข้อมูลแอปพลิเคชันที่มีโครงสร้าง เช่น ข้อมูลผู้ใช้หรือ object การตั้งค่า ให้ใช้ IndexedDB แทน
 </Callout>
 
 export const quizCacheAndQuotaIndex = [

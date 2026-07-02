@@ -12,9 +12,9 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
 ## ทำไมต้องใช้ indexes?
 
-Object store ทุกตัวใน IndexedDB จะใช้ primary key (ได้แก่ `keyPath` หรือ id ที่เพิ่มขึ้นอัตโนมัติ) เป็นตัวระบุระเบียน วิธีนี้มีประสิทธิภาพสำหรับการค้นหา **ด้วย primary key** แต่หากต้องการค้นหาด้วยฟิลด์อื่น เช่น ค้นหา contacts ทั้งหมดตาม `name` คุณจำเป็นต้องใช้ **index**
+Object store ทุกตัวใน IndexedDB จะใช้ primary key (ได้แก่ `keyPath` หรือ id ที่เพิ่มขึ้นอัตโนมัติ) เป็นตัวระบุ record วิธีนี้มีประสิทธิภาพสำหรับการค้นหา **ด้วย primary key** แต่หากต้องการค้นหาด้วยฟิลด์อื่น เช่น ค้นหา contacts ทั้งหมดตาม `name` คุณจำเป็นต้องใช้ **index**
 
-Index คือโครงสร้างเรียงลำดับรองที่แมปค่าของฟิลด์ที่เลือกไปยัง primary key ของระเบียนนั้น เมื่อสร้างแล้ว คุณสามารถเรียก `get()` หรือ `getAll()` บน index ได้เหมือนกับที่เรียกบน store โดยตรง
+Index คือโครงสร้างเรียงลำดับรองที่แมปค่าของฟิลด์ที่เลือกไปยัง primary key ของ record นั้น เมื่อสร้างแล้ว คุณสามารถเรียก `get()` หรือ `getAll()` บน index ได้เหมือนกับที่เรียกบน store โดยตรง
 
 ## การสร้าง index ด้วย `createIndex()`
 
@@ -39,13 +39,13 @@ request.onupgradeneeded = (event) => {
 | พารามิเตอร์ | ความหมาย |
 |-----------|---------|
 | `name` | ชื่อ index ที่จะใช้เรียกคืนในภายหลังด้วย `store.index(name)` |
-| `keyPath` | path ของ property บนแต่ละระเบียนที่จะ index (เช่น `'name'`, `'address.city'`) |
-| `unique` | หาก `true` store จะปฏิเสธระเบียนที่มีค่า indexed ซ้ำกับที่มีอยู่ |
+| `keyPath` | path ของ property บนแต่ละ record ที่จะ index (เช่น `'name'`, `'address.city'`) |
+| `unique` | หาก `true` store จะปฏิเสธ record ที่มีค่า indexed ซ้ำกับที่มีอยู่ |
 | `multiEntry` | หาก `true` และ property ที่ index เป็น array แต่ละ element ของ array จะมี entry เป็นของตัวเองใน index |
 
 ## การเปิด index และการค้นหา
 
-หลังจาก upgrade เสร็จสิ้น ให้เปิด index จาก transaction อ่าน/เขียนปกติด้วย `store.index('by_name')` จากนั้นเรียก `get(value)` สำหรับระเบียนเดียว หรือ `getAll(value)` สำหรับระเบียนที่ตรงกันทั้งหมด
+หลังจาก upgrade เสร็จสิ้น ให้เปิด index จาก transaction อ่าน/เขียนปกติด้วย `store.index('by_name')` จากนั้นเรียก `get(value)` สำหรับ record เดียว หรือ `getAll(value)` สำหรับ record ที่ตรงกันทั้งหมด
 
 ```js
 const tx = db.transaction('contacts', 'readonly');
@@ -61,7 +61,7 @@ const getAllReq = nameIndex.getAll();
 getAllReq.onsuccess = () => console.log(getAllReq.result);
 ```
 
-การส่งค่าให้ `getAll(value)` จะกรองเฉพาะระเบียนที่ฟิลด์ indexed ตรงกับค่านั้น หากไม่ส่งอาร์กิวเมนต์ (หรือส่ง `undefined`) จะคืนค่าทุกระเบียนใน store โดยเรียงตาม index key
+การส่งค่าให้ `getAll(value)` จะกรองเฉพาะ record ที่ฟิลด์ indexed ตรงกับค่านั้น หากไม่ส่งอาร์กิวเมนต์ (หรือส่ง `undefined`) จะคืนค่าทุก record ใน store โดยเรียงตาม index key
 
 ## แฟล็ก `unique`
 
@@ -79,7 +79,7 @@ store.createIndex('by_email', 'email', { unique: true });
 store.createIndex('by_tag', 'tags', { multiEntry: true });
 ```
 
-เมื่อใช้ `multiEntry: true` ฟิลด์ที่มีค่าเป็น array จะสร้าง index entry หนึ่งรายการต่อ element คุณสามารถเรียก `index.getAll('idb')` และระเบียนข้างต้นจะถูกคืนค่า แม้ว่าค่าของ `tags` จะเป็น array ก็ตาม
+เมื่อใช้ `multiEntry: true` ฟิลด์ที่มีค่าเป็น array จะสร้าง index entry หนึ่งรายการต่อ element คุณสามารถเรียก `index.getAll('idb')` และ record ข้างต้นจะถูกคืนค่า แม้ว่าค่าของ `tags` จะเป็น array ก็ตาม
 
 ## ตัวอย่างรันได้: สร้าง index และค้นหา
 
@@ -144,8 +144,28 @@ export const indexesCode = `(async function () {
 <StorageRunner client:visible code={indexesCode} />
 
 <Callout title="ประเด็นสำคัญ">
-Index จะถูกสร้างครั้งเดียวใน `onupgradeneeded` และไม่มีการสร้างซ้ำอีก ใช้ `{ unique: true }` เพื่อบังคับความไม่ซ้ำกันของฟิลด์ และใช้ `{ multiEntry: true }` เมื่อ property ที่ index เก็บค่าเป็น array เรียกคืน index ในขณะค้นหาด้วย `store.index('indexName')` จากนั้นเรียก `.get(value)` สำหรับระเบียนเดียว หรือ `.getAll(value)` สำหรับระเบียนที่ตรงกันทั้งหมด
+Index จะถูกสร้างครั้งเดียวใน `onupgradeneeded` และไม่มีการสร้างซ้ำอีก ใช้ `{ unique: true }` เพื่อบังคับความไม่ซ้ำกันของฟิลด์ และใช้ `{ multiEntry: true }` เมื่อ property ที่ index เก็บค่าเป็น array เรียกคืน index ในขณะค้นหาด้วย `store.index('indexName')` จากนั้นเรียก `.get(value)` สำหรับ record เดียว หรือ `.getAll(value)` สำหรับ record ที่ตรงกันทั้งหมด
 </Callout>
+
+## Trade-offs
+
+| ตัวเลือก | Benefit | Cost |
+|---------|---------|------|
+| สร้าง index บนฟิลด์ที่ค้นหาบ่อย | อ่าน/ค้นหาด้วยฟิลด์นั้นเร็วขึ้นมาก ไม่ต้องสแกนทุก record | ทุกครั้งที่เขียน record ต้องอัปเดต index เพิ่มด้วย ทำให้เขียนช้าลง และกิน storage เพิ่ม |
+| ไม่สร้าง index เลย (ค้นหาผ่าน cursor + filter เอง) | ไม่มี overhead ตอนเขียน ไม่กิน storage เพิ่ม | อ่าน/ค้นหาต้องสแกนทุก record ช้าลงเมื่อ store มีข้อมูลมาก |
+| ใช้ `multiEntry: true` กับฟิลด์ array | ค้นหาแต่ละ element ใน array ได้อย่างมีประสิทธิภาพ | เพิ่มจำนวน index entry ต่อ record หนึ่งตัว ทำให้ index มีขนาดใหญ่ขึ้นตามจำนวน element |
+
+## Common Mistakes
+
+- **พยายามสร้าง index ใหม่นอก `onupgradeneeded`** — จะโยน error ทันที index สร้างหรือลบได้เฉพาะภายใน upgrade transaction เท่านั้น
+- **ตั้ง `unique: true` กับฟิลด์ที่มีค่าซ้ำกันอยู่แล้ว** — การเขียน record ที่มีค่า indexed ซ้ำจะเกิด `ConstraintError` ทันที ต้องมั่นใจว่าฟิลด์นั้นไม่ซ้ำกันจริงก่อนเปิดใช้ตัวเลือกนี้
+- **ลืมว่า `getAll()` บน index จะเรียงตาม index key ไม่ใช่ primary key** — ถ้าคาดหวังลำดับตาม primary key แต่ query ผ่าน index ผลลัพธ์ที่ได้จะเรียงตามฟิลด์ที่ index ไว้แทน
+
+> 💡 Real World Example
+>
+> **Figma** — สร้าง index บนฟิลด์อย่าง `updatedAt` หรือ `projectId` ใน local cache เพื่อให้ query ไฟล์ design ล่าสุดหรือไฟล์ในโปรเจกต์เดียวกันได้เร็วโดยไม่ต้องสแกน record ทั้งหมด
+>
+> **Spotify Web Player** — ใช้ index บนฟิลด์ที่เกี่ยวกับ playlist หรือ track ID เพื่อให้ค้นหาข้อมูลที่ cache ไว้ได้รวดเร็ว แม้ว่าจำนวน record จะเพิ่มขึ้นเรื่อยๆ ตามการใช้งาน
 
 export const quizIndexes = [
   {

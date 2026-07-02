@@ -12,16 +12,16 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
 ## Object Store คืออะไร?
 
-**Object store** คือสิ่งที่ IndexedDB ใช้แทนตารางในฐานข้อมูล แต่ละเรคคอร์ดในอ็อบเจกต์สโตร์คือ JavaScript object ที่คุณเก็บเข้าไป — แต่ต่างจากตาราง SQL ตรงที่ไม่มีการบังคับโครงสร้าง คุณเก็บออบเจกต์ที่มีรูปแบบต่างกันในสโตร์เดียวกันได้ กฎโครงสร้างเพียงอย่างเดียวคือวิธีกำหนด **key**
+**Object store** คือสิ่งที่ IndexedDB ใช้แทนตารางใน database แต่ละ record ใน object store คือ JavaScript object ที่คุณเก็บเข้าไป — แต่ต่างจากตาราง SQL ตรงที่ไม่มีการบังคับโครงสร้าง คุณเก็บ object ที่มีรูปแบบต่างกันใน store เดียวกันได้ กฎโครงสร้างเพียงอย่างเดียวคือวิธีกำหนด **key**
 
 เปรียบได้ดังนี้:
 
 - แถวในตาราง SQL มีชุดคอลัมน์ที่ตายตัว
-- เรคคอร์ดใน object store คือ JS object ใดก็ได้ที่คุณส่งเข้าไป บวกกับ key ที่ระบุตัวตนของมัน
+- record ใน object store คือ JS object ใดก็ได้ที่คุณส่งเข้าไป บวกกับ key ที่ระบุตัวตนของมัน
 
 ## การสร้าง Object Store
 
-คุณสร้าง object store โดยเรียก `db.createObjectStore(name, options)` บน instance ของฐานข้อมูล เมธอดนี้ **ต้อง** เรียกใช้ภายใน event handler `onupgradeneeded` เท่านั้น — ใช้ได้เฉพาะในช่วงการอัปเกรดเวอร์ชัน
+คุณสร้าง object store โดยเรียก `db.createObjectStore(name, options)` บน instance ของ database method นี้ **ต้อง** เรียกใช้ภายใน event handler `onupgradeneeded` เท่านั้น — ใช้ได้เฉพาะในช่วงการอัปเกรดเวอร์ชัน
 
 ```js
 const request = indexedDB.open('my-db', 1);
@@ -32,11 +32,11 @@ request.onupgradeneeded = (event) => {
 };
 ```
 
-อาร์กิวเมนต์แรกคือชื่อสโตร์ อาร์กิวเมนต์ที่สองคือออบเจกต์ตัวเลือกที่ควบคุมวิธีการทำงานของ key
+อาร์กิวเมนต์แรกคือชื่อ store อาร์กิวเมนต์ที่สองคือ object ตัวเลือกที่ควบคุมวิธีการทำงานของ key
 
 ## keyPath: In-Line Key
 
-เมื่อกำหนด `keyPath` สโตร์จะใช้ **property บนออบเจกต์ที่เก็บ** เป็น key ซึ่งเรียกว่า **in-line key** เพราะ key อยู่ภายในออบเจกต์นั้นเอง
+เมื่อกำหนด `keyPath` store จะใช้ **property บน object ที่เก็บ** เป็น key ซึ่งเรียกว่า **in-line key** เพราะ key อยู่ภายใน object นั้นเอง
 
 ```js
 // ออบเจกต์ทุกชิ้นที่เก็บ ต้องมี property `id`
@@ -49,7 +49,7 @@ store.add({ id: 1, name: 'Alice', email: 'alice@example.com' });
 store.add({ name: 'Bob' });
 ```
 
-หากกำหนด `autoIncrement: true` ร่วมกับ `keyPath` เบราว์เซอร์จะสร้าง key ให้อัตโนมัติและเขียนลงในออบเจกต์ที่ตำแหน่งที่ระบุ:
+หากกำหนด `autoIncrement: true` ร่วมกับ `keyPath` browser จะสร้าง key ให้อัตโนมัติและเขียนลงใน object ที่ตำแหน่งที่ระบุ:
 
 ```js
 db.createObjectStore('contacts', { keyPath: 'id', autoIncrement: true });
@@ -60,7 +60,7 @@ store.add({ name: 'Alice' }); // เก็บเป็น { id: 1, name: 'Alice'
 
 ## Out-of-Line Key
 
-เมื่อไม่กำหนด `keyPath` (หรือตั้งเป็น `null`) key จะ **แยกออกจากออบเจกต์** เรียกว่า **out-of-line key** คุณต้องส่ง key เองเป็นอาร์กิวเมนต์ที่สองของ `add()` หรือ `put()`
+เมื่อไม่กำหนด `keyPath` (หรือตั้งเป็น `null`) key จะ **แยกออกจาก object** เรียกว่า **out-of-line key** คุณต้องส่ง key เองเป็นอาร์กิวเมนต์ที่สองของ `add()` หรือ `put()`
 
 ```js
 db.createObjectStore('raw-blobs', { keyPath: null });
@@ -69,7 +69,7 @@ db.createObjectStore('raw-blobs', { keyPath: null });
 store.add({ data: '...' }, 'blob-001');
 ```
 
-ผสมกับ `autoIncrement: true` เพื่อให้เบราว์เซอร์สร้าง key เป็นจำนวนเต็มโดยไม่แตะออบเจกต์ที่เก็บ:
+ผสมกับ `autoIncrement: true` เพื่อให้ browser สร้าง key เป็นจำนวนเต็มโดยไม่แตะ object ที่เก็บ:
 
 ```js
 db.createObjectStore('logs', { autoIncrement: true });
@@ -82,19 +82,19 @@ store.add({ level: 'info', message: 'App started' });
 
 | โหมด | keyPath | autoIncrement | แหล่งที่มาของ Key |
 |---|---|---|---|
-| In-line (กำหนดเอง) | `'id'` | `false` | ฟิลด์ `id` ของออบเจกต์ |
+| In-line (กำหนดเอง) | `'id'` | `false` | ฟิลด์ `id` ของ object |
 | In-line (อัตโนมัติ) | `'id'` | `true` | สร้างอัตโนมัติ เก็บไว้ใน `id` |
 | Out-of-line (กำหนดเอง) | (ไม่มี) | `false` | ผู้เรียกส่ง key มาเอง |
-| Out-of-line (อัตโนมัติ) | (ไม่มี) | `true` | สร้างอัตโนมัติ ไม่อยู่ในออบเจกต์ |
+| Out-of-line (อัตโนมัติ) | (ไม่มี) | `true` | สร้างอัตโนมัติ ไม่อยู่ใน object |
 
 ## ลองทำ: สร้าง Object Store สองอัน
 
-ตัวอย่างด้านล่างเปิดฐานข้อมูลที่เวอร์ชัน 1 และสร้างสโตร์สองอัน:
+ตัวอย่างด้านล่างเปิด database ที่เวอร์ชัน 1 และสร้าง store สองอัน:
 
 - `contacts` — in-line key โดยใช้ property `id`
 - `logs` — out-of-line key แบบ auto-increment
 
-รันดูเพื่อดูชื่อสโตร์ทั้งสองถูกพิมพ์ออกมาใน console
+รันดูเพื่อดูชื่อ store ทั้งสองถูกพิมพ์ออกมาใน console
 
 export const objectStoresCode = `
 const db = await new Promise((resolve, reject) => {
@@ -117,8 +117,28 @@ console.log('Cleanup done');
 <StorageRunner client:visible code={objectStoresCode} />
 
 <Callout title="ใช้ได้เฉพาะภายใน onupgradeneeded เท่านั้น">
-`createObjectStore()` จะ throw `DOMException` หากเรียกนอก handler `onupgradeneeded` Object store เป็นส่วนหนึ่งของ schema ฐานข้อมูล และการเปลี่ยนแปลง schema จะทำได้เฉพาะในช่วงการอัปเกรดเวอร์ชันเท่านั้น หากต้องการเพิ่มสโตร์ใหม่ ให้เพิ่มเลขเวอร์ชันเมื่อเปิดฐานข้อมูล
+`createObjectStore()` จะ throw `DOMException` หากเรียกนอก handler `onupgradeneeded` Object store เป็นส่วนหนึ่งของ schema database และการเปลี่ยนแปลง schema จะทำได้เฉพาะในช่วงการอัปเกรดเวอร์ชันเท่านั้น หากต้องการเพิ่ม store ใหม่ ให้เพิ่มเลขเวอร์ชันเมื่อเปิด database
 </Callout>
+
+## Trade-offs
+
+| ตัวเลือก | Benefit | Cost |
+|---------|---------|------|
+| Schemaless object store | เก็บ object รูปแบบต่างกันใน store เดียวได้ ปรับโครงสร้างข้อมูลได้ยืดหยุ่นโดยไม่ต้อง migrate schema | ไม่มีการบังคับ validate รูปแบบ record ผิดพลาดเรื่อง field/type จะไปโผล่ตอน runtime แทน |
+| In-line key (`keyPath`) | key อยู่ใน object เดียวกัน อ่าน/debug ง่าย ไม่ต้องส่ง key แยก | object ทุกชิ้นต้องมี field ตาม `keyPath` เสมอ ไม่งั้น `add`/`put` error |
+| Out-of-line key | แยก key ออกจาก object เก็บ object ที่ไม่มี field สำหรับ identity ได้ (เช่น blob) | ต้องส่ง key เองทุกครั้งที่เรียก `add`/`put` เพิ่ม boilerplate |
+
+## Common Mistakes
+
+- **เรียก `createObjectStore()` นอก `onupgradeneeded`** — method นี้ throw `DOMException` ทันทีถ้าเรียกนอก upgrade transaction เพราะการเปลี่ยน schema ทำได้เฉพาะช่วง version upgrade เท่านั้น
+- **ไม่เช็ค `objectStoreNames.contains()` ก่อนสร้าง store ซ้ำ** — เมื่อเพิ่มเวอร์ชันแล้ว `onupgradeneeded` รันโค้ด migrate เดิมซ้ำ การเรียก `createObjectStore` ด้วยชื่อที่มีอยู่แล้วจะ throw error
+- **สับสนว่า out-of-line key ถูกเก็บใน object** — เมื่อไม่กำหนด `keyPath` key จะไม่ปรากฏใน object ที่ได้จาก `get()`/`getAll()` เลย ต้องดูจาก `IDBCursor.key` หรือ argument ที่ส่งตอน `add()` แทน
+
+> 💡 Real World Example
+>
+> **Notion** — แยก object store ตามประเภทข้อมูล เช่น pages กับ blocks โดยใช้ in-line key `id` เพื่อให้ sync กับ record บน server ตรงกันโดยตรง
+>
+> **Google Docs** — เก็บ edit history เป็น out-of-line key แบบ auto-increment ในแต่ละ document เพื่อรักษาลำดับเวลาของการแก้ไขโดยไม่ต้องผูก timestamp ไว้ใน object เอง
 
 export const quizObjectStores = [
   {
