@@ -130,12 +130,12 @@ console.log('Cleanup done');`;
 <StorageRunner client:visible code={crudCode} />
 
 <Callout title="add กับ put — และ undefined กับ null">
-ใช้ `add` เมื่อต้องการความแน่ใจว่ากำลังสร้าง record ใหม่; มันจะโยน error เมื่อ key ซ้ำ ใช้ `put` เมื่อต้องการพฤติกรรม upsert และไม่สนใจว่า record มีอยู่แล้วหรือไม่
+ใช้ `add` เมื่อต้องการความแน่ใจว่ากำลังสร้าง record ใหม่; จะโยน error เมื่อ key ซ้ำ ใช้ `put` เมื่อต้องการพฤติกรรม upsert และไม่สนใจว่า record มีอยู่แล้วหรือไม่
 
 `get(key)` จะ resolve เป็น `undefined` ไม่ใช่ `null` เมื่อไม่มี key นั้นอยู่ ต่างจาก `localStorage.getItem` ที่คืน `null` ให้ตรวจสอบ `result === undefined` เสมอเพื่อตรวจจับ record ที่หายไป
 </Callout>
 
-## Trade-offs
+## ข้อแลกเปลี่ยน
 
 | ตัวเลือก | Benefit | Cost |
 |---------|---------|------|
@@ -143,13 +143,13 @@ console.log('Cleanup done');`;
 | `getAll()` เทียบกับการวน cursor | เรียกครั้งเดียวได้ array ครบ เขียนโค้ดสั้น อ่านง่าย | โหลดทุก record เข้า memory พร้อมกัน ไม่เหมาะกับ store ขนาดใหญ่ |
 | wrap `IDBRequest` ด้วย `Promise` | ใช้ `async/await` อ่านง่าย ลด callback nesting | เพิ่ม layer abstraction; ต้อง handle `onerror` เองให้ครบทุก request ไม่งั้น error หายเงียบ |
 
-## Common Mistakes
+## ข้อผิดพลาดที่พบบ่อย
 
 - **เช็ค `if (!result)` แทน `result === undefined`** — record ที่เก็บค่า falsy เช่น `0` หรือ `''` จะถูกตีความว่าไม่มีอยู่ ทั้งที่จริงมี record นั้นอยู่ ต้องเช็ค `=== undefined` เท่านั้น
 - **ใช้ `add()` แล้วไม่ handle `onerror`** — เมื่อ key ซ้ำ request จะโยน `ConstraintError` แต่ถ้าไม่มี `onerror` handler error จะหายไปเงียบ ๆ โดยที่ record ไม่ถูกเขียนแต่โค้ดไม่รู้ตัว
 - **`await fetch()` แทรกกลางระหว่างเรียก store method** — ทำให้ transaction ที่ store method นั้นสังกัดอยู่ auto-commit ไปก่อน request ถัดไปจะ throw `TransactionInactiveError` ทันที
 
-> 💡 Real World Example
+> 💡 ตัวอย่างจากของจริง
 >
 > **Notion** — ใช้ IndexedDB เก็บ workspace data สำหรับโหมด offline โดยเรียก `put()` แบบ upsert เพื่อ sync การเปลี่ยนแปลงจาก server กลับเข้า local store โดยไม่ต้องเช็คว่า record มีอยู่ก่อน
 >
@@ -157,7 +157,7 @@ console.log('Cleanup done');`;
 
 export const quizCrud = [
   {
-    q: 'คุณเรียก store.add({ id: 1, name: "Apple" }) ในขณะที่ record ที่มี id 1 มีอยู่แล้ว จะเกิดอะไรขึ้น?',
+    q: 'คุณเรียก store.add({ id: 1, name: "Apple" }) ตอนที่ record ที่มี id 1 มีอยู่แล้ว จะเกิดอะไรขึ้น?',
     options: [
       'record เดิมถูกเขียนทับโดยไม่แจ้งเตือน',
       'request เรียก onerror พร้อม ConstraintError',
@@ -168,7 +168,7 @@ export const quizCrud = [
   },
   {
     q: 'store.get(999) จะ resolve เป็นอะไรเมื่อไม่มี record ที่มี key 999?',
-    options: ['null', 'false', 'undefined', 'มันโยน NotFoundError'],
+    options: ['null', 'false', 'undefined', 'โยน NotFoundError'],
     answer: 2,
   },
   {

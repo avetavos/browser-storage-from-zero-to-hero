@@ -20,7 +20,7 @@ CRUD พื้นฐานของ IndexedDB — `put`, `get`, `delete` — ช
 | **1. ภาพรวมนี้** | Indexes, cursors, key ranges, library idb, migrations และ blobs เชื่อมต่อกันอย่างไร |
 | **2. Indexes** | การสร้างและสืบค้น secondary indexes; `index.get` vs `index.getAll` |
 | **3. Cursors & key ranges** | การเดินผ่านผลลัพธ์แบบเรียงลำดับ; `IDBKeyRange.bound`, `lowerBound`, `upperBound` |
-| **4. library idb** | Wrapper แบบ Promise; เหตุใดคุณควรใช้มันเสมอในโปรดักชัน |
+| **4. library idb** | Wrapper แบบ Promise; ทำไมคุณถึงควรใช้เสมอในโปรดักชัน |
 | **5. Migrations** | รูปแบบ `onupgradeneeded` สำหรับการพัฒนาสคีมาอย่างปลอดภัยข้ามเวอร์ชัน |
 | **6. Blobs & files** | การเก็บข้อมูลไบนารี — รูปภาพ, เสียง, PDF — โดยตรงใน object store |
 
@@ -51,7 +51,7 @@ const user  = await index.get('ada@example.com');
 
 ## Cursors ช่วยให้คุณเดินผ่านผลลัพธ์ได้
 
-**Cursor** iterate records ตามลำดับ index คุณเปิดมันบน object store (ลำดับ primary key) หรือ index (ลำดับ secondary key) แล้วเรียก `cursor.continue()` เพื่อเลื่อนไปข้างหน้า:
+**Cursor** iterate records ตามลำดับ index คุณเปิด cursor บน object store (ลำดับ primary key) หรือ index (ลำดับ secondary key) แล้วเรียก `cursor.continue()` เพื่อเลื่อนไปข้างหน้า:
 
 ```js
 const tx     = db.transaction('users', 'readonly');
@@ -71,7 +71,7 @@ Key ranges — `bound`, `lowerBound`, `upperBound`, `only` — สามาร�
 
 ## library idb
 
-Raw IndexedDB API ทำงานแบบ callback/event-driven และมีความยาวมาก library **idb** ของ Jake Archibald ห่อหุ้มมันด้วย Promises ที่สะอาดโดยไม่มีค่าใช้จ่ายรันไทม์:
+Raw IndexedDB API ทำงานแบบ callback/event-driven และมีความยาวมาก library **idb** ของ Jake Archibald ห่อ API นี้ด้วย Promises ที่สะอาดโดยไม่มีค่าใช้จ่ายรันไทม์:
 
 ```js
 import { openDB } from 'idb';

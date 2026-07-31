@@ -29,9 +29,9 @@ Cookie: session=abc123; theme=dark; user_id=42
 
 ## ขีดจำกัดขนาด
 
-cookie แต่ละชิ้น (ชื่อ + ค่า + attribute รวมกัน) มีขีดจำกัดที่ประมาณ **4 KB** ซึ่งเป็นขีดจำกัดของ browser การตั้งค่า cookie ที่ใหญ่กว่า 4 KB จะล้มเหลวแบบเงียบๆ — browser ไม่ throw error แต่ cookie จะไม่ถูกเก็บ
+cookie แต่ละชิ้น (ชื่อ + ค่า + attribute รวมกัน) มีขีดจำกัดที่ประมาณ **4 KB** ที่เป็นขีดจำกัดของ browser การตั้งค่า cookie ที่ใหญ่กว่า 4 KB จะล้มเหลวแบบเงียบๆ — browser ไม่ throw error แต่ cookie จะไม่ถูกเก็บ
 
-ด้วยเหตุนี้ cookie จึงไม่เหมาะสำหรับเก็บ JSON payload ภาพที่เข้ารหัส base64 หรือข้อมูลที่มีโครงสร้างขนาดใหญ่ ควรใช้ `localStorage` หรือ IndexedDB แทน
+ดังนั้น cookie จึงไม่เหมาะสำหรับเก็บ JSON payload ภาพที่เข้ารหัส base64 หรือข้อมูลที่มีโครงสร้างขนาดใหญ่ ควรใช้ `localStorage` หรือ IndexedDB แทน
 
 ## ขีดจำกัดจำนวนต่อ domain
 
@@ -41,7 +41,7 @@ browser ยังมี**ขีดจำกัดจำนวน cookie ต่�
 
 ## การส่งอัตโนมัติใน request — ความแตกต่างหลักจาก Web Storage
 
-นี่คือคุณสมบัติที่สำคัญที่สุดของ cookie และเหตุผลที่มันมีอยู่:
+นี่คือคุณสมบัติที่สำคัญที่สุดของ cookie และเหตุผลที่มีอยู่:
 
 **ทุกครั้งที่ browser ทำ HTTP request browser จะแนบ cookie ที่ตรงเงื่อนไขทั้งหมดไปใน `Cookie` request header โดยอัตโนมัติ**
 
@@ -71,20 +71,20 @@ Server ได้รับ cookie โดยไม่ต้องผ่าน Java
 cookie และ Web Storage ใช้แทนกันไม่ได้ ความแตกต่างสำคัญคือ cookie**ถูกส่งโดยอัตโนมัติใน HTTP request ทุกครั้ง**ที่ตรงกับ domain — ค่าของ Web Storage อยู่ใน browser และไม่ออกไปไหนเว้นแต่โค้ดของคุณจะส่งเอง ใช้ cookie เมื่อ server ต้องการค่า; ใช้ Web Storage เมื่อค่าเป็น client-side เท่านั้น
 </Callout>
 
-## Trade-offs
+## ข้อแลกเปลี่ยน
 
 | ตัวเลือก | Benefit | Cost |
 |---------|---------|------|
 | ส่ง cookie อัตโนมัติทุก request | server ตรวจสอบ session ได้ทันทีโดยไม่ต้องเขียนโค้ดฝั่ง client เพิ่ม | ทุก request ที่ตรง domain ต้องแบก cookie header ไปด้วย แม้ request นั้นไม่ต้องการข้อมูลใน cookie เลย ทำให้ payload หนักขึ้นโดยไม่จำเป็น |
 | จำกัดขนาดไว้ที่ ~4 KB ต่อชิ้น | บังคับให้ cookie เก็บแค่ identifier สั้นๆ ทำให้ request header ไม่บวมเกินไป | เก็บข้อมูลโครงสร้างใหญ่หรือ JSON payload ไม่ได้ ต้องพึ่ง `localStorage`/IndexedDB แทน |
 
-## Common Mistakes
+## ข้อผิดพลาดที่พบบ่อย
 
-- **คิดว่า cookie ทำงานเหมือน `localStorage` แค่มี syntax ต่างกัน** — cookie ถูกส่งอัตโนมัติไปกับทุก HTTP request ที่ตรง domain ในขณะที่ `localStorage` ไม่เคยออกจาก browser เว้นแต่โค้ดจะส่งเอง
-- **ตั้งค่า cookie ที่มีขนาดเกิน 4 KB แล้วแปลกใจว่าทำไมมันหาย** — browser ไม่ throw error แต่จะไม่เก็บ cookie นั้นเลย ควรตรวจสอบขนาดก่อนตั้งค่าเสมอ
+- **คิดว่า cookie ทำงานเหมือน `localStorage` แค่มี syntax ต่างกัน** — cookie ถูกส่งอัตโนมัติไปกับทุก HTTP request ที่ตรง domain ส่วน `localStorage` ไม่เคยออกจาก browser เว้นแต่โค้ดจะส่งเอง
+- **ตั้งค่า cookie ที่มีขนาดเกิน 4 KB แล้วแปลกใจว่าทำไม cookie หาย** — browser ไม่ throw error แต่จะไม่เก็บ cookie นั้นเลย ควรตรวจสอบขนาดก่อนตั้งค่าเสมอ
 - **ยัด cookie จำนวนมากเข้าไปเรื่อยๆ จนใกล้ขีดจำกัด ~50 ต่อ domain** — เมื่อเกิน browser จะลบ cookie เก่าออกอย่างเงียบๆ ทำให้ session หรือค่า preference บางตัวหายไปโดยไม่มีการแจ้งเตือน
 
-> 💡 Real World Example
+> 💡 ตัวอย่างจากของจริง
 >
 > **Session-based authentication** — เว็บแอปส่วนใหญ่ใช้ cookie เก็บ session ID เพราะ server อ่านค่าได้ทันทีจาก `Cookie` header โดยไม่ต้องรอ JavaScript ทำงานก่อน
 >
@@ -97,7 +97,7 @@ export const quizWhatAreCookies = [
     answer: 1,
   },
   {
-    q: 'เบราว์เซอร์ส่งคุกกี้หลายชิ้นไปยัง server อย่างไร?',
+    q: 'browser ส่งคุกกี้หลายชิ้นไปยัง server อย่างไร?',
     options: [
       'ใน Cookie header แยกกัน ทีละชิ้น',
       'เป็น JSON array ใน Cookie header เดียว',
@@ -107,7 +107,7 @@ export const quizWhatAreCookies = [
     answer: 2,
   },
   {
-    q: 'เบราว์เซอร์ส่งคุกกี้ไปยัง server เมื่อใด?',
+    q: 'browser ส่งคุกกี้ไปยัง server เมื่อใด?',
     options: [
       'เฉพาะเมื่อ JavaScript เรียก document.cookie',
       'เฉพาะใน POST request',

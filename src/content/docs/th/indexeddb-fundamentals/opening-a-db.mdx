@@ -12,7 +12,7 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
 ## การเปิด database ด้วย `indexedDB.open()`
 
-ต่างจาก `fetch()` ที่คืนค่าเป็น Promise, `indexedDB.open(name, version)` จะคืนค่าเป็น **`IDBOpenDBRequest`** — ไม่ใช่ Promise การโต้ตอบกับมันทำผ่านการกำหนด callback ให้กับ event handler
+ต่างจาก `fetch()` ที่คืนค่าเป็น Promise, `indexedDB.open(name, version)` จะคืนค่าเป็น **`IDBOpenDBRequest`** — ไม่ใช่ Promise คุณโต้ตอบกับ request นี้ผ่านการกำหนด callback ให้กับ event handler
 
 ```js
 const request = indexedDB.open('my-database', 1);
@@ -131,7 +131,7 @@ console.log('Cleanup done');`;
 คุณสามารถเรียก `createObjectStore()`, `deleteObjectStore()` หรือสร้าง index ได้เฉพาะภายใน `onupgradeneeded` handler เท่านั้น การพยายามทำสิ่งเหล่านี้นอก upgrade transaction จะ throw `DOMException` หากต้องการเพิ่ม store ใหม่ ให้เพิ่มหมายเลขเวอร์ชัน — สิ่งนั้นจะ trigger `onupgradeneeded` อีกครั้ง โดยมีหมายเลขเวอร์ชันเก่าและใหม่ให้ใช้งานผ่าน `event.oldVersion` และ `event.newVersion`
 </Callout>
 
-## Trade-offs
+## ข้อแลกเปลี่ยน
 
 | ตัวเลือก | Benefit | Cost |
 |---------|---------|------|
@@ -139,13 +139,13 @@ console.log('Cleanup done');`;
 | Version-based schema migration | ควบคุม schema เปลี่ยนแปลงได้ชัดเจนผ่าน `oldVersion`/`newVersion` | ต้องออกแบบ migration logic เองทุกครั้งที่เพิ่มเวอร์ชัน และเสี่ยงลืม handle `onblocked` |
 | wrap `open()` ด้วย `Promise` | ใช้ `async/await` เขียนโค้ดเป็นเส้นตรง อ่านง่ายขึ้นมาก | ซ่อนรายละเอียด event lifecycle ไป — debug ยากขึ้นถ้าลืม handle `onblocked` หรือ `onversionchange` |
 
-## Common Mistakes
+## ข้อผิดพลาดที่พบบ่อย
 
 - **ไม่ handle event `onblocked`** — ถ้า tab อื่นเปิด connection เดิมค้างอยู่ การ upgrade เวอร์ชันจะค้างเงียบ ๆ โดยไม่มี error ใด ๆ ผู้ใช้จะเห็นหน้าเว็บค้างโดยไม่รู้สาเหตุ
 - **ลืมปิด connection ใน `onversionchange`** — ถ้าไม่เรียก `db.close()` เมื่อ tab อื่นร้องขอ upgrade การ upgrade นั้นจะถูกบล็อกไปเรื่อย ๆ จนกว่า tab นี้จะถูกปิดหรือ reload
 - **ไม่ผูก `onerror` กับ `request`** — เมื่อ `open()` ล้มเหลว เช่น ใน private mode ที่บล็อก storage error จะหายไปเงียบ ๆ โดยไม่มี log ใด ๆ ให้ debug
 
-> 💡 Real World Example
+> 💡 ตัวอย่างจากของจริง
 >
 > **Google Docs** — ใช้ version number ควบคุม schema ของ object store สำหรับ offline editing และ handle `onversionchange` เพื่อปิด connection เก่าเมื่อ deploy schema ใหม่ผ่าน tab ที่ reload แล้ว
 >

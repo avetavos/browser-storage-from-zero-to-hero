@@ -23,7 +23,7 @@ Set-Cookie: session=abc123; Max-Age=3600; Path=/; Secure; HttpOnly; SameSite=Str
 
 สอง attribute นี้ควบคุมว่า cookie จะเป็น **session cookie** หรือ **persistent cookie**
 
-**ไม่มี Expires/Max-Age** → session cookie browser ลบมันเมื่อ session แท็บ/หน้าต่างสิ้นสุด (พฤติกรรมการปิด browser แตกต่างกันตาม browser และการตั้งค่า "restore session")
+**ไม่มี Expires/Max-Age** → session cookie ที่ browser ลบทิ้งเมื่อ session แท็บ/หน้าต่างสิ้นสุด (พฤติกรรมการปิด browser แตกต่างกันตาม browser และการตั้งค่า "restore session")
 
 ```http
 Set-Cookie: pref=dark
@@ -51,7 +51,7 @@ Set-Cookie: pref=dark; Max-Age=86400
 Set-Cookie: admin_token=xyz; Path=/admin
 ```
 
-browser จะส่ง cookie นี้เฉพาะ request ที่ path ขึ้นต้นด้วย `/admin` เท่านั้น Request ไปยัง `/` หรือ `/app` จะไม่รวมมัน
+browser จะส่ง cookie นี้เฉพาะ request ที่ path ขึ้นต้นด้วย `/admin` เท่านั้น Request ไปยัง `/` หรือ `/app` จะไม่รวม cookie นี้
 
 ค่าเริ่มต้น: ถ้าไม่ระบุ browser จะใช้ path ของ URL ที่ตั้ง cookie (มักเป็น `/`)
 
@@ -65,7 +65,7 @@ Set-Cookie: pref=dark; Domain=.example.com
 
 จุดนำหน้า (`.example.com`) หมายความว่า cookie จะถูกส่งไปยัง `example.com` และ subdomain ทั้งหมด (`api.example.com`, `www.example.com` ฯลฯ)
 
-ถ้าไม่ระบุ `Domain` cookie จะถูกส่งเฉพาะ host ที่ตั้งค่ามันเท่านั้น (ไม่มี subdomain)
+ถ้าไม่ระบุ `Domain` cookie จะถูกส่งเฉพาะ host ที่ตั้งค่า cookie นั้นเท่านั้น (ไม่มี subdomain)
 
 ## Secure — เฉพาะ HTTPS
 
@@ -79,7 +79,7 @@ Set-Cookie: session=abc; Secure
 
 ## HttpOnly — มองไม่เห็นจาก JavaScript
 
-`HttpOnly` คือหนึ่งใน attribute ด้านความปลอดภัยที่สำคัญที่สุด มันป้องกันไม่ให้ JavaScript อ่าน cookie ผ่าน `document.cookie`:
+`HttpOnly` คือหนึ่งใน attribute ด้านความปลอดภัยที่สำคัญที่สุด เพราะป้องกันไม่ให้ JavaScript อ่าน cookie ผ่าน `document.cookie`:
 
 ```http
 Set-Cookie: session=abc123; HttpOnly; Secure; SameSite=Strict
@@ -129,10 +129,10 @@ Set-Cookie: session=abc123; Max-Age=3600; Path=/; Secure; HttpOnly; SameSite=Str
 - ป้องกัน cookie ถูกส่งบน cross-site request บล็อก CSRF (`SameSite=Strict`)
 
 <Callout title="cookie HttpOnly มองไม่เห็นจาก JavaScript — นี่คือฟีเจอร์ ไม่ใช่บัก">
-`HttpOnly` หมายความว่า `document.cookie` จะไม่เคยคืน cookie นั้น และ script ไม่สามารถอ่านหรือแก้ไขได้ นี่เป็นสิ่งที่ตั้งใจ: ช่วยปกป้อง session token จากการถูกขโมยโดย script ที่ถูกฉีดเข้ามา ถ้าคุณมองไม่เห็น cookie ใน `document.cookie` ที่คุณรู้ว่า server ตั้งค่า นั่นเกือบจะแน่นอนว่ามัน `HttpOnly` — ตรงตามที่ออกแบบไว้
+`HttpOnly` หมายความว่า `document.cookie` จะไม่เคยคืน cookie นั้น และ script ไม่สามารถอ่านหรือแก้ไขได้ นี่เป็นสิ่งที่ตั้งใจ: ช่วยปกป้อง session token จากการถูกขโมยโดย script ที่ถูกฉีดเข้ามา ถ้าคุณมองไม่เห็น cookie ใน `document.cookie` ที่คุณรู้ว่า server ตั้งค่า นั่นเกือบจะแน่นอนว่า `HttpOnly` — ตรงตามที่ออกแบบไว้
 </Callout>
 
-## Trade-offs
+## ข้อแลกเปลี่ยน
 
 | ตัวเลือก | Benefit | Cost |
 |---------|---------|------|
@@ -140,13 +140,13 @@ Set-Cookie: session=abc123; Max-Age=3600; Path=/; Secure; HttpOnly; SameSite=Str
 | `SameSite=Strict` | ป้องกัน CSRF ได้สูงสุดเพราะไม่ส่ง cookie บน cross-site request เลย | ทำลาย flow ที่ต้องพึ่ง cookie ตอนนำทางข้ามเว็บไซต์ เช่นคลิกลิงก์จากอีเมลแล้วต้องยัง login อยู่ |
 | `SameSite=None; Secure` | รองรับ use case cross-site ที่ถูกกฎหมาย เช่น widget ฝังตัวหรือ third-party auth | เปิดช่องให้ cookie ถูกส่งบน cross-site request ทุกกรณี เพิ่มพื้นที่เสี่ยงต่อ CSRF ถ้าไม่มีการป้องกันอื่นเสริม |
 
-## Common Mistakes
+## ข้อผิดพลาดที่พบบ่อย
 
 - **ไม่ระบุ `SameSite`/`Secure` เลย** — cookie จะเสี่ยงถูกส่งผ่าน HTTP ธรรมดา (ไม่มี `Secure`) และเสี่ยงต่อ CSRF มากขึ้นถ้า browser หรือ config เก่าไม่บังคับค่า default ที่ปลอดภัย
 - **ตั้ง `SameSite=None` โดยไม่มี `Secure` คู่กัน** — browser สมัยใหม่จะปฏิเสธ cookie นั้นทั้งชิ้นทันที ไม่ใช่แค่เตือน
 - **เก็บ auth token ไว้ใน cookie ที่ไม่ใช่ `HttpOnly`** — ทำลายจุดประสงค์หลักของการใช้ cookie เพื่อความปลอดภัย เพราะ script ที่ถูกฉีดเข้ามาผ่าน XSS จะอ่าน token นั้นออกไปได้ทันที
 
-> 💡 Real World Example
+> 💡 ตัวอย่างจากของจริง
 >
 > **Session-based authentication** — บริการ login เกือบทั้งหมดตั้งค่า session cookie ด้วย `HttpOnly; Secure; SameSite=Strict` เพื่อให้ server ยืนยันตัวตนได้โดยที่ JavaScript แตะต้อง token ไม่ได้เลย
 >
@@ -159,7 +159,7 @@ export const quizAttributesSameSite = [
       'ตั้งค่าคุกกี้ให้หมดอายุใน 0 มิลลิวินาที',
       'ลบคุกกี้ทันที',
       'สร้าง session cookie ที่ไม่มีวันหมดอายุ',
-      'รีเซ็ตวันหมดอายุของคุกกี้เป็นค่าเริ่มต้นของเบราว์เซอร์',
+      'รีเซ็ตวันหมดอายุของคุกกี้เป็นค่าเริ่มต้นของ browser',
     ],
     answer: 1,
   },
@@ -179,7 +179,7 @@ export const quizAttributesSameSite = [
     answer: 1,
   },
   {
-    q: 'คุกกี้มี SameSite=None ต้องใช้ attribute อะไรเพิ่มเติมเพื่อให้เบราว์เซอร์ยอมรับ?',
+    q: 'คุกกี้มี SameSite=None ต้องใช้ attribute อะไรเพิ่มเติมเพื่อให้ browser ยอมรับ?',
     options: ['HttpOnly', 'Path=/', 'Secure', 'Domain=.example.com'],
     answer: 2,
   },

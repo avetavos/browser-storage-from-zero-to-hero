@@ -98,7 +98,7 @@ console.log('Held locks after release:', state.held.length);
 Web Locks API ใช้ promise: ไม่ต้องเรียก method "release" อย่างชัดเจน lock จะถูกถือตลอด lifetime ของ async callback และปล่อยโดยอัตโนมัติเมื่อ Promise ที่คืนกลับ settle — แม้จะ reject ก็ตาม ทำให้ cleanup ปลอดภัยและคาดเดาได้
 </Callout>
 
-## Trade-offs
+## ข้อแลกเปลี่ยน
 
 | ตัวเลือก | Benefit | Cost |
 |---------|---------|------|
@@ -106,13 +106,13 @@ Web Locks API ใช้ promise: ไม่ต้องเรียก method "re
 | Web Locks โหมด `shared` | อ่านพร้อมกันได้หลายแท็บ ไม่ block workload ที่อ่านหนัก | ต้องผสมกับ `exclusive` ให้ถูกจังหวะ ไม่งั้นเสี่ยง read ข้อมูลระหว่างที่ writer กำลังแก้ไขอยู่ |
 | `ifAvailable: true` (non-blocking) | ไม่ต้องรอคิว เหมาะกับงาน background ที่ข้ามรอบได้โดยไม่กระทบผู้ใช้ | ถ้าใช้ผิดที่กับงานที่ต้องรันแน่นอน อาจทำให้งานสำคัญถูกข้ามไปเงียบๆ |
 
-## Common Mistakes
+## ข้อผิดพลาดที่พบบ่อย
 
 - **ขอ lock โดยไม่มีกลยุทธ์ timeout/abort** — ถ้าแท็บที่ถือ lock ค้างหรือ crash กลางทาง เช่น network hang ใน callback แท็บอื่นจะรอ lock นั้นตลอดไปโดยไม่มี error ใดๆ ควรส่ง `AbortSignal` ผ่าน option `signal` เพื่อกำหนด timeout
 - **คิดว่าต้องเรียก method "release" เองเหมือน mutex ในภาษาอื่น** — Web Locks ผูกกับ lifetime ของ Promise ที่ callback คืนกลับ lock จะถูกปล่อยอัตโนมัติเมื่อ Promise settle เท่านั้น ไม่มี method ให้เรียกตรงๆ
 - **ใช้ `exclusive` mode สำหรับงานอ่านอย่างเดียว** — ทำให้ทุก read ต้อง serialize โดยไม่จำเป็น ทั้งที่ควรใช้ `shared` mode เพื่อให้อ่านพร้อมกันได้
 
-> 💡 Real World Example
+> 💡 ตัวอย่างจากของจริง
 >
 > **Google Docs** — ใช้ pattern คล้าย Web Locks สำหรับ leader election ให้แท็บเดียวรับผิดชอบ sync กับ server ป้องกันการเขียนซ้อนกันจากหลายแท็บ
 >

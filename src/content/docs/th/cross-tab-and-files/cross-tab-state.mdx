@@ -12,7 +12,7 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
 ## ปัญหา: ทำให้แท็บ sync กัน
 
-ลองนึกภาพ dashboard แบบ multi-tab แท็บ A เพิ่ม counter แท็บ B ควรเห็นค่าใหม่โดยไม่ต้อง polling `storage` event บน `localStorage` สามารถแจ้งแท็บ B ได้ แต่มันส่งเฉพาะค่า string ใหม่ดิบๆ — ไม่มี structured state layer ในตัว
+ลองนึกภาพ dashboard แบบ multi-tab แท็บ A เพิ่ม counter แท็บ B ควรเห็นค่าใหม่โดยไม่ต้อง polling `storage` event บน `localStorage` สามารถแจ้งแท็บ B ได้ แต่ส่งเฉพาะค่า string ใหม่ดิบๆ — ไม่มี structured state layer ในตัว
 
 วิธีแก้ปัญหาที่แข็งแกร่งรวม primitive สามตัว:
 
@@ -109,7 +109,7 @@ console.log('Done. Counter cleaned up.');`;
 Lock จะทำให้ write เป็น serial แต่ไม่ block read Read ทำได้อย่างปลอดภัยนอก lock ตราบเท่าที่แอปรับได้กับค่าที่อาจ stale เล็กน้อย สำหรับ read-then-write ที่ต้องการความแม่นยำสูง (check-then-act) ให้ทั้ง read และ write อยู่ใน lock callback เดียวกัน
 </Callout>
 
-## Trade-offs
+## ข้อแลกเปลี่ยน
 
 | ตัวเลือก | Benefit | Cost |
 |---------|---------|------|
@@ -117,13 +117,13 @@ Lock จะทำให้ write เป็น serial แต่ไม่ block re
 | broadcast-on-write โดยไม่มี lock | เขียน code ง่าย ไม่ต้องรอ queue | เสี่ยง race condition เมื่อสองแท็บเขียนทับกันแบบ overlapping ในเวลาใกล้กัน |
 | leader election ด้วย Web Locks | มีแท็บเดียวทำงานหนัก เช่น polling API ประหยัด resource และลด duplicate request | ถ้า leader tab ค้างโดยไม่ปล่อย lock แท็บอื่นจะไม่มีวันได้เป็น leader |
 
-## Common Mistakes
+## ข้อผิดพลาดที่พบบ่อย
 
 - **พึ่งพา `storage` event เพื่อ sync state ภายในแท็บเดียวกับที่เขียนเอง** — event นี้ยิงเฉพาะแท็บอื่นเท่านั้น แท็บที่เขียนต้องอัปเดต UI ของตัวเองด้วย code แยกต่างหาก
 - **ไม่ wrap read-then-write (check-then-act) ไว้ใน lock callback เดียวกัน** — ถ้า read อยู่นอก lock race condition ยังเกิดได้แม้จะใช้ Web Locks อยู่แล้ว
 - **ปล่อยให้ leader tab ทำงานหนักโดยไม่มี fallback เมื่อทุกแท็บถูกปิด** — leader election ต้องเริ่มใหม่ทุกครั้งที่เปิดแท็บแรก ไม่มีแท็บใด "จำ" สถานะก่อนหน้าไว้ ต้องพึ่ง `localStorage` เป็นตัวกู้คืน state
 
-> 💡 Real World Example
+> 💡 ตัวอย่างจากของจริง
 >
 > **Google Docs** — sync edit state, cursor position และ presence indicator ข้ามแท็บที่เปิดเอกสารเดียวกันด้วย pattern คล้าย broadcast-on-write
 >
@@ -144,7 +144,7 @@ export const quizCrossTabState = [
     q: 'ใน leader-election pattern เกิดอะไรขึ้นเมื่อ leader tab ปิด?',
     options: [
       'lock ถูกโอนไปยังแท็บอื่นโดยอัตโนมัติ',
-      'เบราว์เซอร์ปล่อย lock ทำให้ callback ของแท็บถัดไปในคิวทำงาน',
+      'browser ปล่อย lock ทำให้ callback ของแท็บถัดไปในคิวทำงาน',
       'ทุกแท็บอื่น throw LockError',
       'leader ต้องเรียก lock.release() ก่อนปิดไม่งั้น lock จะ leak',
     ],

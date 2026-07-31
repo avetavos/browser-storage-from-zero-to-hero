@@ -22,7 +22,7 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
 **`sessionStorage`**
 
-- ข้อมูลอยู่เฉพาะตลอดอายุของแท็บ browser (หรือหน้าต่าง) ที่มันถูกสร้างขึ้นเท่านั้น
+- ข้อมูลอยู่เฉพาะตลอดอายุของแท็บ browser (หรือหน้าต่าง) ที่ถูกสร้างขึ้นเท่านั้น
 - ทันทีที่แท็บนั้นถูกปิด ข้อมูลก็หายไป — กู้คืนไม่ได้
 - การเปิดแท็บใหม่ไปยัง URL เดิมจะเริ่มต้นด้วย `sessionStorage` ที่ว่างเปล่าใหม่
 - จึงเหมาะกับ state เฉพาะแท็บที่ไม่ควรรั่วข้ามแท็บ (เช่น ขั้นตอนปัจจุบันของ wizard หลายขั้น, token แบบใช้ครั้งเดียว, ฉบับร่างฟอร์มชั่วคราว)
@@ -83,7 +83,7 @@ console.log('Cleaned up. sessionStorage step:', sessionStorage.getItem('demo:ss-
 `sessionStorage` มีขอบเขตอยู่ที่ **แท็บเดียว** และตายไปพร้อมกับแท็บนั้น ส่วน `localStorage` ถูกแชร์ข้าม **ทุกแท็บ** ของ origin เดียวกัน และอยู่รอดหลังรีสตาร์ท browser เลือกใช้ตามว่าคุณต้องการให้ข้อมูลอยู่ได้นานแค่ไหน และต้องการการแชร์ข้ามแท็บหรือไม่
 </Callout>
 
-## Trade-offs
+## ข้อแลกเปลี่ยน
 
 | ตัวเลือก | Benefit | Cost |
 |---------|---------|------|
@@ -91,13 +91,13 @@ console.log('Cleaned up. sessionStorage step:', sessionStorage.getItem('demo:ss-
 | `sessionStorage` | ขอบเขตแคบแค่แท็บเดียว ลดความเสี่ยงของข้อมูลรั่วข้ามแท็บ และหายไปเองเมื่อปิดแท็บ | ต้องตั้งค่าใหม่ทุกครั้งที่เปิดแท็บใหม่ ใช้เก็บ preference ระยะยาวไม่ได้ |
 | แชร์ state ผ่าน `sessionStorage` ตอนทำสำเนาแท็บ | แท็บใหม่ได้ context เดิมทันทีตอนเปิดขึ้นมา (เช่น ทำสำเนากลางฟอร์ม) | เป็นสำเนาแบบครั้งเดียว หลังจากนั้น sync กันเองไม่ได้อีก อาจทำให้ข้อมูลสองแท็บ diverge |
 
-## Common Mistakes
+## ข้อผิดพลาดที่พบบ่อย
 
 - **คิดว่า `sessionStorage` sync กันข้ามแท็บเหมือน `localStorage`** — แต่ละแท็บมี `sessionStorage` แยกเป็นของตัวเอง เขียนใน Tab A จะไม่มีทางเห็นใน Tab B
 - **เก็บ auth token ใน `localStorage`** — เพราะ JavaScript อ่านได้โดยตรง หาก origin โดน XSS token จะถูกขโมยได้ง่าย ต่างจาก HttpOnly cookie ที่ JS แตะไม่ถึง
 - **สับสนระหว่าง subdomain กับ origin เดียวกัน** — `app.example.com` และ `api.example.com` มี `localStorage` แยกกันคนละก้อนเสมอ แม้ registrable domain จะเหมือนกัน
 
-> 💡 Real World Example
+> 💡 ตัวอย่างจากของจริง
 >
 > **Theme/dark-mode toggle** — เว็บส่วนใหญ่เก็บค่า preference นี้ด้วย `localStorage` เพราะต้องการให้ค่าคงอยู่ข้าม session และแชร์ทุกแท็บที่เปิดพร้อมกัน
 >
@@ -106,11 +106,11 @@ console.log('Cleaned up. sessionStorage step:', sessionStorage.getItem('demo:ss-
 export const quizLocalVsSession = [
   {
     q: 'คุณเปิด Tab A แล้วเรียก sessionStorage.setItem("x", "1") จากนั้นเปิด Tab B ไปยัง URL เดียวกัน sessionStorage.getItem("x") ใน Tab B จะคืนค่าอะไร?',
-    options: ['"1" — sessionStorage ถูกแชร์ภายใน origin', 'null — แต่ละแท็บมี sessionStorage ของตัวเอง', '"undefined"', 'มันโยน SecurityError'],
+    options: ['"1" — sessionStorage ถูกแชร์ภายใน origin', 'null — แต่ละแท็บมี sessionStorage ของตัวเอง', '"undefined"', 'โยน SecurityError'],
     answer: 1,
   },
   {
-    q: 'ผู้ใช้ตั้งค่า dark-mode preference store ตัวไหนเหมาะสมที่สุดเพื่อให้ค่านี้อยู่รอดหลังจากปิดและเปิดเบราว์เซอร์ใหม่?',
+    q: 'ผู้ใช้ตั้งค่า dark-mode preference store ตัวไหนเหมาะสมที่สุดเพื่อให้ค่านี้อยู่รอดหลังจากปิดและเปิด browser ใหม่?',
     options: ['sessionStorage', 'localStorage', 'ตัวไหนก็ได้ — ทำงานเหมือนกัน', 'ไม่มีตัวไหน — ใช้ cookie แทน'],
     answer: 1,
   },

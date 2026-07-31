@@ -147,7 +147,7 @@ export const indexesCode = `(async function () {
 Index จะถูกสร้างครั้งเดียวใน `onupgradeneeded` และไม่มีการสร้างซ้ำอีก ใช้ `{ unique: true }` เพื่อบังคับความไม่ซ้ำกันของฟิลด์ และใช้ `{ multiEntry: true }` เมื่อ property ที่ index เก็บค่าเป็น array เรียกคืน index ในขณะค้นหาด้วย `store.index('indexName')` จากนั้นเรียก `.get(value)` สำหรับ record เดียว หรือ `.getAll(value)` สำหรับ record ที่ตรงกันทั้งหมด
 </Callout>
 
-## Trade-offs
+## ข้อแลกเปลี่ยน
 
 | ตัวเลือก | Benefit | Cost |
 |---------|---------|------|
@@ -155,13 +155,13 @@ Index จะถูกสร้างครั้งเดียวใน `onupgr
 | ไม่สร้าง index เลย (ค้นหาผ่าน cursor + filter เอง) | ไม่มี overhead ตอนเขียน ไม่กิน storage เพิ่ม | อ่าน/ค้นหาต้องสแกนทุก record ช้าลงเมื่อ store มีข้อมูลมาก |
 | ใช้ `multiEntry: true` กับฟิลด์ array | ค้นหาแต่ละ element ใน array ได้อย่างมีประสิทธิภาพ | เพิ่มจำนวน index entry ต่อ record หนึ่งตัว ทำให้ index มีขนาดใหญ่ขึ้นตามจำนวน element |
 
-## Common Mistakes
+## ข้อผิดพลาดที่พบบ่อย
 
 - **พยายามสร้าง index ใหม่นอก `onupgradeneeded`** — จะโยน error ทันที index สร้างหรือลบได้เฉพาะภายใน upgrade transaction เท่านั้น
 - **ตั้ง `unique: true` กับฟิลด์ที่มีค่าซ้ำกันอยู่แล้ว** — การเขียน record ที่มีค่า indexed ซ้ำจะเกิด `ConstraintError` ทันที ต้องมั่นใจว่าฟิลด์นั้นไม่ซ้ำกันจริงก่อนเปิดใช้ตัวเลือกนี้
 - **ลืมว่า `getAll()` บน index จะเรียงตาม index key ไม่ใช่ primary key** — ถ้าคาดหวังลำดับตาม primary key แต่ query ผ่าน index ผลลัพธ์ที่ได้จะเรียงตามฟิลด์ที่ index ไว้แทน
 
-> 💡 Real World Example
+> 💡 ตัวอย่างจากของจริง
 >
 > **Figma** — สร้าง index บนฟิลด์อย่าง `updatedAt` หรือ `projectId` ใน local cache เพื่อให้ query ไฟล์ design ล่าสุดหรือไฟล์ในโปรเจกต์เดียวกันได้เร็วโดยไม่ต้องสแกน record ทั้งหมด
 >

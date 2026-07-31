@@ -36,7 +36,7 @@ const db = await openDB('my-database', 1, {
 | `version` | number | เวอร์ชันของ schema — เพิ่มค่าเพื่อกระตุ้นการอัปเกรด |
 | `{ upgrade(db) }` | object | Callback ที่รันเมื่อ DB ถูกสร้างขึ้นหรือเวอร์ชันเพิ่มขึ้น |
 
-Callback `upgrade` เป็นสถานที่เดียวที่คุณสามารถสร้างหรือลบ object store ได้ มันจะถูกข้ามไปทั้งหมดในการเปิดครั้งถัดไปเมื่อเวอร์ชันไม่มีการเปลี่ยนแปลง
+Callback `upgrade` เป็นสถานที่เดียวที่คุณสามารถสร้างหรือลบ object store ได้ จะถูกข้ามไปทั้งหมดในการเปิดครั้งถัดไปเมื่อเวอร์ชันไม่มีการเปลี่ยนแปลง
 
 ## การเขียน record ด้วย `db.put`
 
@@ -110,7 +110,7 @@ export const idbLibraryCode = `(async function() {
 <StorageRunner client:visible code={idbLibraryCode} />
 
 <Callout title="ประเด็นสำคัญ">
-`idb` ห่อหุ้มทุก operation IndexedDB ด้วย Promise ทำให้คุณสามารถใช้ `async/await` แทน event callback ที่ซ้อนกัน Callback `upgrade` ภายใน `openDB` เป็นสถานที่เดียวในการสร้างหรือแก้ไข object store — มันจะรันเฉพาะเมื่อหมายเลขเวอร์ชันเพิ่มขึ้น
+`idb` ห่อหุ้มทุก operation IndexedDB ด้วย Promise ทำให้คุณสามารถใช้ `async/await` แทน event callback ที่ซ้อนกัน Callback `upgrade` ภายใน `openDB` เป็นสถานที่เดียวในการสร้างหรือแก้ไข object store — จะรันเฉพาะเมื่อหมายเลขเวอร์ชันเพิ่มขึ้น
 </Callout>
 
 ## เปรียบเทียบ IndexedDB ดิบกับ idb
@@ -148,20 +148,20 @@ console.log('Saved');
 
 ทั้งสองทำสิ่งเดียวกันทุกประการ เวอร์ชัน `idb` สั้นกว่า อ่านง่ายกว่า และข้อผิดพลาดจะแสดงเป็น rejected Promise ที่คุณสามารถดักจับด้วย `try/catch` มาตรฐาน
 
-## Trade-offs
+## ข้อแลกเปลี่ยน
 
 | ตัวเลือก | Benefit | Cost |
 |---------|---------|------|
 | IndexedDB ดิบ | ควบคุมได้เต็มที่ ไม่มี dependency เพิ่ม ทำงานตรงกับ spec ของ browser | โค้ดยุ่งยาก ซ้อน callback หลายชั้น debug ยาก |
 | `idb` library | Developer experience (DX) ดีกว่ามาก ใช้ `async/await` เขียนสั้น อ่านง่าย จับ error ด้วย `try/catch` ได้ตรงไปตรงมา | เพิ่ม dependency ขนาดเล็ก (~1 KB) ต้องโหลดผ่าน import และพึ่งพา library ภายนอก |
 
-## Common Mistakes
+## ข้อผิดพลาดที่พบบ่อย
 
 - **สร้างหรือแก้ไข object store นอก callback `upgrade`** — จะไม่มีผลใดๆ เลย object store และ index เปลี่ยนแปลงได้เฉพาะภายใน `upgrade` เมื่อหมายเลขเวอร์ชันเพิ่มขึ้นเท่านั้น
 - **คิดว่า `idb` เปลี่ยนพฤติกรรมของ IndexedDB** — `idb` เป็นเพียง wrapper ที่ห่อ API เดิมด้วย Promise เท่านั้น ข้อจำกัดของ IndexedDB เช่น เรื่อง transaction lifetime หรือ upgrade transaction ยังคงเหมือนเดิมทุกประการ
 - **ลืมว่า `db.put()` แทนที่ record ทั้งก้อน** — หากต้องการอัปเดตแค่บาง field ต้อง `get()` มาก่อน แล้วค่อย merge ค่าใหม่ก่อน `put()` กลับไป ไม่เช่นนั้นข้อมูลเดิมจะหายไป
 
-> 💡 Real World Example
+> 💡 ตัวอย่างจากของจริง
 >
 > **Spotify Web Player** — ใช้ pattern แบบ Promise-based คล้าย `idb` ในการ cache ข้อมูลเพลงและ metadata ฝั่ง client เพื่อรองรับการเล่นแบบ offline-ish เมื่อ network ไม่เสถียร
 >
@@ -201,10 +201,10 @@ export const quizIdbLibrary = [
   {
     q: 'ข้อได้เปรียบหลักของไลบรารี idb เมื่อเทียบกับ IndexedDB API ดิบคืออะไร?',
     options: [
-      'มันจัดเก็บข้อมูลในรูปแบบที่เร็วกว่า IndexedDB ดิบ',
-      'มันอ่านและเขียนข้อมูลแบบ synchronous โดยไม่ต้องใช้โค้ด async',
-      'มันห่อหุ้มทุกการดำเนินการด้วย Promise ทำให้ใช้ async/await แทน nested callback ได้',
-      'มันเพิ่มโควต้าการจัดเก็บข้อมูลที่มีให้กับ origin',
+      'จัดเก็บข้อมูลในรูปแบบที่เร็วกว่า IndexedDB ดิบ',
+      'อ่านและเขียนข้อมูลแบบ synchronous โดยไม่ต้องใช้โค้ด async',
+      'ห่อหุ้มทุกการดำเนินการด้วย Promise ทำให้ใช้ async/await แทน nested callback ได้',
+      'เพิ่มโควต้าการจัดเก็บข้อมูลที่มีให้กับ origin',
     ],
     answer: 2,
   },

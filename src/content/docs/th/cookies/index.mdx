@@ -16,7 +16,7 @@ cookie คือ string ขนาดเล็ก — แต่ละชิ้น
 
 เมื่อ server ส่ง `Set-Cookie` response header มา browser จะเก็บ cookie นั้นและส่งกลับไปใน request ถัดๆ ไปที่ตรงกับ domain นั้น (ขึ้นอยู่กับ attribute ของ cookie เช่น `Path`, `Domain`, `Secure`, และ `SameSite`)
 
-เมื่อ JavaScript เรียก `document.cookie = 'name=value'` มันจะตั้งค่า cookie ฝั่ง client — แต่ browser จะยังคงส่ง cookie นั้นไปยัง server ใน request ถัดไปอีกด้วย
+เมื่อ JavaScript เรียก `document.cookie = 'name=value'` จะตั้งค่า cookie ฝั่ง client — แต่ browser จะยังคงส่ง cookie นั้นไปยัง server ใน request ถัดไปอีกด้วย
 
 ## cookie ที่ตั้งฝั่ง client vs ฝั่ง server
 
@@ -29,7 +29,7 @@ HTTP/1.1 200 OK
 Set-Cookie: session=abc123; HttpOnly; Secure; SameSite=Strict
 ```
 
-Server เป็นผู้ควบคุมค่าและ attribute ของ cookie cookie ที่มี `HttpOnly` จะมองไม่เห็นจาก JavaScript เลย — `document.cookie` จะไม่แสดงมันออกมาไม่ว่ากรณีใด
+Server เป็นผู้ควบคุมค่าและ attribute ของ cookie cookie ที่มี `HttpOnly` จะมองไม่เห็นจาก JavaScript เลย — `document.cookie` จะไม่แสดงค่าออกมาไม่ว่ากรณีใด
 
 **ตั้งโดย client (ผ่าน `document.cookie`):**
 
@@ -55,7 +55,7 @@ export const cookieFlowDiagram = `flowchart LR
 
 | กรณีการใช้งาน | ตัวเลือกที่ดีที่สุด | เหตุผล |
 |---|---|---|
-| Auth token / session ID | Cookie (HttpOnly + Secure) | Server ต้องการมัน; HttpOnly ป้องกันการขโมยผ่าน XSS |
+| Auth token / session ID | Cookie (HttpOnly + Secure) | Server ต้องใช้ค่านี้; HttpOnly ป้องกันการขโมยผ่าน XSS |
 | CSRF token | Cookie | Server ตั้งค่า; JS อ่านเพื่อใส่ใน request body |
 | ค่าความชอบของผู้ใช้ (ธีม, ภาษา) | Web Storage | ใช้ฝั่ง client เท่านั้น; ไม่จำเป็นต้องส่งไป server ทุก request |
 | ตะกร้าสินค้า (client-only) | Web Storage หรือ IndexedDB | ข้อมูลมากกว่า รูปแบบสมบูรณ์กว่า; ไม่มีภาระทางเครือข่าย |

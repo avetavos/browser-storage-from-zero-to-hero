@@ -12,7 +12,7 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
 ## transaction คืออะไร?
 
-**transaction** คือกลุ่มของ operation database ที่ทำงานเป็น atomic unit เดียว ซึ่งเป็นไปตามหลักการ ACID: operation **ทั้งหมด** ต้องสำเร็จ หรือไม่มี operation ใดเลยที่จะถูกนำไปใช้ หาก operation ใดล้มเหลว transaction ทั้งหมดจะถูก rollback กลับสู่สถานะก่อนที่จะเริ่มต้น
+**transaction** คือกลุ่มของ operation database ที่ทำงานเป็น atomic unit เดียว ที่เป็นไปตามหลักการ ACID: operation **ทั้งหมด** ต้องสำเร็จ หรือไม่มี operation ใดเลยที่จะถูกนำไปใช้ หาก operation ใดล้มเหลว transaction ทั้งหมดจะถูก rollback กลับสู่สถานะก่อนที่จะเริ่มต้น
 
 ใน IndexedDB การอ่านและการเขียนทุกครั้งต้องเกิดขึ้นภายใน transaction ไม่มีวิธีเข้าถึง object store โดยตรง — คุณต้องผ่าน transaction ก่อนเสมอ
 
@@ -129,7 +129,7 @@ console.log('Cleanup done');
 อย่าใช้ `await fetch()`, `await setTimeout()` หรือ call อื่นใดที่คืนการควบคุมไปยัง event loop ในขณะที่ transaction ยังเปิดอยู่ IndexedDB จะ auto-commit transaction ทันทีที่ call stack ว่างเปล่าโดยไม่มี pending request request ที่ตามมาทั้งหมดบน transaction นั้นจะล้มเหลวด้วย `TransactionInactiveError` ให้เก็บ read และ write ทั้งหมดไว้ใน synchronous call chain เดียว
 </Callout>
 
-## Trade-offs
+## ข้อแลกเปลี่ยน
 
 | ตัวเลือก | Benefit | Cost |
 |---------|---------|------|
@@ -137,13 +137,13 @@ console.log('Cleanup done');
 | `readonly` mode | รันพร้อมกันหลาย transaction บน store เดียวกันได้ เพิ่ม parallelism | ใช้เขียนข้อมูลไม่ได้เลย ต้องเปิด transaction ใหม่เป็น `readwrite` ถ้าต้องการเขียน |
 | `readwrite` mode | เขียนข้อมูลได้ พร้อม lock แบบ exclusive ป้องกัน race condition บน store เดียวกัน | transaction อื่นที่ต้องการ store เดียวกันต้องรอคิว ลด throughput ถ้าเปิดค้างไว้นาน |
 
-## Common Mistakes
+## ข้อผิดพลาดที่พบบ่อย
 
 - **`await fetch()` หรือ `setTimeout` แทรกกลาง transaction** — เมื่อ call stack ว่างโดยไม่มี pending request transaction จะ auto-commit ทันที request ที่ตามมาจะ throw `TransactionInactiveError` แบบไม่ทันตั้งตัว
 - **ลืมระบุ object store บางตัวตอนเปิด `db.transaction()`** — เรียก `tx.objectStore('name')` กับ store ที่ไม่ได้อยู่ใน array แรกจะ throw `NotFoundError` แม้ store นั้นจะมีอยู่จริงใน database ก็ตาม
 - **ผูก UI update ไว้กับ `onsuccess` ของ request แทน `oncomplete` ของ transaction** — `onsuccess` แจ้งแค่ request เดียวสำเร็จ แต่ transaction อาจยังไม่ commit จริง หากมี request อื่นล้มเหลวภายหลัง ข้อมูลที่ UI แสดงจะไม่ตรงกับที่ถูก rollback ไป
 
-> 💡 Real World Example
+> 💡 ตัวอย่างจากของจริง
 >
 > **Notion** — เปิด `readwrite` transaction ครอบคลุมหลาย object store พร้อมกัน (เช่น blocks กับ page metadata) เพื่อให้การอัปเดต block กับการอัปเดต timestamp ของหน้าเกิดขึ้นเป็น atomic unit เดียว
 >

@@ -12,7 +12,7 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
 ## SharedWorker คืออะไร?
 
-`SharedWorker` คือ Web Worker ที่ถูกแชร์ร่วมกันใน **browsing context ทั้งหมด** (tabs, windows, iframes) ที่มีต้นกำเนิดเดียวกัน ต่างจาก Dedicated Worker ที่มีอยู่เพียงสำหรับหน้าเดียว SharedWorker จะมีชีวิตอยู่จนกว่า tab ที่เชื่อมต่ออยู่ทั้งหมดจะปิด ให้คิดว่ามันเป็น "บริการ" น้ำหนักเบาภายใน browser — สามารถเก็บ state ที่แชร์ร่วมกัน ลดคำขอเครือข่ายที่ซ้ำกัน และซิงโครไนซ์ข้อมูลข้าม tab โดยไม่ต้องพึ่ง backend
+`SharedWorker` คือ Web Worker ที่ถูกแชร์ร่วมกันใน **browsing context ทั้งหมด** (tabs, windows, iframes) ที่มีต้นกำเนิดเดียวกัน ต่างจาก Dedicated Worker ที่มีอยู่เพียงสำหรับหน้าเดียว SharedWorker จะมีชีวิตอยู่จนกว่า tab ที่เชื่อมต่ออยู่ทั้งหมดจะปิด ให้คิดว่าเป็น "บริการ" น้ำหนักเบาภายใน browser — สามารถเก็บ state ที่แชร์ร่วมกัน ลดคำขอเครือข่ายที่ซ้ำกัน และซิงโครไนซ์ข้อมูลข้าม tab โดยไม่ต้องพึ่ง backend
 
 ## ความแตกต่างหลักจาก Dedicated Worker
 
@@ -84,20 +84,20 @@ export const sharedWorkerCode = `// shared-worker.js (runs ONCE, shared by every
 `SharedWorker` มีเพียง ONE instance ต่อ origin ทุก tab ที่เรียก `new SharedWorker(url)` ด้วย URL เดียวกันจะเชื่อมต่อไปยัง worker เดียวกัน event `onconnect` จะยิงหนึ่งครั้งต่อ tab ต้องเรียก `port.start()` ทั้งฝั่งหน้าเว็บและฝั่ง worker
 </Callout>
 
-## Trade-offs
+## ข้อแลกเปลี่ยน
 
 | ตัวเลือก | Benefit | Cost |
 |---------|---------|------|
 | `SharedWorker` (instance เดียวทุก tab) | ประหยัด memory, แชร์ state และ coordination ข้าม tab ได้ทันที (เช่น connection เดียวสำหรับหลาย tab) | Debug ยากกว่า — DevTools ต้องเปิดแยกสำหรับ shared worker, และ historically iOS Safari ไม่รองรับหรือรองรับไม่สมบูรณ์ |
 | Dedicated Worker (instance ต่อ tab) | รองรับ browser ครบทุกตัว, debug ง่ายเพราะผูกกับหน้าเดียว | ใช้ memory มากขึ้นเมื่อเปิดหลาย tab พร้อมกัน ไม่มี state ที่แชร์ร่วมกันในตัว |
 
-## Common Mistakes
+## ข้อผิดพลาดที่พบบ่อย
 
 - **พึ่งพา `SharedWorker` บน iOS Safari โดยไม่มี fallback** — support ของ `SharedWorker` บน iOS Safari ไม่แน่นอนในอดีต ควร feature-detect ด้วย `typeof SharedWorker !== 'undefined'` แล้ว fallback ไปใช้ Dedicated Worker หรือกลไกอื่น
 - **ลืมเรียก `port.start()`** — ทั้งฝั่งหน้าเว็บและฝั่ง worker ต้องเรียก `port.start()` ก่อน message ถึงจะไหลผ่าน MessagePort ไม่อย่างนั้น message จะถูก queue ค้างไว้เฉยๆ
 - **คาดว่า `onconnect` จะยิงแค่ครั้งเดียว** — `onconnect` ยิงทุกครั้งที่มี tab ใหม่มาเชื่อมต่อ ต้อง push port ใหม่เข้า list ที่มีอยู่แทนที่จะ overwrite ไม่งั้น tab เก่าจะหลุดจากการสื่อสาร
 
-> 💡 Real World Example
+> 💡 ตัวอย่างจากของจริง
 >
 > **Slack** — ใช้ `SharedWorker` เพื่อรักษา WebSocket connection เดียวที่แชร์ร่วมกันทุก tab ที่เปิดอยู่ ลดจำนวน connection ไปยัง server และซิงค์สถานะ real-time ข้าม tab ได้ทันที
 >
@@ -129,7 +129,7 @@ export const quizSharedWorker = [
     options: [
       'เพื่อสร้าง port object',
       'เพื่อเปิดใช้งาน MessagePort เพื่อไม่ให้ข้อความถูก queue ไว้',
-      'เพื่อลงทะเบียน worker กับเบราว์เซอร์',
+      'เพื่อลงทะเบียน worker กับ browser',
       'เพื่อป้องกันไม่ให้ worker ถูกยกเลิก',
     ],
     answer: 1,

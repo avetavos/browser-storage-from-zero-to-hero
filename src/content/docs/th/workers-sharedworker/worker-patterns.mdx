@@ -71,7 +71,7 @@ worker.onerror = (event) => {
 };
 ```
 
-นอกจากนี้ยังสามารถแนบ `self.onerror` ภายใน worker เองเพื่อดัก async error ก่อนที่มันจะ bubble ขึ้นไปยังเธรดหลักได้
+นอกจากนี้ยังสามารถแนบ `self.onerror` ภายใน worker เองเพื่อดัก async error ก่อนที่จะ bubble ขึ้นไปยังเธรดหลักได้
 
 ## เมื่อใดควรใช้ worker
 
@@ -119,7 +119,7 @@ ask(15).then(function(r) {
 ควร handle `worker.onerror` เสมอ หากไม่มี handler การ crash ของ worker จะล้มเหลวแบบเงียบใน production ใช้ message ID เพื่อติดตามคู่ request/response เมื่อ worker จัดการงานหลายอย่างพร้อมกัน
 </Callout>
 
-## Trade-offs
+## ข้อแลกเปลี่ยน
 
 | ตัวเลือก | Benefit | Cost |
 |---------|---------|------|
@@ -127,13 +127,13 @@ ask(15).then(function(r) {
 | `postMessage`/`onmessage` แบบดิบ | เรียบง่าย เห็น flow ตรงไปตรงมา เหมาะกับ worker ที่มี message pattern ไม่ซับซ้อน | ถ้ามีหลาย request ค้างพร้อมกัน ต้องจับคู่ response เองด้วยมือ เสี่ยง race condition |
 | แนบ `worker.onerror` handler | จับ error ที่ไม่ถูก catch ได้ ป้องกันความล้มเหลวแบบเงียบใน production | ต้องเขียน handler เพิ่มทุก worker และออกแบบให้ error ไม่ทำให้ pending promise ค้างตลอดไป |
 
-## Common Mistakes
+## ข้อผิดพลาดที่พบบ่อย
 
 - **ไม่แนบ `worker.onerror`** — error ที่ไม่ถูก catch ภายใน worker จะไม่ปรากฏใน `window.onerror` เลย ถ้าไม่มี handler การ crash จะล้มเหลวแบบเงียบและตรวจจับได้ยากมากใน production
 - **ปล่อยให้ `pending`/`map` โตขึ้นเรื่อยๆ โดยไม่ลบ entry** — ถ้า request ไม่ได้รับ response กลับมา (เช่น worker crash) entry ใน map จะค้างอยู่ตลอดไปและกลายเป็น memory leak ควรมี timeout หรือ cleanup เมื่อ worker error
 - **ใช้ worker สำหรับงานที่ไม่คุ้มกับ overhead** — เช่น การอ่าน event คลิกปุ่ม หรือ fetch อย่างง่ายครั้งเดียว ต้นทุนของการตั้ง RPC wrapper และการสื่อสารข้ามเธรดสูงกว่าประโยชน์ที่ได้มาก
 
-> 💡 Real World Example
+> 💡 ตัวอย่างจากของจริง
 >
 > **Figma** — ใช้ pattern คล้าย RPC ที่มี message ID เพื่อจับคู่คำขอคำนวณ layout/rendering หลายรายการที่ยิงพร้อมกันไปยัง worker กับผลลัพธ์ที่ตอบกลับมาไม่เรียงลำดับ
 >

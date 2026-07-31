@@ -17,7 +17,7 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 เปรียบได้ดังนี้:
 
 - แถวในตาราง SQL มีชุดคอลัมน์ที่ตายตัว
-- record ใน object store คือ JS object ใดก็ได้ที่คุณส่งเข้าไป บวกกับ key ที่ระบุตัวตนของมัน
+- record ใน object store คือ JS object ใดก็ได้ที่คุณส่งเข้าไป บวกกับ key ที่ระบุตัวตนของตัวเอง
 
 ## การสร้าง Object Store
 
@@ -120,7 +120,7 @@ console.log('Cleanup done');
 `createObjectStore()` จะ throw `DOMException` หากเรียกนอก handler `onupgradeneeded` Object store เป็นส่วนหนึ่งของ schema database และการเปลี่ยนแปลง schema จะทำได้เฉพาะในช่วงการอัปเกรดเวอร์ชันเท่านั้น หากต้องการเพิ่ม store ใหม่ ให้เพิ่มเลขเวอร์ชันเมื่อเปิด database
 </Callout>
 
-## Trade-offs
+## ข้อแลกเปลี่ยน
 
 | ตัวเลือก | Benefit | Cost |
 |---------|---------|------|
@@ -128,13 +128,13 @@ console.log('Cleanup done');
 | In-line key (`keyPath`) | key อยู่ใน object เดียวกัน อ่าน/debug ง่าย ไม่ต้องส่ง key แยก | object ทุกชิ้นต้องมี field ตาม `keyPath` เสมอ ไม่งั้น `add`/`put` error |
 | Out-of-line key | แยก key ออกจาก object เก็บ object ที่ไม่มี field สำหรับ identity ได้ (เช่น blob) | ต้องส่ง key เองทุกครั้งที่เรียก `add`/`put` เพิ่ม boilerplate |
 
-## Common Mistakes
+## ข้อผิดพลาดที่พบบ่อย
 
 - **เรียก `createObjectStore()` นอก `onupgradeneeded`** — method นี้ throw `DOMException` ทันทีถ้าเรียกนอก upgrade transaction เพราะการเปลี่ยน schema ทำได้เฉพาะช่วง version upgrade เท่านั้น
 - **ไม่เช็ค `objectStoreNames.contains()` ก่อนสร้าง store ซ้ำ** — เมื่อเพิ่มเวอร์ชันแล้ว `onupgradeneeded` รันโค้ด migrate เดิมซ้ำ การเรียก `createObjectStore` ด้วยชื่อที่มีอยู่แล้วจะ throw error
 - **สับสนว่า out-of-line key ถูกเก็บใน object** — เมื่อไม่กำหนด `keyPath` key จะไม่ปรากฏใน object ที่ได้จาก `get()`/`getAll()` เลย ต้องดูจาก `IDBCursor.key` หรือ argument ที่ส่งตอน `add()` แทน
 
-> 💡 Real World Example
+> 💡 ตัวอย่างจากของจริง
 >
 > **Notion** — แยก object store ตามประเภทข้อมูล เช่น pages กับ blocks โดยใช้ in-line key `id` เพื่อให้ sync กับ record บน server ตรงกันโดยตรง
 >

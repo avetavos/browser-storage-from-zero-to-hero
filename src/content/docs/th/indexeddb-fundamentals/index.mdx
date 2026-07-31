@@ -36,7 +36,7 @@ IndexedDB คือ API ระดับต่ำที่ฝังอยู่�
 
 ## โครงสร้างของ database IndexedDB
 
-database IndexedDB แต่ละตัวมีชื่อและหมายเลขเวอร์ชัน ภายใน database จะมี **object store** อย่างน้อยหนึ่งอัน คล้ายกับตารางใน database ทั่วไป แต่ละ object store เก็บ **record** ซึ่งเป็น object JavaScript ที่ระบุตัวตนด้วย **key**
+database IndexedDB แต่ละตัวมีชื่อและหมายเลขเวอร์ชัน ภายใน database จะมี **object store** อย่างน้อยหนึ่งอัน คล้ายกับตารางใน database ทั่วไป แต่ละ object store เก็บ **record** ที่เป็น object JavaScript ที่ระบุตัวตนด้วย **key**
 
 export const idbDiagram = `flowchart LR
   DB["Database\n(name + version)"]
@@ -79,7 +79,7 @@ export const idbDiagram = `flowchart LR
 
 ## รันได้จริง: ตรวจสอบว่า IndexedDB พร้อมใช้งาน
 
-โค้ดด้านล่างเปิด database ยืนยันชื่อของมัน แล้วลบทิ้งเพื่อไม่ให้เหลือร่องรอย
+โค้ดด้านล่างเปิด database ยืนยันชื่อของตัวเอง แล้วลบทิ้งเพื่อไม่ให้เหลือร่องรอย
 
 export const idbCheckCode = `const result = await new Promise((resolve, reject) => {
   const req = indexedDB.open('demo-check', 1);

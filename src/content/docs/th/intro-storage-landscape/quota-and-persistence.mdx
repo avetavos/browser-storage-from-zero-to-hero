@@ -13,7 +13,7 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
 ## browser ให้ storage คุณเท่าไหร่?
 
-browser ไม่ได้ให้ storage ไม่จำกัดแก่ทุก origin แต่จะจัดสรร **quota** ซึ่งเป็นจำนวนสูงสุดที่ origin อาจใช้ โดยพิจารณาจาก disk ที่มีอยู่และนโยบาย browser quota สำหรับ IndexedDB, Cache API และ OPFS มาจาก shared pool ที่เรียกว่า **"default" storage bucket**
+browser ไม่ได้ให้ storage ไม่จำกัดแก่ทุก origin แต่จะจัดสรร **quota** ที่เป็นจำนวนสูงสุดที่ origin อาจใช้ โดยพิจารณาจาก disk ที่มีอยู่และนโยบาย browser quota สำหรับ IndexedDB, Cache API และ OPFS มาจาก shared pool ที่เรียกว่า **"default" storage bucket**
 
 `navigator.storage.estimate()` API คืนค่า snapshot ของปริมาณ quota ที่ origin ของคุณใช้ไปแล้ว
 
@@ -99,7 +99,7 @@ checkStorage();`;
 Best-effort storage เหมาะสำหรับ caches และข้อมูลที่ไม่สำคัญ สำหรับข้อมูลที่แอปของคุณไม่สามารถสูญเสียได้ เช่น offline documents, user-generated content, saved game state ให้เรียก `navigator.storage.persist()` เร็ว ๆ ในช่วงต้น lifecycle ของแอป โดยเฉพาะหลังจากที่ผู้ใช้แสดงให้เห็นถึงการมีส่วนร่วมกับ site ของคุณ
 </Callout>
 
-## Trade-offs
+## ข้อแลกเปลี่ยน
 
 | ตัวเลือก | Benefit | Cost |
 |---------|---------|------|
@@ -107,13 +107,13 @@ Best-effort storage เหมาะสำหรับ caches และข้อ�
 | Persistent storage (`persist()`) | ข้อมูลปลอดภัยจนกว่าผู้ใช้จะล้าง site data เอง | ต้องพึ่ง engagement heuristics ของ browser ซึ่งควบคุมไม่ได้ทั้งหมด และบาง browser จะแสดง permission prompt ที่ผู้ใช้อาจปฏิเสธ |
 | เรียก `estimate()` ก่อนเขียนข้อมูลก้อนใหญ่ | รู้ headroom ที่เหลือ ป้องกัน `QuotaExceededError` กลางทาง | เพิ่ม async round-trip หนึ่งครั้งก่อนเริ่ม operation จริง |
 
-## Common Mistakes
+## ข้อผิดพลาดที่พบบ่อย
 
 - **คิดว่า IndexedDB เท่ากับ "เก็บถาวรตลอดไป"** — โดย default ทุก origin ได้แค่ best-effort storage เท่านั้น ต้องเรียก `navigator.storage.persist()` เพื่อขออัปเกรดเป็น persistent จริง ๆ
 - **ไม่เช็ก quota ก่อนเขียนข้อมูลก้อนใหญ่** — เขียนไปเรื่อย ๆ โดยไม่เรียก `navigator.storage.estimate()` ก่อน ทำให้เจอ `QuotaExceededError` แบบไม่ทันตั้งตัวเมื่อ disk เหลือน้อย
 - **สับสนระหว่าง `usage` ที่ได้จาก `estimate()` กับ `localStorage`** — ค่าที่คืนมาครอบคลุมแค่ IndexedDB, Cache API และ OPFS เท่านั้น ไม่รวม `localStorage` หรือ cookies ซึ่งมี limit แยกต่างหาก
 
-> 💡 Real World Example
+> 💡 ตัวอย่างจากของจริง
 >
 > **Google Photos** — เรียก `navigator.storage.persist()` หลังผู้ใช้ install เป็น PWA เพื่อให้ cached thumbnails และ offline queue ไม่ถูก evict ระหว่างใช้งานแบบ offline
 >
@@ -131,7 +131,7 @@ export const quizQuota = [
     answer: 1,
   },
   {
-    q: 'ภายใต้เงื่อนไขใดที่เบราว์เซอร์สามารถลบข้อมูล best-effort storage เงียบ ๆ?',
+    q: 'ภายใต้เงื่อนไขใดที่ browser สามารถลบข้อมูล best-effort storage เงียบ ๆ?',
     options: [
       'เมื่อผู้ใช้ล้าง browsing history',
       'เมื่อมีการลงทะเบียน service worker ใหม่',
@@ -144,7 +144,7 @@ export const quizQuota = [
     q: 'navigator.storage.persist() คืน Promise ค่าที่ resolve หมายความว่าอะไร?',
     options: [
       'จำนวน bytes ที่ได้รับการปกป้องจาก eviction',
-      'Boolean — true หากเบราว์เซอร์อนุมัติ persistent storage, false หากไม่',
+      'Boolean — true หาก browser อนุมัติ persistent storage, false หากไม่',
       'quota ใหม่เป็น bytes หลังการอัปเกรด',
       'String ที่อธิบาย persistence policy ที่ใช้',
     ],

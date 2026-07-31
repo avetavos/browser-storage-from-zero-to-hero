@@ -12,7 +12,7 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
 ## ทุกอย่างคือ string
 
-Web Storage เก็บได้เฉพาะ string เท่านั้น หากคุณส่งอย่างอื่นเข้าไปให้ `setItem` browser จะแปลงมันเป็น string ให้อย่างเงียบ ๆ:
+Web Storage เก็บได้เฉพาะ string เท่านั้น หากคุณส่งอย่างอื่นเข้าไปให้ `setItem` browser จะแปลงเป็น string ให้อย่างเงียบ ๆ:
 
 ```js
 localStorage.setItem('demo:num', 42);
@@ -46,7 +46,7 @@ console.log(restored.age);   // 36  (number, not string)
 console.log(restored.admin); // false (boolean, not string)
 ```
 
-`JSON.stringify` รองรับ object ซ้อน, array, number, boolean และ `null` ได้ แต่มัน **ไม่** เก็บรักษาสิ่งเหล่านี้:
+`JSON.stringify` รองรับ object ซ้อน, array, number, boolean และ `null` ได้ แต่ **ไม่** เก็บรักษาสิ่งเหล่านี้:
 
 - ค่า `undefined` (จะถูกละทิ้ง)
 - Function (จะถูกละทิ้ง)
@@ -72,7 +72,7 @@ function storageSet(key, value) {
 }
 ```
 
-`try/catch` รอบ ๆ `JSON.parse` เป็นเรื่องสำคัญ: หากค่าที่เก็บไว้ถูกเขียนโดยโค้ดเก่า (plain string), สคริปต์จาก third-party หรือถูกแก้ไขด้วยมือใน DevTools มันอาจไม่ใช่ JSON ที่ถูกต้อง และ `JSON.parse` จะโยน error
+`try/catch` รอบ ๆ `JSON.parse` เป็นเรื่องสำคัญ: หากค่าที่เก็บไว้ถูกเขียนโดยโค้ดเก่า (plain string), สคริปต์จาก third-party หรือถูกแก้ไขด้วยมือใน DevTools ค่านั้นอาจไม่ใช่ JSON ที่ถูกต้อง และ `JSON.parse` จะโยน error
 
 ## รันได้: object round-trip
 
@@ -104,7 +104,7 @@ localStorage.removeItem('demo:count');`;
 ใช้ `JSON.stringify` ตอนเขียน และ `JSON.parse` ตอนอ่าน เพื่อเก็บรักษาโครงสร้างของ object และชนิด primitive ให้ตรวจสอบกัน `null` เสมอตอนอ่าน (key อาจไม่มีอยู่) และครอบ `JSON.parse` ด้วย `try/catch` (ค่าอาจไม่ใช่ JSON ที่ถูกต้อง)
 </Callout>
 
-## Trade-offs
+## ข้อแลกเปลี่ยน
 
 | ตัวเลือก | Benefit | Cost |
 |---------|---------|------|
@@ -112,13 +112,13 @@ localStorage.removeItem('demo:count');`;
 | เก็บเป็น string ดิบ (ไม่ stringify) | เร็วกว่า ไม่มี overhead ของการ serialise | ได้ค่ากลับมาผิดชนิดเสมอ (number/boolean กลายเป็น string) และ object กลายเป็น `"[object Object]"` |
 | helper `storageGet`/`storageSet` แบบ typed | โค้ดสั้นลง มี `try/catch` ป้องกัน corrupt data ในตัว | เพิ่ม layer เล็ก ๆ ที่ทีมต้องรู้จักและดูแลรักษา |
 
-## Common Mistakes
+## ข้อผิดพลาดที่พบบ่อย
 
 - **ส่ง object เข้า `setItem` ตรง ๆ โดยไม่ stringify** — ได้ `"[object Object]"` กลับมา ให้ `JSON.stringify` ก่อนเขียนเสมอ
 - **เรียก `JSON.parse` โดยไม่มี `try/catch`** — ถ้าค่าที่เก็บไว้ไม่ใช่ JSON ที่ถูกต้อง (ถูกเขียนด้วยมือใน DevTools หรือมาจากโค้ดเวอร์ชันเก่า) แอปจะ crash ทันที
 - **คาดหวังว่า `Date` จะกลับมาเป็น `Date` object หลัง parse** — `JSON.stringify` แปลง `Date` เป็น ISO string เสมอ ต้องเรียก `new Date(str)` เองเพื่อกู้คืนชนิดเดิม
 
-> 💡 Real World Example
+> 💡 ตัวอย่างจากของจริง
 >
 > **Notion / Google Docs** — ฟีเจอร์ autosave ฉบับร่างจะ `JSON.stringify` state ทั้งฟอร์ม (title, blocks, cursor position) แล้วเก็บลง `localStorage` เป็นระยะ เพื่อกู้คืนงานได้หากแท็บถูกปิดโดยไม่ตั้งใจ
 >
@@ -127,7 +127,7 @@ localStorage.removeItem('demo:count');`;
 export const quizJsonAndObjects = [
   {
     q: 'คุณเก็บ object ของ JavaScript ด้วย localStorage.setItem("x", myObj) โดยไม่ stringify อ่านกลับมาจะได้อะไร?',
-    options: ['object เดิม', '"[object Object]"', 'null', 'มันโยน TypeError'],
+    options: ['object เดิม', '"[object Object]"', 'null', 'โยน TypeError'],
     answer: 1,
   },
   {

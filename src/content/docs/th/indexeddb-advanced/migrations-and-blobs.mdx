@@ -24,7 +24,7 @@ request.onupgradeneeded = (event) => {
 };
 ```
 
-คุณสมบัติสำคัญคือ `event.oldVersion`: มันบอกให้คุณรู้ว่า database อยู่ที่เวอร์ชันใด **ก่อน** การเปิดครั้งนี้ database ที่สร้างใหม่จะรายงาน `oldVersion === 0`
+คุณสมบัติสำคัญคือ `event.oldVersion`: ค่านี้บอกให้คุณรู้ว่า database อยู่ที่เวอร์ชันใด **ก่อน** การเปิดครั้งนี้ database ที่สร้างใหม่จะรายงาน `oldVersion === 0`
 
 ## รูปแบบ migration: การตรวจสอบ `if (oldVersion < N)` แบบต่อเนื่อง
 
@@ -75,7 +75,7 @@ getReq.onsuccess = async () => {
 };
 ```
 
-เทคนิคเดียวกันนี้ใช้ได้กับ object `File` (ซึ่งเป็น subclass ของ `Blob`), `ArrayBuffer`, `ImageBitmap` และประเภทอื่น ๆ ที่ structured-cloneable
+เทคนิคเดียวกันนี้ใช้ได้กับ object `File` (ที่เป็น subclass ของ `Blob`), `ArrayBuffer`, `ImageBitmap` และประเภทอื่น ๆ ที่ structured-cloneable
 
 ## ทดลองรัน: v2 migration และ Blob round-trip
 
@@ -168,7 +168,7 @@ export const migrationsCode = `(async function () {
 | `Blob` / `File` ใน IDB | จัดเก็บและดึงกลับโดยไม่ต้อง serialisation ใด ๆ |
 | `Blob.prototype.text()` | คืนค่า `Promise<string>` — ใช้ `await` |
 
-## Trade-offs
+## ข้อแลกเปลี่ยน
 
 | ตัวเลือก | Benefit | Cost |
 |---------|---------|------|
@@ -176,13 +176,13 @@ export const migrationsCode = `(async function () {
 | อัปโหลดไฟล์ขึ้น server แล้วเก็บแค่ URL ใน IndexedDB | ควบคุมขนาด storage ฝั่ง client ได้ดีกว่า ไม่พึ่งพาโควต้าของ browser | ต้องพึ่ง network ตอนอ่านไฟล์ ใช้งาน offline ไม่ได้เต็มรูปแบบ |
 | การตรวจสอบ `if (oldVersion < N)` แบบต่อเนื่อง | รองรับผู้ใช้ที่อัปเกรดจากเวอร์ชันไหนก็ได้อย่างถูกต้อง | ต้องดูแล migration path เพิ่มขึ้นเรื่อยๆ ตามจำนวนเวอร์ชันที่ผ่านมา โค้ดยาวขึ้นตามเวลา |
 
-## Common Mistakes
+## ข้อผิดพลาดที่พบบ่อย
 
 - **จัดเก็บ Blob ขนาดใหญ่โดยไม่ตรวจสอบโควต้าก่อน** — อาจทำให้ origin เกิน storage budget แบบเงียบๆ ควรเช็ค `navigator.storage.estimate()` ก่อนเขียนไฟล์ขนาดใหญ่
 - **เขียน migration ด้วย `if/else` เดี่ยวๆ แทนการตรวจสอบแบบต่อเนื่อง** — ทำให้ผู้ใช้ที่อัปเกรดข้ามหลายเวอร์ชันพลาด migration บางขั้นตอนไป ควรใช้ `if (oldVersion < N)` เรียงต่อกันเสมอ
 - **แปลง Blob เป็น base64 string ก่อนเก็บโดยไม่จำเป็น** — IndexedDB รองรับ structured clone ของ `Blob`/`File` อยู่แล้ว การแปลงเป็น base64 เพิ่ม overhead ทั้ง CPU และขนาดข้อมูลโดยไม่มีประโยชน์
 
-> 💡 Real World Example
+> 💡 ตัวอย่างจากของจริง
 >
 > **Figma** — เก็บ asset และ thumbnail ของไฟล์ design เป็น Blob ใน local cache พร้อม migration schema แบบมีเวอร์ชันเมื่อโครงสร้างข้อมูล cache เปลี่ยนแปลงในแต่ละ release
 >

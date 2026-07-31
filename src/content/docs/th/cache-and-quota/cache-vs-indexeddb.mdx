@@ -66,7 +66,7 @@ export const decisionDiagram = `flowchart TD
 ใช้ Cache API สำหรับทุกสิ่งที่มีรูปแบบเหมือน HTTP response (URL + headers + body) ใช้ IndexedDB สำหรับ record ของแอปพลิเคชันและ blob ที่ต้องการ query หรืออัปเดต ใช้ localStorage เฉพาะสำหรับ string preference ขนาดเล็กที่ต้องอ่านแบบ synchronous เมื่อเริ่มต้น สำหรับกลยุทธ์ offline ใน PWA มักใช้ Cache API และ IndexedDB ร่วมกัน — asset ใน Cache API และข้อมูลแอปใน IndexedDB
 </Callout>
 
-## Trade-offs
+## ข้อแลกเปลี่ยน
 
 | ตัวเลือก | Benefit | Cost |
 |---------|---------|------|
@@ -74,13 +74,13 @@ export const decisionDiagram = `flowchart TD
 | IndexedDB สำหรับข้อมูลแอป | query, index และ transaction รองรับข้อมูลซับซ้อนได้ | API ใช้งานยากกว่า ต้องจัดการ schema version และ object store เอง |
 | localStorage สำหรับ preference เล็ก ๆ | เขียนอ่านง่าย ใช้ syntax synchronous | บล็อก main thread ทุกครั้งที่เข้าถึง ไม่เหมาะกับข้อมูลขนาดใหญ่หรือเขียนถี่ |
 
-## Common Mistakes
+## ข้อผิดพลาดที่พบบ่อย
 
 - **ใช้ Cache API เก็บข้อมูล JS object ทั่วไปโดยแปลงเป็น JSON string ใส่ใน Response เอง** — เพิ่มความซับซ้อนโดยไม่จำเป็น ถ้าข้อมูลไม่ใช่ HTTP request/response ควรใช้ IndexedDB ตั้งแต่แรก
 - **ใช้ localStorage เก็บข้อมูลขนาดใหญ่หรือ cache ทั้งชุด** — synchronous I/O ของ localStorage บล็อก main thread ทำให้ UI ค้าง ควรย้ายไป IndexedDB หรือ Cache API
 - **คิดว่า Cache API และ IndexedDB แข่งกัน ต้องเลือกอย่างใดอย่างหนึ่ง** — ในแอป PWA ส่วนใหญ่ใช้ร่วมกัน: Cache API เก็บ asset, IndexedDB เก็บข้อมูลแอป
 
-> 💡 Real World Example
+> 💡 ตัวอย่างจากของจริง
 >
 > **Twitter Lite** — ใช้ Cache API เก็บ app shell (HTML/CSS/JS) ให้โหลดเร็ว และใช้ IndexedDB เก็บ timeline กับข้อมูลผู้ใช้ที่ต้อง query
 >

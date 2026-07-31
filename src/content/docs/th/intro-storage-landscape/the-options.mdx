@@ -79,7 +79,7 @@ OPFS มอบพื้นที่ file system แบบ sandboxed และส
 storage แบบ synchronous ทั้งสาม ได้แก่ cookies, `localStorage` และ `sessionStorage` มีความจุจำกัดและ block main thread สำหรับข้อมูลที่ใหญ่กว่าสองสามเมกะไบต์หรือเข้าถึงบ่อยครั้ง IndexedDB, Cache API หรือ OPFS จะให้บริการได้ดีกว่ามากโดยไม่เสี่ยงต่อ UI jank
 </Callout>
 
-## Trade-offs
+## ข้อแลกเปลี่ยน
 
 | ตัวเลือก | Benefit | Cost |
 |---------|---------|------|
@@ -88,17 +88,17 @@ storage แบบ synchronous ทั้งสาม ได้แก่ cookies, 
 | IndexedDB | รองรับข้อมูลจำนวนมาก, query ได้, async ไม่ block thread | API ซับซ้อนกว่า ต้องจัดการ transactions และ schema versioning เอง |
 | Cache API / OPFS | เหมาะกับ offline assets และ binary files ขนาดใหญ่ | ต้องใช้ร่วมกับ service worker หรือ Worker context จึงจะได้ประโยชน์เต็มที่ |
 
-## Common Mistakes
+## ข้อผิดพลาดที่พบบ่อย
 
 - **ใช้ cookies เก็บข้อมูล UI state ทั่วไป** — cookies ถูกส่งไปกับทุก HTTP request ทำให้ request หนักขึ้นโดยไม่จำเป็น ทั้งที่ข้อมูลแบบนี้ไม่เกี่ยวกับ server เลย ควรใช้ `localStorage` แทน
 - **ใช้ `localStorage` เก็บ dataset ขนาดใหญ่ที่ต้อง query** — `localStorage` เก็บได้แค่ string, ไม่มี index และเป็น synchronous ทำให้ scale ไม่ได้ ควรย้ายไป IndexedDB ตั้งแต่ต้น
 - **ลืมว่าทุก store แบบ best-effort อาจถูก evict ได้** — คิดว่า IndexedDB หรือ Cache API เก็บถาวรเหมือน `localStorage` ทั้งที่ default เป็น best-effort และ browser อาจลบทิ้งได้เมื่อ disk เหลือน้อย
 
-> 💡 Real World Example
+> 💡 ตัวอย่างจากของจริง
 >
 > **Gmail** — ใช้ IndexedDB เก็บ email สำหรับโหมด offline เพราะต้องการความจุมากและ query ที่ซับซ้อนกว่าที่ Web Storage รองรับได้
 >
-> **เว็บไซต์ e-commerce ทั่วไป** — ใช้ cookies เก็บ session token และ auth state เพราะต้องส่งไปยัง server ทุก request ในขณะที่ใช้ `localStorage` เก็บแค่ preference เช่น currency หรือ theme ที่ไม่เกี่ยวกับ server
+> **เว็บไซต์ e-commerce ทั่วไป** — ใช้ cookies เก็บ session token และ auth state เพราะต้องส่งไปยัง server ทุก request ส่วน `localStorage` ใช้เก็บแค่ preference เช่น currency หรือ theme ที่ไม่เกี่ยวกับ server
 
 export const quizTheOptions = [
   {

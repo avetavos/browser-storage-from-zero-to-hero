@@ -120,7 +120,7 @@ export const cacheApiCode = `(async () => {
 `cache.addAll` เป็นแบบ atomic: request ทุกรายการต้องสำเร็จ หรือจะไม่มีการจัดเก็บใด ๆ เลย ใช้สำหรับ pre-cache asset ที่สำคัญในช่วง Service Worker install ถ้า asset ใด 404 การติดตั้งทั้งหมดจะล้มเหลว ซึ่งมักเป็นพฤติกรรมที่ถูกต้อง
 </Callout>
 
-## Trade-offs
+## ข้อแลกเปลี่ยน
 
 | ตัวเลือก | Benefit | Cost |
 |---------|---------|------|
@@ -128,13 +128,13 @@ export const cacheApiCode = `(async () => {
 | ใช้ `cache.addAll()` แบบ atomic สำหรับ pre-cache | รับประกันว่า asset ที่ประกาศ install ครบทุกตัวหรือไม่มีเลย ป้องกัน state ที่ asset ขาดหาย | ถ้า asset ตัวเดียว 404 การติดตั้งทั้งหมดล้มเหลว ต้องออกแบบ error handling ให้รอบคอบ |
 | ตั้งชื่อ cache แบบมี version (เช่น `demo-cache-v2`) | เปลี่ยน strategy หรืออัปเดต asset ได้โดยไม่ปนกับ cache เก่า | ต้องเขียนโค้ดลบ cache version เก่าเองใน `activate` event ไม่งั้น storage โตไม่มีที่สิ้นสุด |
 
-## Common Mistakes
+## ข้อผิดพลาดที่พบบ่อย
 
 - **เก็บ opaque response ไว้ใน cache แล้วคิดว่าไม่กินพื้นที่เพราะอ่าน body ไม่ได้** — browser นับขนาดเต็มของ opaque response (มักหลาย MB ต่อรายการ) เข้า quota เหมือน response ปกติ
 - **ไม่เคยลบ cache version เก่าเมื่อ deploy ใหม่** — ทุกครั้งที่เปลี่ยนชื่อ cache (เช่น v1 → v2) ต้องเรียก `caches.delete()` กับชื่อเก่าใน `activate` event ไม่งั้น storage สะสมไม่มีวันจบ
 - **ใช้ `cache.add()`/`addAll()` กับ request โดยไม่เช็ค response status ก่อน** — method เหล่านี้เก็บ response ทุกสถานะรวมถึง error page ที่ server อาจส่งมาโดยไม่ throw ต้องตรวจสอบเองถ้าต้องการความชัวร์
 
-> 💡 Real World Example
+> 💡 ตัวอย่างจากของจริง
 >
 > **Wikipedia** — offline reading mode ใช้ Cache API ร่วมกับ Service Worker เพื่อเก็บบทความและ asset ไว้ให้เปิดอ่านได้แม้ไม่มีเน็ต
 >

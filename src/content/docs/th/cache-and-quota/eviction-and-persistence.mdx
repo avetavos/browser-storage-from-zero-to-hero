@@ -69,7 +69,7 @@ if (!isAlreadyPersistent) {
 Persistent storage เป็นการรับประกันของ browser ไม่ใช่ JavaScript lock การเรียก `persist()` เป็นการ *ร้องขอ* การป้องกัน browser อาจปฏิเสธ ผู้ใช้ยังคงควบคุมขั้นสุดท้ายและสามารถล้าง storage ทั้งหมดผ่านการตั้งค่า browser ได้ตลอดเวลา
 </Callout>
 
-## Trade-offs
+## ข้อแลกเปลี่ยน
 
 | ตัวเลือก | Benefit | Cost |
 |---------|---------|------|
@@ -77,13 +77,13 @@ Persistent storage เป็นการรับประกันของ bro
 | เรียก `navigator.storage.persist()` เพื่อขอ persistent storage | ข้อมูลปลอดภัยจากการ evict อัตโนมัติ เหมาะกับแอปที่พึ่งพาข้อมูลออฟไลน์ | ต้องผ่านเงื่อนไขของ browser (เช่น engagement, การติดตั้ง PWA) และอาจถูกปฏิเสธ ทำให้โค้ดต้อง handle ทั้งสองกรณี |
 | เช็ค `persisted()` ก่อนขอ `persist()` ทุกครั้ง | หลีกเลี่ยงการขอ permission ซ้ำซ้อนที่รบกวนผู้ใช้ | เพิ่ม async call หนึ่งจังหวะก่อนเริ่ม flow หลัก |
 
-## Common Mistakes
+## ข้อผิดพลาดที่พบบ่อย
 
 - **สมมติว่า `persist()` คืนค่า `true` เสมอโดยไม่เช็คผลลัพธ์** — browser อาจปฏิเสธคำขอเงียบ ๆ ต้อง handle กรณี `false` และแจ้งเตือนผู้ใช้หรือ fallback ตามความเหมาะสม
 - **ไม่เคยเรียก `navigator.storage.persisted()` ก่อน `persist()`** — ทำให้เรียกขอ permission ซ้ำทุกครั้งที่โหลดแอป ทั้งที่อาจได้รับสิทธิ์ไปแล้ว
 - **เข้าใจว่า eviction ลบเฉพาะ cache ที่เก่าที่สุด** — จริง ๆ แล้ว browser ล้าง storage ทั้งหมดของ origin พร้อมกัน ทั้ง Cache API และ IndexedDB ไม่ได้เลือกลบทีละรายการ
 
-> 💡 Real World Example
+> 💡 ตัวอย่างจากของจริง
 >
 > **Twitter Lite** — ขอ persistent storage เพื่อป้องกันไม่ให้ app shell ที่ cache ไว้ถูก evict ระหว่างที่ผู้ใช้ engagement ต่ำ
 >
@@ -94,14 +94,14 @@ export const quizEvictionAndPersistence = [
     q: 'โหมด storage เริ่มต้นของ web origin ใหม่คืออะไร?',
     options: [
       'Persistent — ข้อมูลจะไม่ถูกลบโดยอัตโนมัติ',
-      'Best-effort — เบราว์เซอร์อาจ evict ข้อมูลภายใต้ storage pressure',
+      'Best-effort — browser อาจ evict ข้อมูลภายใต้ storage pressure',
       'Locked — ไม่อนุญาตให้ใช้ storage จนกว่าผู้ใช้จะให้สิทธิ์',
       'Temporary — ข้อมูลถูกล้างหลังทุก browser session',
     ],
     answer: 1,
   },
   {
-    q: 'เมื่อเบราว์เซอร์ evict origin แบบ best-effort เนื่องจาก storage pressure อะไรถูกล้าง?',
+    q: 'เมื่อ browser evict origin แบบ best-effort เนื่องจาก storage pressure อะไรถูกล้าง?',
     options: [
       'เฉพาะข้อมูล Cache API ของ origin นั้น',
       'เฉพาะข้อมูล IndexedDB ของ origin นั้น',
@@ -111,7 +111,7 @@ export const quizEvictionAndPersistence = [
     answer: 2,
   },
   {
-    q: 'navigator.storage.persist() คืนค่าอะไรถ้าเบราว์เซอร์ปฏิเสธคำขอ?',
+    q: 'navigator.storage.persist() คืนค่าอะไรถ้า browser ปฏิเสธคำขอ?',
     options: [
       'throw DOMException',
       'false',

@@ -12,7 +12,7 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
 ## ข้อแปลกของ document.cookie
 
-`document.cookie` ไม่ทำงานเหมือน property JavaScript ทั่วไป มันมีพฤติกรรมที่แตกต่างกันโดยสิ้นเชิงขึ้นอยู่กับว่าคุณกำลังอ่านหรือเขียน
+`document.cookie` ไม่ทำงานเหมือน property JavaScript ทั่วไป มีพฤติกรรมที่แตกต่างกันโดยสิ้นเชิงขึ้นอยู่กับว่าคุณกำลังอ่านหรือเขียน
 
 **การอ่าน** จะคืน cookie ทั้งหมดสำหรับหน้าปัจจุบันเป็น string เดียวคั่นด้วยเซมิโคลอน:
 
@@ -135,20 +135,20 @@ console.log('After delete:', getCookie('demo_user'));`;
 การอ่าน `document.cookie` คืน cookie ทั้งหมดเป็น string ใหญ่ชิ้นเดียว การเขียนจะตั้งค่า cookie เพียงชิ้นเดียว — ไม่ล้าง cookie อื่น เพื่อลบ cookie ต้องตั้งค่าใหม่พร้อม `Max-Age=0` ควรใช้ `encodeURIComponent` ตอนตั้งค่าและ `decodeURIComponent` ตอนอ่านเสมอเพื่อรองรับอักขระพิเศษ
 </Callout>
 
-## Trade-offs
+## ข้อแลกเปลี่ยน
 
 | ตัวเลือก | Benefit | Cost |
 |---------|---------|------|
 | เขียน cookie ทีละชิ้นผ่าน `document.cookie` | อัปเดตค่าเดียวได้โดยไม่กระทบ cookie อื่น ไม่ต้องจัดการ state ทั้งก้อน | ต้อง parse string เองทุกครั้งที่ต้องการอ่านค่าตามชื่อ ไม่มี API แบบ key-value ให้ใช้ตรงๆ |
 | ใช้ `encodeURIComponent`/`decodeURIComponent` ห่อค่า | ป้องกันค่าที่มีเซมิโคลอนหรืออักขระพิเศษทำให้ parsing พัง | เพิ่มขั้นตอนที่ต้องจำทุกครั้ง ลืมด้านใดด้านหนึ่งแล้วค่าจะอ่านผิดแบบเงียบๆ |
 
-## Common Mistakes
+## ข้อผิดพลาดที่พบบ่อย
 
 - **ลบ cookie ด้วยการกำหนด string ว่าง (`document.cookie = 'name=';`)** — วิธีนี้ไม่ลบ cookie จริง ต้องตั้งค่าใหม่พร้อม `Max-Age=0` (หรือ `Expires` ที่ผ่านมาแล้ว) เท่านั้นถึงจะลบได้
 - **ลืม `encodeURIComponent` ตอนตั้งค่าหรือ `decodeURIComponent` ตอนอ่าน** — ค่าที่มีเซมิโคลอนหรืออักขระพิเศษจะทำให้ parsing แบบแยกด้วย `; ` พังหรือได้ค่าที่ผิดเพี้ยน
 - **เข้าใจผิดว่า `document.cookie = 'a=1'` จะล้าง cookie เดิมทั้งหมดแล้วตั้งใหม่** — การเขียนอัปเดตแค่ cookie ชื่อ `a` เท่านั้น cookie อื่นที่มีอยู่ก่อนไม่หายไปไหน
 
-> 💡 Real World Example
+> 💡 ตัวอย่างจากของจริง
 >
 > **ระบบ theme/preference ฝั่ง client** — เว็บไซต์จำนวนมากใช้ helper แบบ `setCookie`/`getCookie` เก็บค่าอย่าง `theme=dark` เพื่อให้ preference คงอยู่ข้าม session โดยไม่ต้อง login
 >

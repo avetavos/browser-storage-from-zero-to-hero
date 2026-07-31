@@ -41,7 +41,7 @@ worker.postMessage(inputData);
 
 ## รันได้: คำนวณแบบ off-thread
 
-Worker ด้านล่างจะรวมจำนวนเต็มตั้งแต่ 1 ถึง N ด้วย N = 1,000,000 ซึ่งเป็น loop ที่ใช้เวลาพอสมควร หากรันบน main thread โดยตรงจะทำให้ UI ค้างชั่วขณะ — แต่นี่รันอยู่บน background thread แทน
+Worker ด้านล่างจะรวมจำนวนเต็มตั้งแต่ 1 ถึง N ด้วย N = 1,000,000 ที่เป็น loop ที่ใช้เวลาพอสมควร หากรันบน main thread โดยตรงจะทำให้ UI ค้างชั่วขณะ — แต่นี่รันอยู่บน background thread แทน
 
 export const webWorkersCode = `var workerSrc = 'self.onmessage = function(e) {' +
   ' var n = e.data, sum = 0;' +
@@ -64,7 +64,7 @@ console.log('Worker started — result arrives asynchronously');`;
 Workers ถูก isolate — ไม่สามารถเข้าถึง `window`, `document` หรือ DOM API ใดๆ ได้ เหมาะอย่างยิ่งสำหรับงาน CPU-intensive เช่น การประมวลผลภาพ การเข้ารหัส หรือการแปลงข้อมูลขนาดใหญ่
 </Callout>
 
-## Trade-offs
+## ข้อแลกเปลี่ยน
 
 | ตัวเลือก | Benefit | Cost |
 |---------|---------|------|
@@ -72,13 +72,13 @@ Workers ถูก isolate — ไม่สามารถเข้าถึง `
 | ประมวลผลบน main thread โดยตรง | เรียบง่าย เข้าถึง DOM ได้ทันที ไม่มีต้นทุนการสื่อสารข้ามเธรด | งานหนักบล็อก UI thread ทำให้หน้าเว็บค้างหรือ frame drop |
 | Inline worker ผ่าน Blob URL | ไม่ต้อง host ไฟล์แยก รวมโค้ดไว้ที่เดียว deploy ง่าย | Debug ยากกว่าไฟล์จริงเพราะไม่มี source map/breakpoint ที่ตรงไปตรงมา |
 
-## Common Mistakes
+## ข้อผิดพลาดที่พบบ่อย
 
 - **คาดว่า worker เข้าถึง DOM ได้** — worker ไม่มี `window`, `document` หรือ DOM API ใดๆ เลย เป็นความเข้าใจผิดที่พบบ่อยที่สุดของมือใหม่ ต้อง postMessage ผลลัพธ์กลับมาให้ main thread จัดการ DOM แทน
 - **ลืมเรียก `worker.terminate()`** — worker ที่ยังไม่ terminate จะค้างอยู่ใน memory และกิน CPU ต่อไปแม้งานจะเสร็จแล้ว ทำให้เกิด memory leak โดยเฉพาะถ้าสร้าง worker ใหม่ซ้ำๆ
 - **ใช้ worker กับงานสั้นๆ ที่ใช้เวลาน้อยกว่า 2-3 ms** — ต้นทุนของการสร้าง worker และ `postMessage` ไป-กลับสูงกว่าประโยชน์ที่ได้ ควรใช้ worker เฉพาะงานที่ใช้เวลานานพอจะคุ้มกับ overhead
 
-> 💡 Real World Example
+> 💡 ตัวอย่างจากของจริง
 >
 > **Figma** — รัน rendering และการคำนวณ geometry ที่หนักหน่วงบน Web Worker แยกจาก main thread เพื่อให้ canvas ยังคง responsive ระหว่างที่ผู้ใช้แก้ไข design
 >

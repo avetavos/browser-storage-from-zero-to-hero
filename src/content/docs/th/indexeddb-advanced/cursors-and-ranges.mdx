@@ -14,7 +14,7 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
 การอ่าน record เดียวด้วยคีย์ผ่าน `objectStore.get(key)` นั้นรวดเร็ว แต่บางครั้งคุณจำเป็นต้อง **เดินผ่าน record จำนวนมาก** — เพื่อกรอง รวบรวม หรือแปลงข้อมูลระหว่างทาง นั่นคือสิ่งที่ cursor มีไว้เพื่อ
 
-Cursor ชี้ไปที่ record หนึ่งในแต่ละครั้ง คุณเปิดมันบน object store (หรือ index) ประมวลผล record ปัจจุบัน จากนั้นเรียก `cursor.continue()` เพื่อเลื่อนไปยัง record ถัดไป เมื่อไม่มี record เหลืออีก cursor จะ resolve เป็น `null` ซึ่งเป็นสัญญาณว่าการ iterate เสร็จสิ้นแล้ว
+Cursor ชี้ไปที่ record หนึ่งในแต่ละครั้ง คุณเปิด cursor บน object store (หรือ index) ประมวลผล record ปัจจุบัน จากนั้นเรียก `cursor.continue()` เพื่อเลื่อนไปยัง record ถัดไป เมื่อไม่มี record เหลืออีก cursor จะ resolve เป็น `null` ที่เป็นสัญญาณว่าการ iterate เสร็จสิ้นแล้ว
 
 ```js
 const request = objectStore.openCursor();
@@ -181,10 +181,10 @@ export const cursorsCode = `(async function() {
 <StorageRunner client:visible code={cursorsCode} />
 
 <Callout title="ประเด็นสำคัญ">
-Cursor ไม่ได้โหลด record ทั้งหมดเข้าหน่วยความจำพร้อมกัน — มันเดินผ่านทีละรายการ ต้องเรียก `cursor.continue()` ภายใน handler ของ `onsuccess` เสมอเพื่อเลื่อนไปหน้า หากลืมเรียกจะทำให้การ iterate หยุดนิ่งโดยไม่มีข้อผิดพลาด จับคู่ cursor กับ `IDBKeyRange` เพื่อหลีกเลี่ยงการสแกน record ที่ไม่จำเป็น
+Cursor ไม่ได้โหลด record ทั้งหมดเข้าหน่วยความจำพร้อมกัน — แต่เดินผ่านทีละรายการ ต้องเรียก `cursor.continue()` ภายใน handler ของ `onsuccess` เสมอเพื่อเลื่อนไปหน้า หากลืมเรียกจะทำให้การ iterate หยุดนิ่งโดยไม่มีข้อผิดพลาด จับคู่ cursor กับ `IDBKeyRange` เพื่อหลีกเลี่ยงการสแกน record ที่ไม่จำเป็น
 </Callout>
 
-## Trade-offs
+## ข้อแลกเปลี่ยน
 
 | ตัวเลือก | Benefit | Cost |
 |---------|---------|------|
@@ -192,13 +192,13 @@ Cursor ไม่ได้โหลด record ทั้งหมดเข้า�
 | ใช้ `getAll()` ตรงๆ | เขียนโค้ดสั้น อ่านง่าย ได้ผลลัพธ์เป็น array ทันที | โหลด record ทั้งหมดเข้าหน่วยความจำในครั้งเดียว ไม่เหมาะกับ store ขนาดใหญ่ |
 | กรองด้วย `IDBKeyRange` ก่อน iterate | ลดจำนวน record ที่ต้องสแกน ประหยัดเวลา | ต้องรู้โครงสร้างของคีย์ล่วงหน้าเพื่อสร้าง range ที่ถูกต้อง |
 
-## Common Mistakes
+## ข้อผิดพลาดที่พบบ่อย
 
 - **ลืมเรียก `cursor.continue()` ภายใน handler ของ `onsuccess`** — การ iterate จะหยุดนิ่งเงียบๆ โดยไม่มี error ใดๆ ให้เห็น ต้องเรียกทุกครั้งที่ยังมี record เหลือ
 - **คิดว่า `IDBKeyRange.bound()` ไม่รวมขอบทั้งสองด้านโดยค่าเริ่มต้น** — ค่าเริ่มต้นคือรวมทั้ง lower และ upper ต้องส่ง `true` ในอาร์กิวเมนต์ที่สามหรือสี่อย่างชัดเจนถ้าต้องการ exclusive
 - **เปิด cursor ใหม่ทุกครั้งที่ต้องการ record ถัดไป** — cursor ตัวเดียวสามารถเลื่อนไปเรื่อยๆ ด้วย `continue()` ไม่จำเป็นต้องเปิดใหม่ ทำแบบนั้นจะเสีย performance และทำให้โค้ดสับสน
 
-> 💡 Real World Example
+> 💡 ตัวอย่างจากของจริง
 >
 > **Figma** — ใช้ cursor เพื่อ iterate ผ่าน object จำนวนมากใน local cache ของไฟล์ design โดยไม่ต้องโหลดทั้งหมดเข้าหน่วยความจำในคราวเดียว ช่วยให้ canvas render ได้ลื่นแม้ไฟล์มีขนาดใหญ่
 >
@@ -207,7 +207,7 @@ Cursor ไม่ได้โหลด record ทั้งหมดเข้า�
 export const quizCursorsAndRanges = [
   {
     q: 'Cursor จะ resolve เป็นค่าใดเมื่อไม่มีระเบียนเหลืออีกให้วนซ้ำ?',
-    options: ['undefined', 'null', '0', 'มันจะโยน StopIteration error'],
+    options: ['undefined', 'null', '0', 'จะโยน StopIteration error'],
     answer: 1,
   },
   {

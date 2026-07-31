@@ -114,7 +114,7 @@ console.log('Cleaned up demo-opfs.txt');`;
 พื้นที่จัดเก็บ OPFS นับรวมกับ quota รวมของ origin (pool เดียวกับ IndexedDB และ Cache API) ใช้ `navigator.storage.estimate()` เพื่อตรวจสอบพื้นที่ที่มี ข้อมูล OPFS จะอยู่รอดหลังรีสตาร์ท browser แต่สามารถถูก evict โดย browser ภายใต้แรงกดดันของพื้นที่จัดเก็บ หาก origin ไม่ได้รับ persistent storage ผ่าน `navigator.storage.persist()`
 </Callout>
 
-## Trade-offs
+## ข้อแลกเปลี่ยน
 
 | ตัวเลือก | Benefit | Cost |
 |---------|---------|------|
@@ -122,13 +122,13 @@ console.log('Cleaned up demo-opfs.txt');`;
 | OPFS | I/O เร็วใกล้เคียง native เพราะเป็น sandboxed virtual file system เขียน program ได้เต็มที่ ไม่ต้อง user gesture | browser support จำกัดกว่า IndexedDB/localStorage และผู้ใช้มองไม่เห็นไฟล์โดยตรง เพราะไม่ใช่ไฟล์ใน OS จริง |
 | IndexedDB (เก็บ blob ทั่วไป) | รองรับ browser กว้างที่สุด มี transaction model ที่คุ้นเคยจากบทก่อนหน้า | throughput ต่ำกว่า OPFS สำหรับไฟล์ขนาดใหญ่หรือการเขียนบ่อยๆ |
 
-## Common Mistakes
+## ข้อผิดพลาดที่พบบ่อย
 
 - **คิดว่า File System Access API รองรับทุก browser เหมือน OPFS** — `showOpenFilePicker`/`showSaveFilePicker` ใช้ได้เต็มที่เฉพาะ Chromium-based browser เท่านั้น Firefox และ Safari ยังไม่รองรับ
 - **เรียก `showOpenFilePicker` นอก user-gesture handler** เช่นใน `useEffect` หรือ event ที่ไม่ใช่ click แล้วสงสัยว่าทำไม throw `SecurityError`
 - **ลืมเรียก `writable.close()` หลังเขียนไฟล์ใน OPFS** — ข้อมูลจะไม่ถูก flush และมองไม่เห็นใน read ครั้งถัดไปแม้ `write()` จะ resolve แล้วก็ตาม
 
-> 💡 Real World Example
+> 💡 ตัวอย่างจากของจริง
 >
 > **VS Code for the Web** — ใช้ OPFS เก็บ local cache ของไฟล์ ทำให้ file I/O เร็วใกล้เคียง native editor เมื่อรันอยู่ใน browser
 >
@@ -138,7 +138,7 @@ export const quizFileSystemAccessOpfs = [
   {
     q: 'ทำไม showOpenFilePicker ต้องใช้ user gesture?',
     options: [
-      'เป็น bug ของเบราว์เซอร์ที่จะแก้ในเวอร์ชันอนาคต',
+      'เป็น bug ของ browser ที่จะแก้ในเวอร์ชันอนาคต',
       'เพื่อป้องกัน script ที่เป็นอันตรายจากการอ่านไฟล์ในเครื่องผู้ใช้โดยไม่รู้ตัว',
       'เพราะ OPFS ใช้ security model ที่แตกต่าง',
       'User gesture จะเพิ่ม file quota',
@@ -169,8 +169,8 @@ export const quizFileSystemAccessOpfs = [
     q: 'ข้อใดอธิบาย OPFS storage persistence ได้ถูกต้อง?',
     options: [
       'ข้อมูลหายเมื่อปิดแท็บ',
-      'ข้อมูลอยู่รอดหลังรีสตาร์ทเบราว์เซอร์ แต่อาจถูก evict ภายใต้แรงกดดันพื้นที่จัดเก็บ เว้นแต่ persist() ได้รับการอนุมัติ',
-      'ข้อมูลถาวรและเบราว์เซอร์ไม่สามารถลบได้',
+      'ข้อมูลอยู่รอดหลังรีสตาร์ท browser แต่อาจถูก evict ภายใต้แรงกดดันพื้นที่จัดเก็บ เว้นแต่ persist() ได้รับการอนุมัติ',
+      'ข้อมูลถาวรและ browser ไม่สามารถลบได้',
       'ข้อมูลแชร์ระหว่างทุก origin',
     ],
     answer: 1,
