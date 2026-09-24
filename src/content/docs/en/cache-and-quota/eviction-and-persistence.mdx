@@ -74,11 +74,29 @@ if (!isAlreadyPersistent) {
 
 - **Do not assume** `persist()` will return `true` — always handle the `false` case gracefully.
 - Call `persisted()` first to avoid redundant prompts if the browser already granted persistence.
-- For apps where offline capability is critical, store enough diagnostic information in localStorage (which is harder to evict than Cache API in practice) to detect data loss on next load.
+- For apps where offline capability is critical, store enough diagnostic information in localStorage — it has its own small fixed quota and is not covered by the storage-pressure eviction system that governs IndexedDB, the Cache API, and OPFS — to detect data loss on next load.
 - Inform users when the app is running in best-effort mode so they understand the risk.
 
 <Callout title="Key point">
 Persistent storage is a browser guarantee, not a JavaScript lock. Calling `persist()` *requests* protection — the browser may decline. The user retains final control and can always clear all storage via their browser settings regardless of persistence state.
+</Callout>
+
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| Staying in best-effort mode (default) | No permission prompt, works immediately — good for non-critical caches | The browser can evict data at any time with no warning once disk space gets tight |
+| Calling `navigator.storage.persist()` to request persistent storage | Data is protected from automatic eviction — good for an app that depends on offline data | Subject to the browser's own conditions (engagement, PWA install) and can be denied, so your code must handle both outcomes |
+| Checking `persisted()` before every `persist()` call | Avoids a redundant permission request that would annoy the user | Adds one extra async call before the main flow starts |
+
+## Common mistakes
+
+- **Assuming `persist()` always returns `true` without checking the result** — the browser can silently decline the request; you must handle the `false` case and notify the user or fall back appropriately.
+- **Never calling `navigator.storage.persisted()` before `persist()`** — this re-requests permission on every app load, even when it may already have been granted.
+- **Assuming eviction only removes the oldest cache entries** — in reality the browser clears an origin's storage as a whole; it doesn't selectively evict individual entries within Cache API or IndexedDB.
+
+<Callout title="Real-world example">
+**Twitter Lite (PWA)** — requested persistent storage to keep its cached app shell from being evicted during periods of low user engagement. Source: [web.dev case study, "Twitter Lite PWA significantly increases engagement and reduces data usage"](https://web.dev/case-studies/twitter).
 </Callout>
 
 export const quizEvictionAndPersistence = [

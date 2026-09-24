@@ -22,38 +22,46 @@ method ทั้งสามคืนค่า Promise และใช้ร่�
 
 คืนค่า object ที่มีสองฟิลด์:
 
-- `usage` — จำนวน byte ที่ origin ใช้อยู่ขณะนี้ ครอบคลุมกลไกการจัดเก็บทั้งหมด (Cache API, IndexedDB, localStorage ฯลฯ)
+- `usage` — จำนวน byte ที่ origin ใช้อยู่ขณะนี้ ครอบคลุมกลไกการจัดเก็บแบบ best-effort (Cache API, IndexedDB, OPFS ฯลฯ) — **ไม่รวม** `localStorage`/`sessionStorage` หรือ cookie ซึ่งมี quota แยกต่างหากที่เล็กกว่ามาก
 - `quota` — จำนวน byte โดยประมาณที่ browser ยินดีให้ origin นี้ใช้
 
 ```js
 const { usage, quota } = await navigator.storage.estimate();
-console.log('Using', usage, 'of', quota, 'bytes');
+
+const usageMB = (usage / 1024 ** 2).toFixed(2);
+const quotaMB = (quota / 1024 ** 2).toFixed(2);
+
+console.log(\`Used: \${usageMB} MB of \${quotaMB} MB available\`);
 ```
 
-ค่าที่ได้เป็นค่าประมาณ browser อาจปัดค่าเพื่อป้องกันการ fingerprinting
+quota เป็นค่าที่เปลี่ยนแปลงได้ — ขึ้นอยู่กับพื้นที่ว่างบนอุปกรณ์ ณ ขณะนั้น บนมือถือที่มีพื้นที่จำกัด quota อาจเล็กกว่าบนเครื่อง desktop มาก
 
 ### `navigator.storage.persist()`
 
-ร้องขอให้ browser ให้ *persistent* storage แก่ origin ปัจจุบัน คืนค่า `Promise<boolean>`:
-
-- `true` — ได้รับ persistent storage browser จะไม่ evict ข้อมูลของ origin โดยอัตโนมัติ
-- `false` — คำขอถูกปฏิเสธ storage ยังคงเป็น best-effort และอาจถูก evict ได้
+ร้องขอให้ browser ให้ *persistent* storage แก่ origin ปัจจุบัน คืนค่า Promise ที่ resolve เป็น `true` ถ้าคำขอได้รับอนุมัติ หรือ `false` ถ้า browser ปฏิเสธ
 
 ```js
 const granted = await navigator.storage.persist();
-console.log('Persistent:', granted);
+console.log('Persistent storage granted:', granted);
 ```
+
+การที่ browser จะอนุมัติ persistence หรือไม่นั้นขึ้นอยู่กับ heuristic ของ browser เช่น ผู้ใช้ได้เพิ่มเว็บไซต์ไปยังหน้าจอหลักแล้วหรือไม่ ผู้ใช้เข้าเว็บบ่อยแค่ไหน หรือผู้ใช้อนุมัติ permission prompt อย่างชัดเจนหรือไม่ คุณไม่สามารถบังคับให้คืนค่า `true` ได้
 
 ### `navigator.storage.persisted()`
 
-ตรวจสอบว่า persistent storage ได้รับอนุญาตไปแล้วหรือยัง คืนค่า `Promise<boolean>`
+ตรวจสอบว่า origin ปัจจุบันมี persistent storage อยู่แล้วหรือไม่ คืนค่า Promise ที่ resolve เป็น `true` ถ้า storage เป็น persistent อยู่แล้ว หรือ `false` ถ้ายังเป็น best-effort
 
 ```js
-const isPersisted = await navigator.storage.persisted();
-if (!isPersisted) {
-  // ตัดสินใจว่าจะขอ persistence หรือไม่
+const isPersistent = await navigator.storage.persisted();
+
+if (isPersistent) {
+  console.log('Data is safe from automatic eviction');
+} else {
+  console.log('Data may be evicted under storage pressure');
 }
 ```
+
+ใช้ `persisted()` ตอนแอปเริ่มทำงานเพื่อตัดสินใจว่าจะแสดง prompt "โปรดอนุญาต persistent storage" ให้ผู้ใช้หรือไม่
 
 ## ลองเลย: ตรวจสอบ usage, quota, และ persistence
 
@@ -80,7 +88,7 @@ export const storageManagerCode = `(async () => {
 <StorageRunner client:visible code={storageManagerCode} />
 
 <Callout title="จุดสำคัญ">
-`navigator.storage.estimate()` รายงาน usage ของ **storage ทั้งหมด** ของ origin ไม่ใช่แค่ Cache API IndexedDB, Service Worker registration และ API อื่น ๆ ล้วนนับรวมใน quota เดียวกัน ตรวจสอบในแอปที่ production ซึ่ง cache asset ขนาดใหญ่หรือเก็บข้อมูลออฟไลน์จำนวนมาก
+`navigator.storage.estimate()` รายงาน usage ของ **storage แบบ best-effort ทั้งหมด** ของ origin — IndexedDB, Cache API และ OPFS ล้วนนับรวมใน quota เดียวกัน แต่**ไม่รวม** `localStorage`/`sessionStorage` หรือ cookie ซึ่งมี quota แยกต่างหากที่เล็กกว่ามาก ตรวจสอบในแอปที่ production ซึ่ง cache asset ขนาดใหญ่หรือเก็บข้อมูลออฟไลน์จำนวนมาก
 </Callout>
 
 ## ข้อแลกเปลี่ยน
@@ -94,14 +102,12 @@ export const storageManagerCode = `(async () => {
 ## ข้อผิดพลาดที่พบบ่อย
 
 - **ไม่เช็ค `navigator.storage.persisted()` ก่อนสรุปว่าข้อมูลปลอดภัยแล้ว** — แค่เรียก `persist()` ครั้งเดียวไม่ได้แปลว่าสำเร็จเสมอไป ต้อง verify ผลลัพธ์จริงก่อนไว้ใจ
-- **มองข้ามว่า `usage` จาก `estimate()` รวมทุก storage mechanism** — ไม่ใช่แค่ Cache API เท่านั้น แต่รวม IndexedDB, localStorage และอื่น ๆ ของ origin เดียวกันด้วย เวลา debug quota ใกล้เต็มต้องเช็คทุกกลไก ไม่ใช่แค่ตัวที่เพิ่งเขียนโค้ด
+- **คิดว่า `usage` จาก `estimate()` รวม `localStorage` ด้วย** — จริง ๆ แล้วครอบคลุมแค่ storage แบบ best-effort (Cache API, IndexedDB, OPFS) เท่านั้น `localStorage`/`sessionStorage` และ cookie มี quota แยกต่างหากที่เล็กกว่ามากและไม่ปรากฏในตัวเลขนี้เลย
 - **เก็บ opaque response จำนวนมากแล้วแปลกใจว่า quota หมดเร็วผิดปกติ** — opaque response นับขนาดเต็มจริง (มักหลาย MB ต่อรายการ) เข้า usage แม้จะอ่าน body ไม่ได้
 
-> 💡 ตัวอย่างจากของจริง
->
-> **Twitter Lite** — เรียก `estimate()` เพื่อ monitor การใช้ quota ของ app shell cache และ `persist()` เพื่อป้องกันการ evict ระหว่างช่วง engagement ต่ำ
->
-> **Wikipedia** — ตรวจสอบ `persisted()` ก่อนอนุญาตให้ผู้ใช้บันทึกบทความจำนวนมากไว้อ่านออฟไลน์ เพื่อยืนยันว่าข้อมูลจะไม่ถูกลบทิ้งกลางทาง
+<Callout title="ตัวอย่างจากของจริง">
+**Twitter Lite (PWA)** — ใช้ persistent storage เพื่อป้องกันไม่ให้ app shell cache ถูก evict ระหว่างที่ผู้ใช้ engagement ต่ำ ซึ่งเป็นสิ่งที่ `navigator.storage.persist()` ออกแบบมาให้ทำได้โดยตรง แหล่งอ้างอิง: [web.dev case study, "Twitter Lite PWA significantly increases engagement and reduces data usage"](https://web.dev/case-studies/twitter)
+</Callout>
 
 export const quizStorageManager = [
   {
@@ -120,12 +126,12 @@ export const quizStorageManager = [
     answer: 1,
   },
   {
-    q: 'กลไกการจัดเก็บใดบ้างที่รวมอยู่ใน usage ที่รายงานโดย navigator.storage.estimate()?',
+    q: 'ตัวเลือกใดที่รวมอยู่ใน usage ที่รายงานโดย navigator.storage.estimate()?',
     options: [
-      'เฉพาะ Cache API',
-      'เฉพาะ IndexedDB',
-      'storage ทั้งหมดของ origin: Cache API, IndexedDB, localStorage และอื่น ๆ',
-      'เฉพาะ storage ที่เขียนโดย Service Workers',
+      'localStorage',
+      'sessionStorage',
+      'IndexedDB',
+      'Cookie',
     ],
     answer: 2,
   },

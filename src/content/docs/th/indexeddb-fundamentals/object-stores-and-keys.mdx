@@ -39,13 +39,13 @@ request.onupgradeneeded = (event) => {
 เมื่อกำหนด `keyPath` store จะใช้ **property บน object ที่เก็บ** เป็น key ซึ่งเรียกว่า **in-line key** เพราะ key อยู่ภายใน object นั้นเอง
 
 ```js
-// ออบเจกต์ทุกชิ้นที่เก็บ ต้องมี property `id`
+// Every object you store MUST have an `id` property
 db.createObjectStore('contacts', { keyPath: 'id' });
 
-// เรคคอร์ดที่ถูกต้อง:
+// Valid record:
 store.add({ id: 1, name: 'Alice', email: 'alice@example.com' });
 
-// ไม่ถูกต้อง — ไม่มีฟิลด์ `id` จะเกิด error:
+// Invalid — no `id` field, will throw:
 store.add({ name: 'Bob' });
 ```
 
@@ -54,8 +54,8 @@ store.add({ name: 'Bob' });
 ```js
 db.createObjectStore('contacts', { keyPath: 'id', autoIncrement: true });
 
-// `id` จะถูกกรอกอัตโนมัติ:
-store.add({ name: 'Alice' }); // เก็บเป็น { id: 1, name: 'Alice' }
+// `id` will be filled in automatically:
+store.add({ name: 'Alice' }); // stored as { id: 1, name: 'Alice' }
 ```
 
 ## Out-of-Line Key
@@ -65,7 +65,7 @@ store.add({ name: 'Alice' }); // เก็บเป็น { id: 1, name: 'Alice'
 ```js
 db.createObjectStore('raw-blobs', { keyPath: null });
 
-// คุณต้องระบุ key เอง:
+// You provide the key explicitly:
 store.add({ data: '...' }, 'blob-001');
 ```
 
@@ -74,7 +74,7 @@ store.add({ data: '...' }, 'blob-001');
 ```js
 db.createObjectStore('logs', { autoIncrement: true });
 
-// ไม่ต้องใส่ key — เบราว์เซอร์กำหนดเป็น 1, 2, 3, ...
+// No key needed — browser assigns 1, 2, 3, ...
 store.add({ level: 'info', message: 'App started' });
 ```
 

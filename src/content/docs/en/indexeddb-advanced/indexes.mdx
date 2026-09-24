@@ -147,6 +147,20 @@ export const indexesCode = `(async function () {
 Indexes are created once in `onupgradeneeded` and never again. Use `{ unique: true }` to enforce uniqueness on a field and `{ multiEntry: true }` when the indexed property holds an array. Retrieve an index at query time with `store.index('indexName')`, then call `.get(value)` for one record or `.getAll(value)` for all matching records.
 </Callout>
 
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| Creating an index on a frequently-queried field | Much faster reads/searches on that field, no need to scan every record | Every write must also update the index, slowing writes down and using extra storage |
+| No index at all (search via cursor + your own filter) | No write overhead, no extra storage used | Reads/searches must scan every record, getting slower as the store grows |
+| `multiEntry: true` on an array field | Efficiently searches each element inside an array | Adds one index entry per array element, so the index grows with the element count |
+
+## Common mistakes
+
+- **Trying to create a new index outside `onupgradeneeded`** — this throws immediately. Indexes can only be created or removed inside an upgrade transaction.
+- **Setting `unique: true` on a field that already has duplicate values** — writing a record with a duplicate indexed value throws `ConstraintError` immediately. Make sure the field is genuinely unique before turning this on.
+- **Forgetting that `getAll()` on an index sorts by the index key, not the primary key** — if you expect primary-key order but query through an index, the results are instead sorted by the indexed field.
+
 export const quizIndexes = [
   {
     q: 'Where must you call objectStore.createIndex() to successfully add an index?',

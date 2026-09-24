@@ -78,11 +78,9 @@ Workers ถูก isolate — ไม่สามารถเข้าถึง `
 - **ลืมเรียก `worker.terminate()`** — worker ที่ยังไม่ terminate จะค้างอยู่ใน memory และกิน CPU ต่อไปแม้งานจะเสร็จแล้ว ทำให้เกิด memory leak โดยเฉพาะถ้าสร้าง worker ใหม่ซ้ำๆ
 - **ใช้ worker กับงานสั้นๆ ที่ใช้เวลาน้อยกว่า 2-3 ms** — ต้นทุนของการสร้าง worker และ `postMessage` ไป-กลับสูงกว่าประโยชน์ที่ได้ ควรใช้ worker เฉพาะงานที่ใช้เวลานานพอจะคุ้มกับ overhead
 
-> 💡 ตัวอย่างจากของจริง
->
-> **Figma** — รัน rendering และการคำนวณ geometry ที่หนักหน่วงบน Web Worker แยกจาก main thread เพื่อให้ canvas ยังคง responsive ระหว่างที่ผู้ใช้แก้ไข design
->
-> **Squoosh** (เครื่องมือบีบอัดภาพของ Google) — รัน codec การบีบอัดภาพ (เช่น MozJPEG, WebP) ทั้งหมดใน Web Worker เพื่อไม่ให้ UI ค้างระหว่างประมวลผลไฟล์ขนาดใหญ่
+<Callout title="ตัวอย่างจากของจริง">
+**Squoosh** เครื่องมือบีบอัดภาพโอเพนซอร์สของ Google รัน codec บีบอัดภาพทั้งหมด (เช่น MozJPEG, WebP) ใน Web Worker เพื่อไม่ให้ UI ค้างระหว่างประมวลผลไฟล์ขนาดใหญ่ แหล่งอ้างอิง: [web.dev, "Squoosh v2"](https://web.dev/blog/squoosh-v2) และ [Squoosh GitHub repository](https://github.com/GoogleChromeLabs/squoosh)
+</Callout>
 
 export const quizWebWorkers = [
   {

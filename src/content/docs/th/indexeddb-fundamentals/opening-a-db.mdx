@@ -34,7 +34,7 @@ const request = indexedDB.open('my-database', 1);
 ```js
 request.onupgradeneeded = (event) => {
   const db = event.target.result; // IDBDatabase
-  // สร้าง object store โดยใช้ 'id' เป็น key path
+  // Create an object store with 'id' as the key path
   db.createObjectStore('notes', { keyPath: 'id' });
 };
 ```
@@ -68,7 +68,7 @@ request.onerror = (event) => {
 
 ```js
 db.onversionchange = () => {
-  db.close(); // ปล่อย connection เพื่อให้การ upgrade ดำเนินต่อได้
+  db.close(); // release the connection so the upgrade can proceed
   alert('Database is outdated. Please reload the page.');
 };
 ```
@@ -103,7 +103,7 @@ function openDatabase(name, version) {
   });
 }
 
-// การใช้งาน
+// Usage
 const db = await openDatabase('my-database', 1);
 console.log('Ready:', db.name, db.version);
 ```

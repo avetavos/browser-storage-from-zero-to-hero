@@ -135,6 +135,19 @@ console.log('After delete:', getCookie('demo_user'));`;
 Reading `document.cookie` returns all cookies as one big string. Writing to it sets exactly one cookie — it never clears other cookies. To delete a cookie you must set it again with `Max-Age=0`. Always use `encodeURIComponent` when setting values and `decodeURIComponent` when reading them to handle special characters safely.
 </Callout>
 
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| Writing one cookie at a time via `document.cookie` | Updates a single value without touching any other cookie, no need to manage the whole state at once | You must parse the string yourself every time you want to read a value by name — there's no direct key-value API |
+| Wrapping values with `encodeURIComponent`/`decodeURIComponent` | Prevents a semicolon or special character from breaking the parsing | One more step to remember every time — forget it on either side and the value reads back silently wrong |
+
+## Common mistakes
+
+- **Deleting a cookie by assigning an empty string (`document.cookie = 'name=';`)** — this does not actually delete the cookie. You must set it again with `Max-Age=0` (or an `Expires` date in the past) to delete it.
+- **Forgetting `encodeURIComponent` when writing or `decodeURIComponent` when reading** — a value containing a semicolon or special character breaks the `; `-delimited parsing or comes back garbled.
+- **Assuming `document.cookie = 'a=1'` clears all existing cookies and sets a new one** — the write only updates the cookie named `a`. Any other existing cookies are untouched.
+
 export const quizReadingWriting = [
   {
     q: 'What does reading document.cookie return?',

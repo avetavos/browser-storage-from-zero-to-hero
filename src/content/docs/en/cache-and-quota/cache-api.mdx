@@ -137,6 +137,24 @@ export const cacheApiCode = `(async () => {
 `cache.addAll` is atomic: all requests must succeed or none are stored. Use it to pre-cache a known set of critical assets at Service Worker install time. If one asset 404s, the entire installation fails, which is usually the correct behavior — you do not want a partially cached app shell.
 </Callout>
 
+## Trade-offs
+
+| Choice | Benefit | Cost |
+|---|---|---|
+| Store an opaque response (cross-origin, `no-cors`) with `cache.put()` | Works with CDN or third-party resources that don't send CORS headers | Counted against quota at full size even though the body can't be read, so quota drains without warning |
+| Use `cache.addAll()` atomically for pre-caching | Guarantees every declared install asset is present or none are — no partially-cached state | If a single asset 404s, the whole install fails; error handling has to account for that |
+| Version the cache name (e.g. `demo-cache-v2`) | Lets you change strategy or update assets without mixing with the old cache | You must delete old cache versions yourself in the `activate` event, or storage grows without bound |
+
+## Common mistakes
+
+- **Caching an opaque response and assuming it costs nothing because the body is unreadable** — the browser counts an opaque response's full size (often several MB each) against quota just like a normal response.
+- **Never deleting old cache versions on deploy** — every time the cache name changes (e.g. v1 → v2) you must call `caches.delete()` on the old name inside the `activate` event, or storage accumulates forever.
+- **Using `cache.add()`/`addAll()` without checking response status** — these methods store a response of any status, including error pages a server may return, without throwing. Check status yourself if that matters.
+
+<Callout title="Real-world example">
+**Twitter Lite (PWA)** — used the Cache API to store its app shell (HTML/CSS/JS), so the app loads almost instantly on repeat visits before fresh data comes in from the network. Source: [web.dev case study, "Twitter Lite PWA significantly increases engagement and reduces data usage"](https://web.dev/case-studies/twitter).
+</Callout>
+
 export const quizCacheApi = [
   {
     q: 'What does cache.addAll([...urls]) do if one URL returns a 404?',

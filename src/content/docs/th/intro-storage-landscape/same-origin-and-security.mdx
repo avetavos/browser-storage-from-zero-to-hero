@@ -33,7 +33,7 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
 ```js
 console.log(window.location.origin);
-// เช่น "https://example.com"
+// e.g. "https://example.com"
 ```
 
 ## Same-origin policy แยก storage อย่างไร
@@ -74,9 +74,9 @@ export const originDiagram = `flowchart LR
 Cross-site scripting (XSS) คือการโจมตีที่ JavaScript อันตรายถูก inject และรันบนหน้าของคุณ script ใด ๆ ที่รันบน origin ของคุณ รวมถึง scripts ที่ถูก inject สามารถอ่าน `localStorage` และ `sessionStorage` ทั้งหมดของคุณได้ด้วยการเรียกเพียงครั้งเดียว:
 
 ```js
-// script ที่ attacker inject สามารถทำสิ่งนี้ได้:
+// An attacker's injected script can do this:
 const stolen = JSON.stringify(localStorage);
-// จากนั้นส่ง `stolen` ไปยัง server ที่ attacker ควบคุม
+// then exfiltrate `stolen` to an attacker-controlled server
 ```
 
 ซึ่งหมายความว่าคุณต้อง **ไม่** เก็บ access tokens, refresh tokens, API keys หรือ passwords ใน `localStorage` หรือ `sessionStorage` หาก attacker พบ XSS vector ใด ๆ พวกเขาสามารถดูด secrets ทั้งหมดที่เก็บไว้ได้อย่างเงียบ ๆ
@@ -86,7 +86,7 @@ const stolen = JSON.stringify(localStorage);
 Cookies ที่มี flag `HttpOnly` ไม่สามารถอ่านได้ด้วย JavaScript เลย แม้แต่ scripts ที่ถูก inject browser จะแนบไปกับ requests แต่ซ่อนจาก `document.cookie` เมื่อรวมกับ `Secure` (HTTPS-only) และ `SameSite=Strict` หรือ `SameSite=Lax` แล้ว HttpOnly cookies เป็นที่ที่เหมาะสมสำหรับ session tokens
 
 ```js
-// นี่คือสิ่งที่ server ตั้งค่า — JS ไม่สามารถอ่านได้:
+// This is what the server sets — JS cannot read it:
 // Set-Cookie: session=abc123; HttpOnly; Secure; SameSite=Lax
 ```
 

@@ -168,6 +168,20 @@ Use cascading `if (oldVersion < N)` checks in `onupgradeneeded` so every user �
 | `Blob` / `File` in IDB | Stored and retrieved without any serialisation |
 | `Blob.prototype.text()` | Returns a `Promise<string>` — use `await` |
 
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| Storing a `Blob` directly in IndexedDB | Convenient — no need to serialize to base64 or JSON, saving CPU and data size | A large file eats into the origin's quota quickly, and you can exceed the storage budget without noticing |
+| Uploading the file to a server and keeping only a URL in IndexedDB | Better control over client-side storage size, not dependent on the browser's quota | Depends on the network to read the file — no full offline support |
+| Cascading `if (oldVersion < N)` checks | Correctly supports a user upgrading from any prior version | The migration path grows with every version that's shipped, so the code gets longer over time |
+
+## Common mistakes
+
+- **Storing a large `Blob` without checking quota first** — this can silently push the origin over its storage budget. Check `navigator.storage.estimate()` before writing a large file.
+- **Writing a migration as a single `if/else` instead of a cascading check** — a user who upgrades across several versions at once misses some of the migration steps. Always chain `if (oldVersion < N)` checks in sequence.
+- **Converting a `Blob` to a base64 string before storing it unnecessarily** — IndexedDB already supports structured-clone storage of `Blob`/`File` natively; converting to base64 adds CPU and data-size overhead for no benefit.
+
 export const quizMigrationsAndBlobs = [
   {
     q: 'What value does event.oldVersion hold when a user opens an IndexedDB database for the very first time (it has never existed before)?',

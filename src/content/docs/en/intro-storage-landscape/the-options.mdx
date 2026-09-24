@@ -79,6 +79,21 @@ OPFS gives every origin a sandboxed, private area of the device file system — 
 The three synchronous stores — cookies, `localStorage`, and `sessionStorage` — are capped in capacity and block the main thread. For anything larger than a few megabytes or accessed frequently, IndexedDB, the Cache API, or OPFS will serve you far better without risking UI jank.
 </Callout>
 
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| Cookies | Sent with every HTTP request automatically, good for server-side auth | Only ~4 KB, and adds payload to every request even when unneeded |
+| `localStorage` / `sessionStorage` | Simple API, usable immediately with no setup | Synchronous, blocks the main thread, and capacity is limited to roughly 5–10 MB |
+| IndexedDB | Handles large amounts of data, queryable, async so it doesn't block the thread | More complex API — you manage transactions and schema versioning yourself |
+| Cache API / OPFS | Great for offline assets and large binary files | Needs a service worker or Worker context to get the full benefit |
+
+## Common mistakes
+
+- **Using cookies for general UI state** — cookies are sent with every HTTP request, needlessly bloating requests for data that has nothing to do with the server. Use `localStorage` instead.
+- **Using `localStorage` for a large dataset that needs querying** — `localStorage` only stores strings, has no indexes, and is synchronous, so it doesn't scale. Move to IndexedDB from the start.
+- **Forgetting that every best-effort store can be evicted** — assuming IndexedDB or the Cache API persists like `localStorage`, when by default they are best-effort and the browser can delete them when disk space runs low.
+
 export const quizTheOptions = [
   {
     q: 'Which storage type is automatically included in HTTP requests sent to the matching domain?',

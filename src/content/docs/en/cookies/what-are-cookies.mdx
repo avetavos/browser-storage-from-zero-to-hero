@@ -71,6 +71,19 @@ The server receives the cookies without any JavaScript involvement. This is what
 Cookies and Web Storage are not interchangeable. The defining difference is that cookies are **sent automatically on every HTTP request** to the matching domain — Web Storage values stay in the browser and never leave unless your own code sends them. Use cookies when the server needs the value; use Web Storage when the value is purely client-side.
 </Callout>
 
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| Sending the cookie automatically on every request | The server can check the session immediately with no extra client-side code | Every request to the matching domain carries the cookie header, even when that request doesn't need it, adding needless payload |
+| A ~4 KB size cap per cookie | Forces cookies to hold only a short identifier, keeping request headers from bloating | Can't hold a large structured payload or JSON — you must use `localStorage`/IndexedDB instead |
+
+## Common mistakes
+
+- **Assuming a cookie works like `localStorage` with different syntax** — a cookie is sent automatically with every matching HTTP request, while `localStorage` never leaves the browser unless your own code sends it.
+- **Setting a cookie larger than ~4 KB and being surprised it disappears** — the browser doesn't throw an error, it just refuses to store that cookie. Always check size before setting one.
+- **Piling up cookies until you approach the per-domain limit** — once the limit is exceeded, the browser silently evicts older cookies, so a session or preference value can vanish with no warning.
+
 export const quizWhatAreCookies = [
   {
     q: 'What is the approximate maximum size of a single cookie?',

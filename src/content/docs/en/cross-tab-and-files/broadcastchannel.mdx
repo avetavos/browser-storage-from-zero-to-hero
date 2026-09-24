@@ -93,6 +93,24 @@ console.log('postMessage called.');
 `BroadcastChannel` does not fire the `message` event in the sending tab in real multi-tab usage — only in other tabs and workers. The single-page echo above works in the runner because both sender and receiver are in the same JS context; do not rely on this pattern in production code.
 </Callout>
 
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| `BroadcastChannel` | Sends a real-time message to every tab/worker that's joined the same channel, with no need to write to storage first | No built-in persistence — if no tab is listening when the message is sent, it's simply lost |
+| `storage` event | Reuses a persistence layer you already have (`localStorage`) as a side effect, with no extra channel to set up | Can only send strings, and never fires in the tab that wrote — you handle serializing/deserializing yourself |
+| `window.postMessage` across a window reference | Fine-grained control over the target — sends only to a window you hold a reference to | You must hold each window's reference yourself, which gets hard with tabs opening and closing dynamically |
+
+## Common mistakes
+
+- **Assuming BroadcastChannel queues a message for a receiver that joins later** — you must join the channel before the message is sent. If the receiving tab hasn't created its `BroadcastChannel` yet, the message is silently lost.
+- **Forgetting to call `ch.close()` on component unmount** — the channel object and its listener stay in memory, leaking, especially in an SPA that mounts/unmounts often.
+- **Expecting the tab that calls `postMessage` to also receive its own event** — BroadcastChannel never delivers a message back to the sender, just as the `storage` event never fires in the writing tab. Update the sending tab's own UI separately.
+
+<Callout title="Real-world example">
+A collaborative document or chat app with multiple tabs open on the same account can use `BroadcastChannel` to keep a notification badge, unread count, or a "someone else is editing" indicator in sync across every open tab, without each tab polling the server separately.
+</Callout>
+
 export const quizBroadcastChannel = [
   {
     q: 'What value types can you pass to BroadcastChannel.postMessage()?',

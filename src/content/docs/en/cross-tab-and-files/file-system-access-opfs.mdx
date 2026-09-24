@@ -114,6 +114,24 @@ console.log('Cleaned up demo-opfs.txt');`;
 OPFS storage is counted against the origin's overall quota (same pool as IndexedDB and Cache API). Use `navigator.storage.estimate()` to check available space. OPFS data survives browser restarts but can be evicted by the browser under storage pressure if the origin has not been granted persistent storage via `navigator.storage.persist()`.
 </Callout>
 
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| File System Access API | Accesses a real file on disk that the user picked themselves — good for import/export where the user sees and manages the file | Requires a user gesture every time, and isn't supported outside Chromium-based browsers |
+| OPFS | I/O speed close to native, since it's a sandboxed virtual file system — full read/write access with no user gesture needed | More limited browser support than IndexedDB/localStorage, and the user can't see the file directly since it isn't a real file in the OS |
+| IndexedDB (storing a blob generally) | Widest browser support, with the transaction model already familiar from earlier lessons | Lower throughput than OPFS for large files or frequent writes |
+
+## Common mistakes
+
+- **Assuming the File System Access API works in every browser like OPFS does** — `showOpenFilePicker`/`showSaveFilePicker` are fully supported only in Chromium-based browsers; Firefox and Safari don't support them yet.
+- **Calling `showOpenFilePicker` outside a user-gesture handler** — for example inside `useEffect` or a non-click event — then wondering why it throws `SecurityError`.
+- **Forgetting to call `writable.close()` after writing a file in OPFS** — the data never gets flushed and won't show up on the next read, even though `write()` already resolved.
+
+<Callout title="Real-world example">
+Adobe's Photoshop on the web uses OPFS access handles to dynamically page document data between disk and memory as the user pans around a large file — the same role `mmap` plays on desktop, made possible on the web through OPFS. Source: [web.dev, "Bringing Photoshop to the web"](https://web.dev/articles/ps-on-the-web).
+</Callout>
+
 export const quizFileSystemAccessOpfs = [
   {
     q: 'Why does showOpenFilePicker require a user gesture?',

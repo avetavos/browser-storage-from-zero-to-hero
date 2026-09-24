@@ -80,11 +80,9 @@ export const decisionDiagram = `flowchart TD
 - **ใช้ localStorage เก็บข้อมูลขนาดใหญ่หรือ cache ทั้งชุด** — synchronous I/O ของ localStorage บล็อก main thread ทำให้ UI ค้าง ควรย้ายไป IndexedDB หรือ Cache API
 - **คิดว่า Cache API และ IndexedDB แข่งกัน ต้องเลือกอย่างใดอย่างหนึ่ง** — ในแอป PWA ส่วนใหญ่ใช้ร่วมกัน: Cache API เก็บ asset, IndexedDB เก็บข้อมูลแอป
 
-> 💡 ตัวอย่างจากของจริง
->
-> **Twitter Lite** — ใช้ Cache API เก็บ app shell (HTML/CSS/JS) ให้โหลดเร็ว และใช้ IndexedDB เก็บ timeline กับข้อมูลผู้ใช้ที่ต้อง query
->
-> **Wikipedia** — โหมดอ่านออฟไลน์ใช้ Cache API เก็บหน้าบทความที่ผู้ใช้บันทึกไว้ ร่วมกับ Service Worker เพื่อ serve เนื้อหาโดยไม่ต้องพึ่ง network
+<Callout title="ตัวอย่างจากของจริง">
+**Twitter Lite (PWA)** — ใช้ Cache API เก็บ app shell (HTML/CSS/JS) ให้โหลดเร็ว และใช้ IndexedDB เก็บ timeline กับข้อมูลผู้ใช้ที่ต้อง query แหล่งอ้างอิง: [web.dev case study, "Twitter Lite PWA significantly increases engagement and reduces data usage"](https://web.dev/case-studies/twitter)
+</Callout>
 
 export const quizCacheVsIndexeddb = [
   {

@@ -35,25 +35,31 @@ await cache.put('/api/hello', new Response('{"status":"ok"}', {
 }));
 ```
 
-### `cache.add(url)` และ `cache.addAll(urls)`
+### `cache.add(url)`
 
-`cache.add(url)` ดึงข้อมูลจาก URL แล้วจัดเก็บ response ไว้ใน cache เป็น shorthand สำหรับ `fetch(url)` ตามด้วย `cache.put(url, response)`
-
-`cache.addAll(urls)` ทำเช่นเดียวกันสำหรับ URL หลายรายการ แต่เป็นแบบ **atomic**: ถ้า request ใดล้มเหลว จะไม่มีการจัดเก็บใด ๆ เลย
+ดึงข้อมูลจาก URL ที่ระบุแล้วจัดเก็บ response ที่ได้ไว้ใน cache เทียบเท่ากับการเรียก `fetch(url)` ตามด้วย `cache.put(url, response)` request ต้องสำเร็จ (status 2xx) มิฉะนั้น cache จะไม่ถูกอัปเดต
 
 ```js
 const cache = await caches.open('demo-cache-v1');
-// URL เดียว
-await cache.add('/index.html');
-// หลาย URL — ทั้งหมดหรือไม่มีเลย
-await cache.addAll(['/index.html', '/styles/main.css', '/scripts/app.js']);
+await cache.add('/images/logo.png'); // fetches then stores
 ```
 
-### `cache.match(request)` และ `caches.match(request)`
+### `cache.addAll(urls)`
 
-`cache.match(request)` ค้นหาใน cache เดียวและคืนค่า `Response` ที่ตรงกัน หรือ `undefined` ถ้าไม่พบ
+รับ array ของ URL string แล้ว fetch ทั้งหมดแบบ atomic ถ้า request ใด **แม้แต่ตัวเดียว** ล้มเหลว จะ **ไม่มี** response ใดถูกจัดเก็บเลย ใช้เมื่อต้องการ cache asset กลุ่มหนึ่งพร้อมกันทั้งหมดหรือไม่เลย
 
-`caches.match(request)` ค้นหาใน **cache ทั้งหมด** ของ origin และคืนค่า match แรกที่พบ
+```js
+const cache = await caches.open('demo-cache-v1');
+await cache.addAll([
+  '/index.html',
+  '/styles/main.css',
+  '/scripts/app.js',
+]);
+```
+
+### `cache.match(request, options?)`
+
+ค้นหาใน cache สำหรับ entry ที่ตรงกับ request ที่ระบุ (URL string หรือ `Request`) คืนค่า `Response` ที่ตรงกัน หรือ `undefined` ถ้าไม่พบ argument `options` (ไม่บังคับ) รับ `ignoreSearch`, `ignoreMethod`, และ `ignoreVary`
 
 ```js
 const cache = await caches.open('demo-cache-v1');
@@ -63,14 +69,22 @@ if (response) {
 }
 ```
 
-### `cache.delete(request)`
+### `caches.match(request, options?)`
+
+เหมือนกับ `cache.match` แต่ค้นหา**ในทุก cache ที่มีชื่อ**ของ origin ปัจจุบัน คืนค่า match แรกที่พบ มีประโยชน์เมื่อไม่ทราบว่า response ที่ต้องการอยู่ใน cache ไหน
+
+```js
+const response = await caches.match('/api/hello');
+```
+
+### `cache.delete(request, options?)`
 
 ลบ entry เฉพาะออกจาก cache ที่มีชื่อ คืนค่า `true` ถ้าพบและลบได้ หรือ `false` ถ้าไม่พบ
 
 ```js
 const cache = await caches.open('demo-cache-v1');
 const deleted = await cache.delete('/api/hello');
-console.log('Deleted:', deleted); // true หรือ false
+console.log('Deleted:', deleted); // true
 ```
 
 ### `caches.keys()`
@@ -80,6 +94,11 @@ console.log('Deleted:', deleted); // true หรือ false
 ```js
 const names = await caches.keys();
 console.log('Open caches:', names);
+
+// Delete all caches
+for (const name of names) {
+  await caches.delete(name);
+}
 ```
 
 ## ลองเลย: สร้าง, จับคู่, และล้าง cache
@@ -134,11 +153,9 @@ export const cacheApiCode = `(async () => {
 - **ไม่เคยลบ cache version เก่าเมื่อ deploy ใหม่** — ทุกครั้งที่เปลี่ยนชื่อ cache (เช่น v1 → v2) ต้องเรียก `caches.delete()` กับชื่อเก่าใน `activate` event ไม่งั้น storage สะสมไม่มีวันจบ
 - **ใช้ `cache.add()`/`addAll()` กับ request โดยไม่เช็ค response status ก่อน** — method เหล่านี้เก็บ response ทุกสถานะรวมถึง error page ที่ server อาจส่งมาโดยไม่ throw ต้องตรวจสอบเองถ้าต้องการความชัวร์
 
-> 💡 ตัวอย่างจากของจริง
->
-> **Wikipedia** — offline reading mode ใช้ Cache API ร่วมกับ Service Worker เพื่อเก็บบทความและ asset ไว้ให้เปิดอ่านได้แม้ไม่มีเน็ต
->
-> **Twitter Lite** — ใช้ app-shell caching ผ่าน Cache API เก็บ HTML/CSS/JS หลักไว้ ทำให้เปิดแอปครั้งถัดไปโหลดเกือบทันที ก่อนค่อยดึงข้อมูลสดจาก network
+<Callout title="ตัวอย่างจากของจริง">
+**Twitter Lite (PWA)** — ใช้ Cache API เก็บ app shell (HTML/CSS/JS) ทำให้เปิดแอปครั้งถัดไปโหลดเกือบทันที ก่อนค่อยดึงข้อมูลสดจาก network แหล่งอ้างอิง: [web.dev case study, "Twitter Lite PWA significantly increases engagement and reduces data usage"](https://web.dev/case-studies/twitter)
+</Callout>
 
 export const quizCacheApi = [
   {

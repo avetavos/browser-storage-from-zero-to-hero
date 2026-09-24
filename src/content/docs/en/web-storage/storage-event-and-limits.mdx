@@ -121,6 +121,20 @@ console.log('Cleaned up. demo:signal =', localStorage.getItem('demo:signal'));`;
 The `storage` event is a simple cross-tab signal for `localStorage` changes — it fires in **other tabs only**, not the writer. Web Storage is **synchronous**, so avoid storing large blobs; prefer IndexedDB for anything above a few KB.
 </Callout>
 
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| `storage` event | No external library needed — a pure browser API for cross-tab signaling | Only fires for `localStorage`, and never in the tab that wrote — you must design around this asymmetry |
+| Web Storage's ~5 MB quota | Small enough for the browser to process synchronously and fast, with no extra setup | Once data outgrows 5 MB you must migrate the whole system to IndexedDB, changing the API and mental model entirely |
+| A synchronous API | Simple to write — no Promises or callbacks to manage | A large value blocks the main thread directly, freezing the UI during the read/write |
+
+## Common mistakes
+
+- **Calling `setItem` without wrapping it in `try/catch`** — when quota is full, `setItem` throws `QuotaExceededError`, and an app that doesn't catch it crashes immediately.
+- **Expecting the `storage` event to fire in the tab that wrote** — this event only fires in **other tabs**. To update the UI in the writing tab too, call that logic directly, separate from the listener.
+- **Writing to `localStorage` on every keystroke** — because every operation is synchronous, this blocks the main thread repeatedly until it feels janky. Always debounce before writing.
+
 export const quizStorageEventAndLimits = [
   {
     q: 'You call localStorage.setItem("x", "1") in Tab A. Which tabs receive the storage event?',

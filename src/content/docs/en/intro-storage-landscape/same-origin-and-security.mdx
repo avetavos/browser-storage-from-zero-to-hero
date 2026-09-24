@@ -94,6 +94,20 @@ Cookies with the `HttpOnly` flag cannot be read by JavaScript at all — not eve
 Never store access tokens, refresh tokens, or any secret credential in `localStorage` or `sessionStorage`. JavaScript running on the same origin — including XSS payloads — can read the entire store. Use `HttpOnly` cookies for session tokens: they are invisible to JavaScript and cannot be stolen via XSS.
 </Callout>
 
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| Same-origin isolation (enforced by the browser) | Automatically stops other origins from reading/writing your storage — no configuration needed | Cannot be disabled, so sharing data across subdomains needs another mechanism, such as a server-side hand-off |
+| `HttpOnly` cookies for session tokens | Unreadable by XSS even if a script injection succeeds | Cannot be read or written from client-side JavaScript — the server must always set and read the value |
+| Storing tokens in `localStorage`/`sessionStorage` | Easy to access from JavaScript, convenient for an SPA that attaches the token itself | A single XSS hole can exfiltrate every token in one shot |
+
+## Common mistakes
+
+- **Assuming the same subdomain can share storage** — `https://app.example.com` and `https://example.com` are different origins because the host differs, even though it's the same domain.
+- **Assuming data survives an HTTP-to-HTTPS switch** — the scheme is part of the origin, so switching between HTTP and HTTPS creates an entirely new storage partition. The old data isn't gone; it just lives in a different origin.
+- **Storing an access token or API key in `localStorage`** — a single XSS hole lets an attacker pull out every token immediately. Use an `HttpOnly` cookie instead for session tokens.
+
 export const quizSameOrigin = [
   {
     q: 'Which three components together define a browser origin?',

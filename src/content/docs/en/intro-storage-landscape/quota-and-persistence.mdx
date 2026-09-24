@@ -99,6 +99,20 @@ checkStorage();`;
 Best-effort storage is suitable for caches and non-critical data. For data your app cannot afford to lose — offline documents, user-generated content, saved game state — always call `navigator.storage.persist()` early in your app lifecycle, ideally after the user has demonstrated engagement with your site.
 </Callout>
 
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| Best-effort storage (default) | No permission prompt, works immediately | The browser can silently evict data when disk space is low |
+| Persistent storage (`persist()`) | Data survives until the user clears site data themselves | Depends on the browser's engagement heuristics, which you don't fully control, and some browsers show a permission prompt the user can deny |
+| Calling `estimate()` before a large write | Know the remaining headroom, avoid a mid-write `QuotaExceededError` | Adds one extra async round-trip before the real operation starts |
+
+## Common mistakes
+
+- **Assuming IndexedDB means "stored forever"** — by default every origin only gets best-effort storage. You must call `navigator.storage.persist()` to actually request an upgrade to persistent storage.
+- **Not checking quota before a large write** — writing continuously without calling `navigator.storage.estimate()` first leads to an unexpected `QuotaExceededError` when disk space runs low.
+- **Confusing the `usage` from `estimate()` with `localStorage`** — the returned value only covers IndexedDB, Cache API, and OPFS. It does not include `localStorage` or cookies, which have separate limits.
+
 export const quizQuota = [
   {
     q: 'What does navigator.storage.estimate() return?',

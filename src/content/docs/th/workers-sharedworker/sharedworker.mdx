@@ -97,11 +97,9 @@ export const sharedWorkerCode = `// shared-worker.js (runs ONCE, shared by every
 - **ลืมเรียก `port.start()`** — ทั้งฝั่งหน้าเว็บและฝั่ง worker ต้องเรียก `port.start()` ก่อน message ถึงจะไหลผ่าน MessagePort ไม่อย่างนั้น message จะถูก queue ค้างไว้เฉยๆ
 - **คาดว่า `onconnect` จะยิงแค่ครั้งเดียว** — `onconnect` ยิงทุกครั้งที่มี tab ใหม่มาเชื่อมต่อ ต้อง push port ใหม่เข้า list ที่มีอยู่แทนที่จะ overwrite ไม่งั้น tab เก่าจะหลุดจากการสื่อสาร
 
-> 💡 ตัวอย่างจากของจริง
->
-> **Slack** — ใช้ `SharedWorker` เพื่อรักษา WebSocket connection เดียวที่แชร์ร่วมกันทุก tab ที่เปิดอยู่ ลดจำนวน connection ไปยัง server และซิงค์สถานะ real-time ข้าม tab ได้ทันที
->
-> **ระบบแดชบอร์ดหรือเครื่องมือ back-office ที่เปิดหลาย tab พร้อมกัน** — ใช้ `SharedWorker` แชร์ token การยืนยันตัวตนและแคช API response เดียวกันข้าม tab เพื่อลดจำนวนคำขอไปยัง server
+<Callout title="ตัวอย่างจากของจริง">
+แอปที่ต้องการ WebSocket connection เดียวที่แชร์ร่วมกันทุก tab ที่เปิดอยู่ — เช่นแอปแชทหรือเครื่องมือ collaboration แบบ real-time — สามารถใช้ `SharedWorker` ถือ connection เดียวนั้นไว้ แล้วกระจายอัปเดตไปยัง port ของแต่ละ tab ช่วยลดจำนวน connection ไปยัง server และซิงค์สถานะข้าม tab ได้ทันที ระบบแดชบอร์ดหรือเครื่องมือ back-office ที่เปิดหลาย tab พร้อมกันก็ใช้ pattern เดียวกันนี้ได้ เพื่อแชร์ token การยืนยันตัวตนและแคช API response เดียวกันข้าม tab ลดจำนวนคำขอซ้ำไปยัง server
+</Callout>
 
 export const quizSharedWorker = [
   {

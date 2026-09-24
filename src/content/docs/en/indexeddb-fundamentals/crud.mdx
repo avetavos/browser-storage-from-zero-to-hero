@@ -133,6 +133,20 @@ Use `add` when you want a hard guarantee that you are creating a new record; it 
 `get(key)` resolves to `undefined` — not `null` — when the key is absent. This is the opposite of `localStorage.getItem`, which returns `null`. Always check `result === undefined` to detect a missing record.
 </Callout>
 
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| `add()` vs `put()` | `add` prevents a duplicate key with a `ConstraintError`, guaranteeing a genuinely new record | Requires extra error handling for the duplicate-key case, unlike `put`, which upserts for you |
+| `getAll()` vs iterating a cursor | One call returns the whole array — short, readable code | Loads every record into memory at once, unsuitable for a large store |
+| Wrapping `IDBRequest` in a `Promise` | Readable `async/await` code, less callback nesting | Adds an abstraction layer; you must still handle `onerror` for every request or errors disappear silently |
+
+## Common mistakes
+
+- **Checking `if (!result)` instead of `result === undefined`** — a record whose value is falsy, like `0` or `''`, gets treated as missing even though it exists. Always check `=== undefined`.
+- **Using `add()` without handling `onerror`** — on a duplicate key the request throws `ConstraintError`, but with no `onerror` handler the error disappears silently while the record is never written.
+- **Awaiting `fetch()` or a similar call in the middle of a chain of store method calls** — the transaction that store method belongs to auto-commits as soon as the call stack empties, so the very next request throws `TransactionInactiveError` immediately.
+
 export const quizCrud = [
   {
     q: 'You call store.add({ id: 1, name: "Apple" }) when a record with id 1 already exists. What happens?',

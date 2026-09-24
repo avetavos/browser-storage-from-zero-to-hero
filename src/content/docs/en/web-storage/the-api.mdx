@@ -116,6 +116,20 @@ localStorage.removeItem('demo:two');
 There is no "update" method — `setItem` overwrites any existing value for that key. A missing key always reads back as `null`, never `undefined`. Check `=== null` to distinguish an absent key from a stored empty string.
 </Callout>
 
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| Simple key/value API (`setItem`/`getItem`) | Fast to learn, no schema or config needed | No query, index, or transaction — you iterate manually with `key(i)`/`length` if you need to search |
+| `clear()` wipes the whole origin | Clears everything in a single call, good for a full logout | Clears every key set by every script on that origin, not just your own — risks accidentally deleting another library's data |
+| Returns `null` when a key is absent | Easy to check with `=== null`, no separate `undefined` handling | A developer who uses `!value` instead of `=== null` can't tell "no key" apart from "a stored falsy value" |
+
+## Common mistakes
+
+- **Checking the returned value with `!value` instead of `=== null`** — the string `"null"` or `""` is falsy but is a genuinely stored value, leading to broken logic.
+- **Calling `clear()` assuming it only clears your own keys** — it clears every key on that origin, including ones from other libraries or scripts.
+- **Assuming `key(i)` order matches insertion order** — the spec doesn't guarantee this order; never rely on the index to refer to a specific key.
+
 export const quizTheApi = [
   {
     q: 'What does localStorage.getItem("missing-key") return when the key has never been set?',

@@ -123,11 +123,9 @@ Lock จะทำให้ write เป็น serial แต่ไม่ block re
 - **ไม่ wrap read-then-write (check-then-act) ไว้ใน lock callback เดียวกัน** — ถ้า read อยู่นอก lock race condition ยังเกิดได้แม้จะใช้ Web Locks อยู่แล้ว
 - **ปล่อยให้ leader tab ทำงานหนักโดยไม่มี fallback เมื่อทุกแท็บถูกปิด** — leader election ต้องเริ่มใหม่ทุกครั้งที่เปิดแท็บแรก ไม่มีแท็บใด "จำ" สถานะก่อนหน้าไว้ ต้องพึ่ง `localStorage` เป็นตัวกู้คืน state
 
-> 💡 ตัวอย่างจากของจริง
->
-> **Google Docs** — sync edit state, cursor position และ presence indicator ข้ามแท็บที่เปิดเอกสารเดียวกันด้วย pattern คล้าย broadcast-on-write
->
-> **Notion** — ใช้ leader-election pattern ให้แท็บเดียวรับผิดชอบ sync กับ server แล้ว broadcast ผลลัพธ์ไปยังแท็บอื่น ลด duplicate network request จากหลายแท็บพร้อมกัน
+<Callout title="ตัวอย่างจากของจริง">
+แอป editor แบบ collaborative ที่เปิดหลายแท็บบนเอกสารเดียวกัน สามารถเลือกแท็บหนึ่งเป็น "leader" ที่รับผิดชอบ sync กับ server แล้ว broadcast ผลลัพธ์ไปยังแท็บอื่น ช่วยลด duplicate network request จากหลายแท็บที่ poll พร้อมกัน
+</Callout>
 
 export const quizCrossTabState = [
   {

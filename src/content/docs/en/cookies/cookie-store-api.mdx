@@ -146,6 +146,19 @@ run();`;
 The Cookie Store API makes cookie code far more readable — async/await instead of string parsing, objects instead of semicolon-delimited strings, and reactive change events. Until Firefox ships support, always wrap usage in a feature-detect (`'cookieStore' in window`) and fall back to `document.cookie` for full cross-browser compatibility.
 </Callout>
 
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| Cookie Store API | Much shorter, more readable code — `await cookieStore.get()` instead of splitting a string yourself, plus a reactive `change` event to listen to | Not supported in Firefox — you must feature-detect and always write a `document.cookie` fallback, doubling the code for the same logic |
+| `document.cookie` | Works in every browser, no fallback needed | A synchronous string API you must parse yourself every time, with no built-in change event |
+
+## Common mistakes
+
+- **Calling `cookieStore.get()`/`.set()` without feature-detecting first** — the code breaks immediately in Firefox, since `cookieStore` doesn't exist on `window`.
+- **Forgetting that every Cookie Store API method is async** — writing code as if the value comes back synchronously gets you a Promise object instead of the real value; always `await` it.
+- **Assuming the `change` event behaves identically across every browser and situation** — this event's cross-tab behavior isn't fully standardized across implementations yet, so test it directly before relying on it as core logic.
+
 export const quizCookieStoreApi = [
   {
     q: 'What does cookieStore.get(name) return when the cookie exists?',

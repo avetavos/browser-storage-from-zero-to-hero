@@ -147,7 +147,7 @@ export const cursorsCode = `(async function() {
   ]);
   await new Promise((res, rej) => {
     seedTx.oncomplete = res;
-    seedTx.onerror    = () rej(seedTx.error);
+    seedTx.onerror    = () => rej(seedTx.error);
   });
 
   // --- Iterate ALL records ---

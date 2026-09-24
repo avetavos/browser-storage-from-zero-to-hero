@@ -132,6 +132,20 @@ This combination:
 `HttpOnly` means `document.cookie` will never return the cookie, and no script can read or modify it. This is intentional: it protects session tokens from being stolen by injected scripts. If you cannot see a cookie in `document.cookie` that you know the server set, it is almost certainly `HttpOnly` — exactly as designed.
 </Callout>
 
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| `HttpOnly` | Protects a session token from XSS theft — JavaScript can never read that cookie at all | Client-side JavaScript cannot read or update the value itself; only the server can |
+| `SameSite=Strict` | Maximum CSRF protection — the cookie is never sent on a cross-site request | Breaks flows that depend on the cookie during cross-site navigation, e.g. clicking an email link and still being logged in |
+| `SameSite=None; Secure` | Supports legitimate cross-site use cases, like embedded widgets or third-party auth | Opens the door for the cookie to be sent on every cross-site request, widening the CSRF surface without extra protections |
+
+## Common mistakes
+
+- **Not setting `SameSite`/`Secure` at all** — the cookie risks being sent over plain HTTP (no `Secure`) and is more exposed to CSRF if the browser or an old config doesn't enforce a safe default.
+- **Setting `SameSite=None` without pairing it with `Secure`** — modern browsers reject the entire cookie outright, not just warn about it.
+- **Storing an auth token in a cookie that isn't `HttpOnly`** — this defeats the main security purpose of using a cookie, since a script injected via XSS can read that token immediately.
+
 export const quizAttributesSameSite = [
   {
     q: 'What does Max-Age=0 do to a cookie?',

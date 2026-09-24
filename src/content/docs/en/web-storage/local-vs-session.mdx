@@ -83,6 +83,20 @@ console.log('Cleaned up. sessionStorage step:', sessionStorage.getItem('demo:ss-
 `sessionStorage` is scoped to **one tab** and dies with it. `localStorage` is shared across **all tabs** of the same origin and survives browser restarts. Choose based on how long you need the data and whether cross-tab sharing is desirable.
 </Callout>
 
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| `localStorage` | Data persists and is shared across every tab of the same origin — good for long-lived preferences | A write from any tab affects every tab, risking a race condition if multiple tabs write at once |
+| `sessionStorage` | Scoped to a single tab, reducing the risk of data leaking across tabs, and disappears when the tab closes | Must be re-populated every time a new tab opens — not suitable for long-lived preferences |
+| Sharing state via `sessionStorage` when duplicating a tab | The new tab gets the same context immediately on open (e.g. duplicating mid-form) | It's a one-time copy — the two tabs can't sync afterward and may diverge |
+
+## Common mistakes
+
+- **Assuming `sessionStorage` syncs across tabs like `localStorage`** — each tab has its own separate `sessionStorage`; a write in Tab A is never visible in Tab B.
+- **Storing an auth token in `localStorage`** — because JavaScript can read it directly, an XSS hole on the origin can steal it easily, unlike an `HttpOnly` cookie that JS can't touch.
+- **Confusing a subdomain with the same origin** — `app.example.com` and `api.example.com` always have separate `localStorage`, even though the registrable domain is the same.
+
 export const quizLocalVsSession = [
   {
     q: 'You open Tab A and call sessionStorage.setItem("x", "1"). You then open Tab B to the same URL. What does sessionStorage.getItem("x") return in Tab B?',

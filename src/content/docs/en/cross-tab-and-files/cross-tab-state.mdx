@@ -109,6 +109,24 @@ console.log('Done. Counter cleaned up.');`;
 The lock serialises writes but does not block reads. Reads are safe to do outside the lock as long as your app can tolerate seeing a value that is slightly stale. For strict read-then-write consistency (check-then-act), perform both the read and the write inside the same lock callback.
 </Callout>
 
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| Combining all 3 primitives (`localStorage` + `BroadcastChannel` + Web Locks) | Gives you a shared-state layer that's persistent, real-time, and safe from race conditions | More complex than a single primitive — you maintain all three concepts together, and debugging gets harder |
+| Broadcast-on-write with no lock | Simple code, no queue to wait on | Risks a race condition when two tabs write at nearly the same time and overlap |
+| Leader election with Web Locks | Only one tab does heavy work, like polling an API, saving resources and avoiding duplicate requests | If the leader tab hangs without releasing the lock, no other tab can ever become leader |
+
+## Common mistakes
+
+- **Relying on the `storage` event to sync state within the same tab that wrote it** — this event only fires in other tabs. The writing tab must update its own UI with separate code.
+- **Not wrapping a read-then-write (check-then-act) sequence in the same lock callback** — if the read happens outside the lock, a race condition can still occur even though you're using Web Locks.
+- **Letting the leader tab do heavy work with no fallback for when every tab closes** — leader election restarts from scratch every time the first tab opens; no tab "remembers" the previous state, so you still need `localStorage` to recover it.
+
+<Callout title="Real-world example">
+A collaborative editor with several tabs open on the same document can elect one tab as the "leader" responsible for syncing with the server, then broadcast the result to the other tabs — cutting duplicate network requests from several tabs polling at once.
+</Callout>
+
 export const quizCrossTabState = [
   {
     q: 'Why wrap a localStorage write in navigator.locks.request when multiple tabs may write?',

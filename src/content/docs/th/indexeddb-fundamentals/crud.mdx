@@ -37,10 +37,10 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 const tx = db.transaction(['products'], 'readwrite');
 const store = tx.objectStore('products');
 
-// add — ปลอดภัยเฉพาะเมื่อ id 1 ยังไม่มีอยู่
+// add — safe only when id 1 does not exist yet
 store.add({ id: 1, name: 'Apple', price: 1.5 });
 
-// put — ปลอดภัยเสมอ; เขียนทับถ้า id 1 มีอยู่แล้ว
+// put — always safe; overwrites if id 1 is already there
 store.put({ id: 1, name: 'Apple', price: 1.99 });
 ```
 
@@ -54,7 +54,7 @@ const store = tx.objectStore('products');
 const req = store.get(999);
 
 req.onsuccess = () => {
-  console.log(req.result); // undefined — key 999 ไม่มีอยู่
+  console.log(req.result); // undefined — key 999 does not exist
 };
 ```
 
@@ -70,7 +70,7 @@ function promisifyReq(r) {
   });
 }
 
-// ตอนนี้สามารถ await ทุก store method ได้
+// Now you can await any store method
 const apple = await promisifyReq(store.get(1));
 ```
 

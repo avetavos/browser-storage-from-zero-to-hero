@@ -107,11 +107,9 @@ console.log('postMessage called.');
 - **ลืมเรียก `ch.close()` เมื่อ component unmount** — channel object และ listener จะค้างอยู่ใน memory กลายเป็น leak โดยเฉพาะใน SPA ที่ mount/unmount บ่อย
 - **คาดหวังว่าแท็บที่เรียก `postMessage` จะได้รับ event ของตัวเองด้วย** — BroadcastChannel ไม่ส่งข้อความกลับไปยัง sender เหมือนกับที่ `storage` event ก็ไม่ยิงในแท็บที่เขียน ต้องอัปเดต UI ของแท็บที่ส่งเองแยกต่างหาก
 
-> 💡 ตัวอย่างจากของจริง
->
-> **Google Docs** — ใช้ pattern คล้าย BroadcastChannel เพื่อ sync สถานะการแก้ไข เช่น cursor, selection และ presence indicator ข้ามแท็บที่เปิดเอกสารเดียวกัน
->
-> **Slack web** — ใช้ cross-tab messaging เพื่อให้ notification badge และ unread count sync กันทุกแท็บ โดยไม่ต้อง poll server ซ้ำในแต่ละแท็บ
+<Callout title="ตัวอย่างจากของจริง">
+แอปเอกสารร่วมหรือแอปแชทที่เปิดหลายแท็บบน account เดียวกัน สามารถใช้ `BroadcastChannel` เพื่อซิงค์ notification badge, unread count หรือ indicator แบบ "มีคนอื่นกำลังแก้ไขอยู่" ให้ตรงกันทุกแท็บที่เปิดอยู่ โดยไม่ต้องให้แต่ละแท็บ poll server แยกกัน
+</Callout>
 
 export const quizBroadcastChannel = [
   {

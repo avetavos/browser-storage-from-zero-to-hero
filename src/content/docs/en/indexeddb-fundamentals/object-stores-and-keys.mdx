@@ -120,6 +120,20 @@ console.log('Cleanup done');
 `createObjectStore()` throws a `DOMException` if called outside of an `onupgradeneeded` handler. Object stores are part of the database schema, and schema changes are only allowed during a version upgrade. If you need a new store, increment the version number when opening the database.
 </Callout>
 
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| Schemaless object store | Store differently-shaped objects in the same store, and restructure freely without a schema migration | No enforced validation — a wrong field or type shows up at runtime instead |
+| In-line key (`keyPath`) | The key lives inside the object itself — easy to read and debug, no separate key to pass | Every object must always have the `keyPath` field, or `add`/`put` throws |
+| Out-of-line key | Keeps the key separate from the object, so you can store objects with no identity field (e.g. a blob) | You must supply the key yourself on every `add`/`put` call, adding boilerplate |
+
+## Common mistakes
+
+- **Calling `createObjectStore()` outside of `onupgradeneeded`** — this method throws a `DOMException` immediately when called outside the upgrade transaction, since schema changes are only allowed during a version upgrade.
+- **Not checking `objectStoreNames.contains()` before creating a store again** — once you bump the version, `onupgradeneeded` re-runs your old migration code too, and calling `createObjectStore` with a name that already exists throws.
+- **Assuming an out-of-line key is stored inside the object** — when `keyPath` isn't set, the key never appears in the object returned by `get()`/`getAll()`. You must read it from `IDBCursor.key` or the argument you passed to `add()` instead.
+
 export const quizObjectStores = [
   {
     q: "What option do you pass to createObjectStore to use a property on the stored object as its key?",

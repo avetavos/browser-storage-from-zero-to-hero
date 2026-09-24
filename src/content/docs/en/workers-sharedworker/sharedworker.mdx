@@ -84,6 +84,23 @@ export const sharedWorkerCode = `// shared-worker.js (runs ONCE, shared by every
 A `SharedWorker` has ONE instance per origin. Every tab that calls `new SharedWorker(url)` with the same URL connects to the SAME worker. The `onconnect` event fires once per tab. Call `port.start()` on BOTH the page and the worker side.
 </Callout>
 
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| `SharedWorker` (one instance for every tab) | Saves memory, shares state and coordination across tabs immediately (e.g. one connection for many tabs) | Harder to debug — DevTools needs a separate panel for the shared worker, and historically iOS Safari didn't support it or supported it incompletely |
+| Dedicated Worker (one instance per tab) | Supported in every browser, easier to debug since it's tied to a single page | Uses more memory with many tabs open, and has no built-in shared state |
+
+## Common mistakes
+
+- **Relying on `SharedWorker` in iOS Safari with no fallback** — its support on iOS Safari has historically been inconsistent. Feature-detect with `typeof SharedWorker !== 'undefined'` and fall back to a Dedicated Worker or another mechanism.
+- **Forgetting to call `port.start()`** — both the page side and the worker side must call `port.start()` before messages flow through the `MessagePort`. Otherwise messages just sit queued and never arrive.
+- **Expecting `onconnect` to fire only once** — `onconnect` fires every time a new tab connects. Push each new port onto your existing list instead of overwriting it, or older tabs get disconnected from communication.
+
+<Callout title="Real-world example">
+An app that needs one WebSocket connection shared across every open tab — for example a chat or real-time collaboration tool — can use a `SharedWorker` to hold that single connection and fan out updates to each tab's port, cutting the number of server connections and keeping state in sync across tabs. A dashboard or back-office tool with many tabs open at once can use the same pattern to share an auth token and a cached API response across tabs, reducing duplicate requests to the server.
+</Callout>
+
 export const quizSharedWorker = [
   {
     q: "How many SharedWorker instances exist when three tabs on the same origin all call `new SharedWorker('sw.js')`?",

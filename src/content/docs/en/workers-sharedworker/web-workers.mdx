@@ -64,6 +64,24 @@ console.log('Worker started — result arrives asynchronously');`;
 Workers are isolated — they cannot access `window`, `document`, or any DOM APIs. They are perfect for CPU-intensive tasks like image processing, cryptography, or large data transformations.
 </Callout>
 
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| Processing in a Web Worker | True parallelism — a background thread separate from the main thread keeps the UI responsive during heavy work | Communication cost via `postMessage` (structured clone), plus the overhead of creating/destroying the worker |
+| Processing directly on the main thread | Simple, immediate DOM access, no cross-thread communication cost | Heavy work blocks the UI thread, causing the page to freeze or drop frames |
+| Inline worker via a Blob URL | No separate file to host — code lives in one place, easy to deploy | Harder to debug than a real file since there's no straightforward source map or breakpoint |
+
+## Common mistakes
+
+- **Expecting a worker to access the DOM** — a worker has no `window`, `document`, or any DOM API at all. This is the most common beginner misunderstanding; `postMessage` the result back and let the main thread handle the DOM instead.
+- **Forgetting to call `worker.terminate()`** — a worker that's never terminated stays in memory and keeps consuming CPU even after its work is done, causing a memory leak, especially if you keep creating new workers.
+- **Using a worker for short work that takes less than a few milliseconds** — the cost of creating the worker and round-tripping a `postMessage` outweighs the benefit. Reserve workers for work that's long enough to justify the overhead.
+
+<Callout title="Real-world example">
+**Squoosh**, Google's open-source image-compression web app, runs all of its image codecs (MozJPEG, WebP, and others) inside a Web Worker so the UI doesn't freeze while processing large files. Source: [web.dev, "Squoosh v2"](https://web.dev/blog/squoosh-v2) and the [Squoosh GitHub repository](https://github.com/GoogleChromeLabs/squoosh).
+</Callout>
+
 export const quizWebWorkers = [
   {
     q: 'Which identifier refers to the global scope inside a Web Worker?',

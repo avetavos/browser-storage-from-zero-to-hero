@@ -67,6 +67,24 @@ export const decisionDiagram = `flowchart TD
 Use the Cache API for anything that looks like an HTTP response (URL + headers + body). Use IndexedDB for application records and blobs that need to be queried or updated. Use localStorage only for lightweight string preferences that must be read synchronously at startup. For PWA offline strategies, Cache API and IndexedDB often work together — assets in Cache API, app data in IndexedDB.
 </Callout>
 
+## Trade-offs
+
+| Choice | Benefit | Cost |
+|---|---|---|
+| Cache API for HTTP responses | Matches the `Request`/`Response` model directly — good fit for pre-cached assets and API responses | Not a good fit for structured data — use IndexedDB instead when you need to query or index it |
+| IndexedDB for app data | Query, index, and transaction support for complex data | Harder API to use — you manage schema versions and object stores yourself |
+| localStorage for small preferences | Simple to read and write, synchronous syntax | Blocks the main thread on every access — unsuitable for large data or frequent writes |
+
+## Common mistakes
+
+- **Using the Cache API to store plain JS objects by JSON-stringifying them into a Response yourself** — unnecessary complexity; if the data isn't an HTTP request/response, reach for IndexedDB from the start.
+- **Using localStorage for large data or an entire cache** — localStorage's synchronous I/O blocks the main thread and stalls the UI; move it to IndexedDB or the Cache API.
+- **Assuming the Cache API and IndexedDB compete and you must pick one** — most PWAs use both together: Cache API for assets, IndexedDB for app data.
+
+<Callout title="Real-world example">
+**Twitter Lite (PWA)** — used the Cache API to store its app shell (HTML/CSS/JS) for fast loads, and IndexedDB to store timeline data and user records that needed to be queried. Source: [web.dev case study, "Twitter Lite PWA significantly increases engagement and reduces data usage"](https://web.dev/case-studies/twitter).
+</Callout>
+
 export const quizCacheVsIndexeddb = [
   {
     q: 'Which storage API is purpose-built for caching HTTP responses and static assets?',

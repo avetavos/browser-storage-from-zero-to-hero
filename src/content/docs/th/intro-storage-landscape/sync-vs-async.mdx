@@ -29,7 +29,7 @@ browser รัน JavaScript, layout และ painting บน main thread เ�
 เนื่องจากทั้งหมดนี้เกิดขึ้นบน main thread การใช้ Web Storage อย่างหนักจึงนำไปสู่ frame-time delays ที่วัดได้
 
 ```js
-// ทุก call เหล่านี้เป็น synchronous — thread จะ block จนแต่ละอันเสร็จ
+// Every one of these calls is synchronous — the thread blocks until each completes
 const start = performance.now();
 for (let i = 0; i < 1000; i++) {
   localStorage.setItem('key-' + i, 'value-' + i);
@@ -43,7 +43,7 @@ console.log('1 000 writes took ' + elapsed.toFixed(2) + ' ms');
 IndexedDB และ Cache API เป็น **asynchronous** ทุก operation คืน Promise (หรือยิง event) และโค้ดของคุณดำเนินต่อทันที I/O จริงเกิดขึ้นนอก main thread เมื่อผลลัพธ์พร้อม browser จะเรียก callback หรือ resolve Promise ของคุณ
 
 ```js
-// return ทันที — การเขียนเกิดขึ้นใน background
+// This returns immediately — the write happens in the background
 const db = await idb.openDB('my-db', 1, {
   upgrade(db) { db.createObjectStore('items'); }
 });

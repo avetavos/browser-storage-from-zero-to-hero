@@ -16,8 +16,8 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 
 ```js
 const arr = [1, 2, 3];
-worker.postMessage(arr);    // arr ถูก clone — ต้นฉบับไม่เปลี่ยน
-console.log(arr);           // [1, 2, 3] — ยังอยู่ครบ
+worker.postMessage(arr);      // arr is cloned — original is unchanged
+console.log(arr);             // [1, 2, 3] — still here
 ```
 
 สิ่งที่ structured clone ไม่สามารถคัดลอกได้คือ: functions และ DOM nodes การพยายามส่งสิ่งเหล่านี้จะ throw `DataCloneError`
@@ -28,8 +28,8 @@ console.log(arr);           // [1, 2, 3] — ยังอยู่ครบ
 
 ```js
 const buffer = new ArrayBuffer(1024 * 1024); // 1 MB
-worker.postMessage(buffer, [buffer]);          // โอนกรรมสิทธิ์
-console.log(buffer.byteLength);               // 0 — detached แล้ว!
+worker.postMessage(buffer, [buffer]);          // transfer ownership
+console.log(buffer.byteLength);               // 0 — detached!
 ```
 
 อาร์กิวเมนต์ที่สองคือ array ของ transferable objects คุณสามารถผสมข้อมูลปกติกับ transferable ได้:
@@ -88,11 +88,9 @@ Transferables เป็น zero-copy เมื่อ transfer `ArrayBuffer` แ�
 - **พยายามอ่านหรือเขียน buffer หลัง transfer แล้ว** — buffer จะ detached ทันที (`byteLength` เป็น 0) การเข้าถึง buffer นั้นอีกครั้งไม่ throw error แต่ได้ค่าว่างเปล่า ต้องเปลี่ยน reference ไปใช้ buffer ใหม่ที่ฝั่งรับสร้างขึ้นแทน
 - **ลืมว่าอาร์กิวเมนต์ที่สองของ `postMessage` ต้องเป็น array** — การส่ง buffer เดี่ยวๆ โดยไม่ห่อด้วย `[]` จะทำให้ transfer ไม่เกิดขึ้น และข้อมูลจะถูก clone ตามปกติแทน
 
-> 💡 ตัวอย่างจากของจริง
->
-> **Figma** — ใช้ Web Worker ประมวลผลงานหนักอย่างการ render และ geometry calculation โดย transfer `ArrayBuffer` ของ document data ระหว่างเธรดเพื่อหลีกเลี่ยงต้นทุนการ clone ที่จะกระทบ frame rate
->
-> **Squoosh** (เครื่องมือบีบอัดภาพของ Google) — ส่ง pixel data เป็น transferable `ArrayBuffer` เข้า-ออก codec worker แทนการ clone ทำให้บีบอัดภาพขนาดใหญ่ได้โดยไม่ค้าง UI
+<Callout title="ตัวอย่างจากของจริง">
+**Squoosh** เครื่องมือบีบอัดภาพโอเพนซอร์สของ Google รัน codec บีบอัดภาพ (MozJPEG, WebP และอื่นๆ) ใน Web Worker เพื่อไม่ให้ UI ค้างระหว่างบีบอัด แหล่งอ้างอิง: [web.dev, "Squoosh v2"](https://web.dev/blog/squoosh-v2) และ [Squoosh GitHub repository](https://github.com/GoogleChromeLabs/squoosh) worker ที่ประมวลผล buffer ขนาดใหญ่แบบนี้ (ภาพหรือเสียง) โดยทั่วไปจะได้ประโยชน์จากการ transfer pixel/sample buffer ดิบแทนการ clone เพื่อหลีกเลี่ยงการคัดลอกข้อมูลหลาย MB ในทุกเฟรม
+</Callout>
 
 export const quizTransferables = [
   {

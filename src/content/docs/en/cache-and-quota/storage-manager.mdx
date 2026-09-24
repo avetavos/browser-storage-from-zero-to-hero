@@ -20,7 +20,7 @@ All three methods are async and return Promises.
 
 Returns a Promise that resolves to an object with two properties:
 
-- `usage` — the number of bytes currently used by the origin across all storage mechanisms (Cache API, IndexedDB, localStorage, etc.)
+- `usage` — the number of bytes currently used by the origin across best-effort storage mechanisms (Cache API, IndexedDB, OPFS, etc.) — it does **not** include `localStorage`/`sessionStorage` or cookies, which have their own separate, much smaller limits
 - `quota` — the maximum number of bytes the browser is willing to grant to this origin
 
 Both values are in bytes and are estimates. The browser may round or cap them for privacy reasons.
@@ -88,7 +88,25 @@ export const storageManagerCode = `(async () => {
 <StorageRunner client:visible code={storageManagerCode} />
 
 <Callout title="Key point">
-`navigator.storage.estimate()` reports usage across **all** storage for the origin — not just the Cache API. IndexedDB, Service Worker registrations, and other APIs all count toward the same quota. Monitor it in production apps that cache large assets or store significant amounts of offline data.
+`navigator.storage.estimate()` reports usage across **all** best-effort storage for the origin — IndexedDB, the Cache API, and OPFS all count toward the same quota. It does not include `localStorage`/`sessionStorage` or cookies, which have their own separate, much smaller limits. Monitor it in production apps that cache large assets or store significant amounts of offline data.
+</Callout>
+
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| Calling `estimate()` before caching a large amount of data | Know the remaining quota in advance, avoiding a mid-write failure | It's only an estimate — the browser may round the numbers to resist fingerprinting, so it isn't 100% precise |
+| Calling `persist()` to prevent eviction | Data isn't automatically deleted when disk space gets tight — good for an offline app | Depends on the browser's own heuristics for approval, and adds a little friction to the app's startup flow |
+| Using best-effort storage without requesting persistence | Zero friction — no condition to wait on | Risks eviction with no advance warning |
+
+## Common mistakes
+
+- **Not checking `navigator.storage.persisted()` before assuming data is safe** — calling `persist()` once doesn't always mean it succeeded; verify the actual result before relying on it.
+- **Assuming `estimate()`'s `usage` covers `localStorage` too** — it only covers best-effort storage (Cache API, IndexedDB, OPFS); `localStorage`/`sessionStorage` and cookies have their own separate, much smaller quotas and never show up in this number.
+- **Caching many opaque responses and being surprised the quota runs out fast** — an opaque response is counted at its true full size (often several MB each) toward usage, even though its body can't be read.
+
+<Callout title="Real-world example">
+**Twitter Lite (PWA)** — guarded against eviction of its app shell cache during low-engagement periods, which is exactly the scenario `navigator.storage.persist()` is designed to protect against. Source: [web.dev case study, "Twitter Lite PWA significantly increases engagement and reduces data usage"](https://web.dev/case-studies/twitter).
 </Callout>
 
 export const quizStorageManager = [
@@ -108,12 +126,12 @@ export const quizStorageManager = [
     answer: 1,
   },
   {
-    q: 'Which storage mechanisms are included in the usage reported by navigator.storage.estimate()?',
+    q: 'Which of these is included in the usage reported by navigator.storage.estimate()?',
     options: [
-      'Only the Cache API',
-      'Only IndexedDB',
-      'All storage for the origin: Cache API, IndexedDB, localStorage, and others',
-      'Only storage written by Service Workers',
+      'localStorage',
+      'sessionStorage',
+      'IndexedDB',
+      'Cookies',
     ],
     answer: 2,
   },

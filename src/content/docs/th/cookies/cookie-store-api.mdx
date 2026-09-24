@@ -43,10 +43,10 @@ object ที่คืนยังมี property `domain`, `path`, `expires`, `
 รับคู่ name/value เป็น string หรือ object options:
 
 ```js
-// รูปแบบสั้น
+// Simple form
 await cookieStore.set('theme', 'dark');
 
-// รูปแบบ options — แนะนำสำหรับควบคุม attribute
+// Options form — recommended for control over attributes
 await cookieStore.set({
   name: 'theme',
   value: 'dark',
@@ -101,7 +101,7 @@ async function getTheme() {
     const c = await cookieStore.get('theme');
     return c ? c.value : null;
   } else {
-    // fallback document.cookie
+    // document.cookie fallback
     var pairs = document.cookie.split('; ');
     for (var i = 0; i < pairs.length; i++) {
       var p = pairs[i].split('=');

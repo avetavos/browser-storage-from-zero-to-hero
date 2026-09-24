@@ -184,6 +184,20 @@ export const cursorsCode = `(async function() {
 A cursor does not load all records into memory at once — it steps through them one at a time. Always call `cursor.continue()` inside the `onsuccess` handler to advance; forgetting it will stall iteration silently. Pair cursors with `IDBKeyRange` to avoid scanning records you do not need.
 </Callout>
 
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| A cursor + `IDBKeyRange` instead of `getAll()` | Processes one record at a time without loading everything into memory at once — good for a large dataset | More complex code — you handle callbacks and call `continue()` yourself every time |
+| Calling `getAll()` directly | Short, readable code, giving you an array right away | Loads every record into memory in one shot — unsuitable for a large store |
+| Filtering with `IDBKeyRange` before iterating | Fewer records to scan, saving time | You need to know the key structure in advance to build the correct range |
+
+## Common mistakes
+
+- **Forgetting to call `cursor.continue()` inside the `onsuccess` handler** — iteration just stops silently, with no error to see. Call it every time records remain.
+- **Assuming `IDBKeyRange.bound()` excludes both edges by default** — the default is inclusive of both the lower and upper bound. Pass `true` explicitly as the third or fourth argument if you want it exclusive.
+- **Opening a new cursor every time you want the next record** — a single cursor can keep advancing with `continue()`; there's no need to reopen it. Doing so wastes performance and confuses the code.
+
 export const quizCursorsAndRanges = [
   {
     q: 'What value does the cursor resolve to when there are no more records to iterate?',

@@ -128,11 +128,9 @@ console.log('Cleaned up demo-opfs.txt');`;
 - **เรียก `showOpenFilePicker` นอก user-gesture handler** เช่นใน `useEffect` หรือ event ที่ไม่ใช่ click แล้วสงสัยว่าทำไม throw `SecurityError`
 - **ลืมเรียก `writable.close()` หลังเขียนไฟล์ใน OPFS** — ข้อมูลจะไม่ถูก flush และมองไม่เห็นใน read ครั้งถัดไปแม้ `write()` จะ resolve แล้วก็ตาม
 
-> 💡 ตัวอย่างจากของจริง
->
-> **VS Code for the Web** — ใช้ OPFS เก็บ local cache ของไฟล์ ทำให้ file I/O เร็วใกล้เคียง native editor เมื่อรันอยู่ใน browser
->
-> **Photoshop (web version)** — ใช้ File System Access API ผสมกับ OPFS จัดการไฟล์ภาพขนาดใหญ่ โดยไม่ต้องโหลดทั้งไฟล์เข้า memory ทีเดียว
+<Callout title="ตัวอย่างจากของจริง">
+Photoshop เวอร์ชันเว็บของ Adobe ใช้ OPFS access handle เพื่อย้ายข้อมูลเอกสารระหว่างดิสก์กับหน่วยความจำแบบไดนามิกขณะที่ผู้ใช้ pan ไปมาในไฟล์ขนาดใหญ่ — บทบาทเดียวกับที่ `mmap` ทำบน desktop ซึ่งเป็นไปได้บนเว็บผ่าน OPFS แหล่งอ้างอิง: [web.dev, "Bringing Photoshop to the web"](https://web.dev/articles/ps-on-the-web)
+</Callout>
 
 export const quizFileSystemAccessOpfs = [
   {

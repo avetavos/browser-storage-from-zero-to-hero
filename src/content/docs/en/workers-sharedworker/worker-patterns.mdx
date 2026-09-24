@@ -119,6 +119,24 @@ ask(15).then(function(r) {
 Always handle `worker.onerror`. Without it, worker crashes fail silently in production. Use message IDs to track request/response pairs when a worker handles multiple concurrent tasks.
 </Callout>
 
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| RPC wrapper (message ID + Promise) | Call the worker like a normal async function, and handle several concurrent requests systematically | More boilerplate to write (an id counter, a pending map) and an extra abstraction layer that's slightly harder to debug |
+| Raw `postMessage`/`onmessage` | Simple, the flow is direct and visible — fine for a worker with a simple message pattern | With several requests in flight at once, you must match responses by hand, risking a race condition |
+| Attaching a `worker.onerror` handler | Catches uncaught errors, preventing a silent failure in production | Needs a handler on every worker, and you must design it so an error doesn't leave a pending promise hanging forever |
+
+## Common mistakes
+
+- **Not attaching `worker.onerror`** — an uncaught error inside a worker never shows up in `window.onerror`. Without a handler, a crash fails silently and is very hard to detect in production.
+- **Letting a `pending`/map grow without ever removing entries** — if a request never gets a response (e.g. the worker crashes), its entry sits in the map forever, becoming a memory leak. Add a timeout or a cleanup path for worker errors.
+- **Using a worker for work that isn't worth the overhead** — like reading a button click or a single simple fetch. The cost of setting up an RPC wrapper and cross-thread communication is far higher than the benefit for such small tasks.
+
+<Callout title="Real-world example">
+**Squoosh**, Google's open-source image-compression web app, runs its image codecs inside a Web Worker. Source: [web.dev, "Squoosh v2"](https://web.dev/blog/squoosh-v2) and the [Squoosh GitHub repository](https://github.com/GoogleChromeLabs/squoosh). Wrapping that kind of codec worker with a Promise-based RPC pattern — matching each request to its response by message ID — lets UI code call the worker like a normal async function instead of juggling raw `postMessage`/`onmessage` handlers directly.
+</Callout>
+
 export const quizWorkerPatterns = [
   {
     q: 'Why include a unique `id` in each worker message?',

@@ -17,7 +17,7 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 **การอ่าน** จะคืน cookie ทั้งหมดสำหรับหน้าปัจจุบันเป็น string เดียวคั่นด้วยเซมิโคลอน:
 
 ```js
-// ถ้าตั้งค่าคุกกี้สามชิ้น:
+// If three cookies are set:
 console.log(document.cookie);
 // "theme=dark; user=Alice; lang=en"
 ```
@@ -26,7 +26,7 @@ console.log(document.cookie);
 
 ```js
 document.cookie = 'theme=light; Max-Age=86400; SameSite=Lax';
-// อัปเดตเฉพาะ theme — คุกกี้อื่นไม่เปลี่ยนแปลง
+// Only theme is updated — other cookies are untouched
 ```
 
 ความไม่สมมาตรนี้คือส่วนที่น่าประหลาดใจที่สุดของ cookies API การเขียนไปยัง `document.cookie` เหมือนกับการเรียกฟังก์ชัน `setCookie()` มากกว่าการกำหนดค่าให้ property string
@@ -36,13 +36,13 @@ document.cookie = 'theme=light; Max-Age=86400; SameSite=Lax';
 ไวยากรณ์สำหรับตั้งค่า cookie คือ string ที่เริ่มด้วย name=value ตามด้วย attribute ที่เป็นตัวเลือก คั่นด้วยเซมิโคลอน:
 
 ```js
-// Session cookie (ไม่มี Expires/Max-Age — ลบเมื่อเบราว์เซอร์ปิด)
+// Session cookie (no Expires/Max-Age — deleted when browser closes)
 document.cookie = 'demo_pref=dark; SameSite=Lax';
 
-// Persistent cookie (รอดหลังเบราว์เซอร์ restart)
+// Persistent cookie (survives browser restarts)
 document.cookie = 'demo_pref=dark; Max-Age=86400; SameSite=Lax';
 
-// Cookie ที่จำกัด path
+// Path-scoped cookie
 document.cookie = 'demo_pref=dark; Max-Age=86400; Path=/app; SameSite=Lax';
 ```
 
@@ -62,7 +62,7 @@ function getCookie(name) {
   return null;
 }
 
-var theme = getCookie('demo_pref'); // 'dark' หรือ null
+var theme = getCookie('demo_pref'); // 'dark' or null
 ```
 
 สังเกต `decodeURIComponent` — ค่าที่ตั้งด้วย `encodeURIComponent` ต้องถูก decode ตอนอ่านด้วย

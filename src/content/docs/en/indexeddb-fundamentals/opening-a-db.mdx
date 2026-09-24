@@ -131,6 +131,20 @@ console.log('Cleanup done');`;
 You can only call `createObjectStore()`, `deleteObjectStore()`, or create indexes inside an `onupgradeneeded` handler. Attempting these operations outside of an upgrade transaction will throw a `DOMException`. If you need to add a new store, bump the version number — that triggers `onupgradeneeded` again with the old and new version numbers available on `event.oldVersion` and `event.newVersion`.
 </Callout>
 
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| The event-based async model of `indexedDB.open` | Doesn't block the main thread while opening a large database | You write three levels of callback (`onupgradeneeded`, `onsuccess`, `onerror`) instead of `await`ing directly |
+| Version-based schema migration | Gives you explicit control over schema changes via `oldVersion`/`newVersion` | You must design the migration logic yourself every time you bump the version, and risk forgetting to handle `onblocked` |
+| Wrapping `open()` in a `Promise` | Lets you write linear, much more readable `async/await` code | Hides the event lifecycle details — harder to debug if you forget to handle `onblocked` or `onversionchange` |
+
+## Common mistakes
+
+- **Not handling the `onblocked` event** — if another tab still has an old connection open, the version upgrade hangs silently with no error, and the user just sees a stuck page with no clue why.
+- **Forgetting to close the connection in `onversionchange`** — if you don't call `db.close()` when another tab requests an upgrade, that upgrade stays blocked until this tab is closed or reloaded.
+- **Not attaching `onerror` to the request** — when `open()` fails, for example in a private-browsing mode that blocks storage, the error disappears silently with nothing to debug.
+
 export const quizOpeningADb = [
   {
     q: 'What does indexedDB.open("myDB", 1) return?',

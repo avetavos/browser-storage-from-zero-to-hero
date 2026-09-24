@@ -98,6 +98,24 @@ console.log('Held locks after release:', state.held.length);
 The Web Locks API is promise-based: you never need to call an explicit "release" method. The lock is held for the lifetime of the async callback and released automatically when the returned Promise settles — even if it rejects. This makes cleanup safe and deterministic.
 </Callout>
 
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| Web Locks `exclusive` mode | Reliably prevents a cross-tab race condition, since the browser queues requests FIFO for you | If the callback never resolves/rejects, the lock is never released, and other tabs deadlock waiting forever |
+| Web Locks `shared` mode | Multiple tabs can read at once, without blocking a read-heavy workload | Must be paired correctly with `exclusive`, or you risk reading data while a writer is mid-update |
+| `ifAvailable: true` (non-blocking) | No queueing to wait for — good for background work that can skip a cycle without affecting the user | Used in the wrong place for work that must run reliably, it can silently skip something important |
+
+## Common mistakes
+
+- **Requesting a lock with no timeout/abort strategy** — if the tab holding the lock hangs or crashes mid-callback, e.g. a network hang, other tabs wait for that lock forever with no error. Pass an `AbortSignal` via the `signal` option to set a timeout.
+- **Assuming you must call a "release" method yourself like a mutex in other languages** — Web Locks are tied to the lifetime of the Promise the callback returns; the lock is only released automatically when that Promise settles. There's no method to call directly.
+- **Using `exclusive` mode for read-only work** — this needlessly serializes every read, when `shared` mode should be used instead to let reads happen concurrently.
+
+<Callout title="Real-world example">
+A multi-tab app that syncs local changes to a server can use a Web Locks-based leader election so only one tab is responsible for the sync at any moment, preventing two tabs from writing conflicting updates at once.
+</Callout>
+
 export const quizWebLocks = [
   {
     q: 'What happens if Tab A holds an exclusive lock named "x" and Tab B calls navigator.locks.request("x", cb) with no options?',

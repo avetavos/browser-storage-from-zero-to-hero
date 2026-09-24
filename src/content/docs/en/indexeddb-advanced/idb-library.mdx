@@ -148,6 +148,19 @@ console.log('Saved');
 
 Both do exactly the same thing. The `idb` version is shorter, easier to read, and errors surface as rejected Promises that you can catch with a standard `try/catch`.
 
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| Raw IndexedDB | Full control, no added dependency, works exactly to the browser spec | Verbose code with several layers of nested callbacks — harder to debug |
+| `idb` library | Much better developer experience — short, readable `async/await` code, errors caught directly with `try/catch` | Adds a small dependency (~1 KB) that you must import and rely on |
+
+## Common mistakes
+
+- **Creating or modifying an object store outside the `upgrade` callback** — it simply has no effect. Object stores and indexes can only change inside `upgrade`, and only when the version number increases.
+- **Assuming `idb` changes IndexedDB's behavior** — `idb` is only a Promise wrapper around the same API. Every IndexedDB limitation, such as transaction lifetime or the upgrade transaction, is exactly the same underneath.
+- **Forgetting that `db.put()` replaces the entire record** — to update just one field, `get()` the record first, merge in the new value, then `put()` it back. Otherwise the rest of the old data is lost.
+
 export const quizIdbLibrary = [
   {
     q: 'What is the third argument to openDB() used for?',

@@ -22,6 +22,8 @@ worker.postMessage(arr);      // arr is cloned — original is unchanged
 console.log(arr);             // [1, 2, 3] — still here
 ```
 
+What structured clone **cannot** copy: functions and DOM nodes. Trying to send either of these throws a `DataCloneError`.
+
 ## Transferables — zero-copy ownership transfer
 
 To avoid copying large buffers, pass them as **transferables** in the second argument to `postMessage`. Instead of cloning, the browser moves ownership of the underlying memory to the receiver. The source side is **detached** immediately — its `byteLength` drops to 0 and any attempt to read or write it throws.
@@ -32,7 +34,11 @@ worker.postMessage(buffer, [buffer]);          // transfer ownership
 console.log(buffer.byteLength);               // 0 — detached!
 ```
 
-The second argument is an array of transferable objects. Every item in that array must also appear as (or inside) the first argument — otherwise the browser won't know where to route it.
+The second argument is an array of transferable objects. Every item in that array must also appear as (or inside) the first argument — otherwise the browser won't know where to route it. You can mix regular data with a transferable in the same message:
+
+```js
+worker.postMessage({ kind: 'frame', data: imageBuffer }, [imageBuffer]);
+```
 
 ## When to use transferables
 
@@ -69,6 +75,23 @@ console.log('After transfer, byteLength:', buf.byteLength, '(detached — 0)');`
 
 <Callout title="Key point">
 Transferables are zero-copy. Once you transfer an `ArrayBuffer`, the sending side is detached — `byteLength` becomes 0. Never read from a buffer after transferring it.
+</Callout>
+
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| Structured clone (default) | Easy to use, no ownership to manage yourself, supports many types | Copies the entire value — time and memory cost scales with buffer size |
+| Transferables (`postMessage(data, [buffer])`) | Zero-copy, pointer-only ownership transfer — very fast for large buffers | The source side is detached immediately — you must design the code to never touch that buffer again |
+
+## Common mistakes
+
+- **Cloning a large `ArrayBuffer` unnecessarily** — if you don't need the original buffer afterward, transfer it instead with `postMessage(data, [buffer])`; it's faster and uses far less memory than letting structured clone copy the whole thing.
+- **Trying to read or write a buffer after transferring it** — the buffer is detached immediately (`byteLength` becomes 0). Accessing it again doesn't throw, it just returns empty data — switch your reference to the new buffer the receiving side constructs instead.
+- **Forgetting the second argument to `postMessage` must be an array** — passing a bare buffer without wrapping it in `[]` means no transfer happens at all, and the data is cloned normally instead.
+
+<Callout title="Real-world example">
+**Squoosh**, Google's open-source image-compression web app, runs its image codecs (MozJPEG, WebP, and others) inside a Web Worker so the UI thread stays responsive during compression. Source: [web.dev, "Squoosh v2"](https://web.dev/blog/squoosh-v2) and the [Squoosh GitHub repository](https://github.com/GoogleChromeLabs/squoosh). A worker doing this kind of large-buffer image or audio processing generally benefits from transferring the raw pixel/sample buffer instead of cloning it, avoiding a multi-megabyte copy on every frame.
 </Callout>
 
 export const quizTransferables = [

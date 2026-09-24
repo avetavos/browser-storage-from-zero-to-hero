@@ -104,6 +104,20 @@ localStorage.removeItem('demo:count');`;
 Use `JSON.stringify` on write and `JSON.parse` on read to preserve object structure and primitive types. Always guard the read with a `null` check (key may be absent) and wrap `JSON.parse` in a `try/catch` (value may not be valid JSON).
 </Callout>
 
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| `JSON.stringify`/`JSON.parse` | Handles deeply nested objects and arrays fully, same pattern everywhere | Must re-parse on every read, costing more CPU as data grows |
+| Storing a raw string (no stringify) | Faster, no serialization overhead | Always comes back the wrong type (numbers/booleans become strings), and objects become `"[object Object]"` |
+| Typed `storageGet`/`storageSet` helpers | Shorter call sites, built-in `try/catch` guards against corrupt data | Adds a small extra layer the team needs to know about and maintain |
+
+## Common mistakes
+
+- **Passing an object straight into `setItem` without stringifying it** — you get `"[object Object]"` back. Always `JSON.stringify` before writing.
+- **Calling `JSON.parse` without a `try/catch`** — if the stored value isn't valid JSON (hand-edited in DevTools, or left over from an old code version), the app crashes immediately.
+- **Expecting a `Date` to come back as a `Date` object after parsing** — `JSON.stringify` always converts a `Date` to an ISO string. You must call `new Date(str)` yourself to restore the original type.
+
 export const quizJsonAndObjects = [
   {
     q: 'You store a JavaScript object with localStorage.setItem("x", myObj) without stringifying. What is read back?',

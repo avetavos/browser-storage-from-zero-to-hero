@@ -21,10 +21,10 @@ import ProgressTracker from '../../../../components/ProgressTracker.tsx';
 ใช้ `db.transaction()` เพื่อเปิด transaction ใหม่ โดยรับสองอาร์กิวเมนต์: อาร์เรย์ของชื่อ store ที่ต้องการเข้าถึง และ string mode
 
 ```js
-// ทรานแซกชันแบบอ่านอย่างเดียว — สำหรับการอ่านเท่านั้น
+// Read-only transaction — for reads only
 const tx = db.transaction(['storeName'], 'readonly');
 
-// ทรานแซกชันแบบอ่าน-เขียน — สำหรับการอ่านและการเขียน
+// Read-write transaction — for reads and writes
 const tx = db.transaction(['storeName'], 'readwrite');
 ```
 
@@ -50,17 +50,17 @@ transaction จะ fire สาม event ที่ควรจัดการ:
 
 ```js
 tx.oncomplete = () => {
-  // request ทั้งหมดในทรานแซกชันสำเร็จและถูก commit แล้ว
+  // All requests inside the transaction succeeded and were committed
   console.log('Transaction committed successfully');
 };
 
 tx.onerror = (event) => {
-  // request อย่างน้อยหนึ่งตัวล้มเหลว — ทรานแซกชันถูก rollback
+  // At least one request failed — the transaction was rolled back
   console.error('Transaction error:', tx.error);
 };
 
 tx.onabort = () => {
-  // ทรานแซกชันถูก abort อย่างชัดเจนผ่าน tx.abort()
+  // The transaction was explicitly aborted via tx.abort()
   console.warn('Transaction aborted');
 };
 ```
@@ -74,22 +74,22 @@ transaction ของ IndexedDB ใช้ **auto-commit**: เมื่อ pendi
 ซึ่งหมายความว่าคุณต้องออก request ทั้งหมดใน **chain แบบ synchronous** — success handler ของ request หนึ่งจะ trigger request ถัดไป หากคุณ yield ไปยัง event loop ระหว่าง request (เช่น การ await `fetch()` หรือห่อ logic ใน `setTimeout`) transaction จะ commit ไปแล้วเมื่อ code ของคุณ resume และ request ใหม่ที่ออกต่อ transaction นั้นจะเกิด error
 
 ```js
-// ผิด — ห้ามทำแบบนี้
-tx.oncomplete = async () => { /* ... */ };  // ไม่ใช่ pattern ที่ถูกต้อง
+// WRONG — do not do this
+tx.oncomplete = async () => { /* ... */ };  // not the right pattern
 
 const store = tx.objectStore('items');
 store.get(1).onsuccess = async (e) => {
-  const data = await fetch('/api/extra');  // yield ไปยัง event loop — ทรานแซกชันหายไปแล้ว!
-  store.put({ ...e.target.result, extra: data }); // ERROR: ทรานแซกชัน commit ไปแล้ว
+  const data = await fetch('/api/extra');  // yields to event loop — transaction is gone!
+  store.put({ ...e.target.result, extra: data }); // ERROR: transaction has already committed
 };
 ```
 
 ```js
-// ถูกต้อง — เก็บ request ทั้งหมดไว้ใน synchronous microtask chain เดียวกัน
+// CORRECT — keep all requests in the same synchronous microtask chain
 const store = tx.objectStore('items');
 const getReq = store.get(1);
 getReq.onsuccess = (e) => {
-  store.put({ ...e.target.result, updated: true }); // ออกแบบ synchronous — ยังอยู่ใน tx
+  store.put({ ...e.target.result, updated: true }); // issued synchronously — still in tx
 };
 ```
 

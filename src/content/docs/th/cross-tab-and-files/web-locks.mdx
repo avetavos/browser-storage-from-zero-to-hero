@@ -112,11 +112,9 @@ Web Locks API ใช้ promise: ไม่ต้องเรียก method "re
 - **คิดว่าต้องเรียก method "release" เองเหมือน mutex ในภาษาอื่น** — Web Locks ผูกกับ lifetime ของ Promise ที่ callback คืนกลับ lock จะถูกปล่อยอัตโนมัติเมื่อ Promise settle เท่านั้น ไม่มี method ให้เรียกตรงๆ
 - **ใช้ `exclusive` mode สำหรับงานอ่านอย่างเดียว** — ทำให้ทุก read ต้อง serialize โดยไม่จำเป็น ทั้งที่ควรใช้ `shared` mode เพื่อให้อ่านพร้อมกันได้
 
-> 💡 ตัวอย่างจากของจริง
->
-> **Google Docs** — ใช้ pattern คล้าย Web Locks สำหรับ leader election ให้แท็บเดียวรับผิดชอบ sync กับ server ป้องกันการเขียนซ้อนกันจากหลายแท็บ
->
-> **Photoshop (web version)** — ใช้ lock-like coordination ป้องกันหลายแท็บเขียนไฟล์ OPFS เดียวกันพร้อมกันจนข้อมูลเสียหาย
+<Callout title="ตัวอย่างจากของจริง">
+แอปหลายแท็บที่ sync การเปลี่ยนแปลงในเครื่องขึ้น server สามารถใช้ Web Locks ทำ leader election ให้มีแท็บเดียวรับผิดชอบการ sync ในแต่ละขณะ ป้องกันไม่ให้สองแท็บเขียนอัปเดตที่ขัดแย้งกันพร้อมกัน
+</Callout>
 
 export const quizWebLocks = [
   {

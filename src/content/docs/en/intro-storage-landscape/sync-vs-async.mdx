@@ -95,8 +95,22 @@ console.log('Remaining demo keys in localStorage:',
 <StorageRunner client:visible code={timingCode} />
 
 <Callout title="Performance tip">
-If your storage access pattern involves large objects, frequent writes, or happens inside a scroll or animation callback, switch to IndexedDB. Its async, off-thread model keeps the main thread free for rendering and input handling, eliminating the jank that synchronous Web Storage can introduce.
+If your storage access pattern involves large objects, frequent writes, or happens inside a scroll or animation callback, switch to IndexedDB. Its async, non-blocking model keeps the main thread free for rendering and input handling, eliminating the jank that synchronous Web Storage can introduce.
 </Callout>
+
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| Synchronous (Web Storage / cookies) | Simple API — one line gives you the result immediately, no `await` needed | Blocks the main thread on every call, causing jank when data is large or calls are frequent |
+| Asynchronous (IndexedDB / Cache API) | Doesn't block the main thread; handles large data and many operations smoothly | More complex code — you must handle Promises/callbacks and extra error handling |
+| OPFS `createSyncAccessHandle()` in a worker | Very fast synchronous I/O without touching the main thread | Only available inside a Web Worker — you must design a separate-thread architecture from the start |
+
+## Common mistakes
+
+- **Writing to `localStorage` repeatedly in a hot path** — e.g. on every keystroke or scroll event — blocks the main thread over and over, causing jank the user can actually feel.
+- **Assuming async always means faster** — asynchronous storage doesn't block the thread, but a single operation can take slightly longer than a synchronous call because of event-loop and IPC overhead.
+- **Forgetting that `document.cookie` is synchronous too** — many people focus only on `localStorage`, but parsing a long cookie string on a hot code path blocks the main thread just the same.
 
 export const quizSyncAsync = [
   {

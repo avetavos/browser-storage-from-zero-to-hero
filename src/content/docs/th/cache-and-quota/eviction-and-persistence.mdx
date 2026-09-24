@@ -52,8 +52,10 @@ if (granted) {
 const isAlreadyPersistent = await navigator.storage.persisted();
 
 if (!isAlreadyPersistent) {
+  // Optionally explain why you need it, then request
   const granted = await navigator.storage.persist();
   if (!granted) {
+    // Show a degraded-experience warning
     console.warn('Could not get persistent storage. Cached data may be lost.');
   }
 }
@@ -63,7 +65,7 @@ if (!isAlreadyPersistent) {
 
 - **อย่าสมมติ** ว่า `persist()` จะคืนค่า `true` เสมอ — จัดการกรณี `false` ให้เหมาะสม
 - เรียก `persisted()` ก่อนเพื่อหลีกเลี่ยงการแจ้งเตือนซ้ำซ้อน
-- สำหรับแอปที่ต้องทำงานออฟไลน์ ควรเก็บข้อมูล diagnostic ไว้ใน localStorage เพื่อตรวจจับการสูญเสียข้อมูลเมื่อโหลดหน้าครั้งถัดไป
+- สำหรับแอปที่ต้องทำงานออฟไลน์ ควรเก็บข้อมูล diagnostic ไว้ใน localStorage — เพราะมี quota คงที่ขนาดเล็กของตัวเองและไม่อยู่ภายใต้ระบบ eviction จาก storage pressure ที่ควบคุม IndexedDB, Cache API และ OPFS — เพื่อตรวจจับการสูญเสียข้อมูลเมื่อโหลดหน้าครั้งถัดไป
 
 <Callout title="จุดสำคัญ">
 Persistent storage เป็นการรับประกันของ browser ไม่ใช่ JavaScript lock การเรียก `persist()` เป็นการ *ร้องขอ* การป้องกัน browser อาจปฏิเสธ ผู้ใช้ยังคงควบคุมขั้นสุดท้ายและสามารถล้าง storage ทั้งหมดผ่านการตั้งค่า browser ได้ตลอดเวลา
@@ -83,11 +85,9 @@ Persistent storage เป็นการรับประกันของ bro
 - **ไม่เคยเรียก `navigator.storage.persisted()` ก่อน `persist()`** — ทำให้เรียกขอ permission ซ้ำทุกครั้งที่โหลดแอป ทั้งที่อาจได้รับสิทธิ์ไปแล้ว
 - **เข้าใจว่า eviction ลบเฉพาะ cache ที่เก่าที่สุด** — จริง ๆ แล้ว browser ล้าง storage ทั้งหมดของ origin พร้อมกัน ทั้ง Cache API และ IndexedDB ไม่ได้เลือกลบทีละรายการ
 
-> 💡 ตัวอย่างจากของจริง
->
-> **Twitter Lite** — ขอ persistent storage เพื่อป้องกันไม่ให้ app shell ที่ cache ไว้ถูก evict ระหว่างที่ผู้ใช้ engagement ต่ำ
->
-> **Wikipedia** — บทความที่ผู้ใช้บันทึกไว้อ่านออฟไลน์ต้องพึ่ง persistent storage ไม่งั้นอาจถูกลบทิ้งเมื่อดิสก์ของอุปกรณ์ใกล้เต็ม
+<Callout title="ตัวอย่างจากของจริง">
+**Twitter Lite (PWA)** — ขอ persistent storage เพื่อป้องกันไม่ให้ app shell ที่ cache ไว้ถูก evict ระหว่างที่ผู้ใช้ engagement ต่ำ แหล่งอ้างอิง: [web.dev case study, "Twitter Lite PWA significantly increases engagement and reduces data usage"](https://web.dev/case-studies/twitter)
+</Callout>
 
 export const quizEvictionAndPersistence = [
   {

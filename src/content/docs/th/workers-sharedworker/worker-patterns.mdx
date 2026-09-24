@@ -133,11 +133,9 @@ ask(15).then(function(r) {
 - **ปล่อยให้ `pending`/`map` โตขึ้นเรื่อยๆ โดยไม่ลบ entry** — ถ้า request ไม่ได้รับ response กลับมา (เช่น worker crash) entry ใน map จะค้างอยู่ตลอดไปและกลายเป็น memory leak ควรมี timeout หรือ cleanup เมื่อ worker error
 - **ใช้ worker สำหรับงานที่ไม่คุ้มกับ overhead** — เช่น การอ่าน event คลิกปุ่ม หรือ fetch อย่างง่ายครั้งเดียว ต้นทุนของการตั้ง RPC wrapper และการสื่อสารข้ามเธรดสูงกว่าประโยชน์ที่ได้มาก
 
-> 💡 ตัวอย่างจากของจริง
->
-> **Figma** — ใช้ pattern คล้าย RPC ที่มี message ID เพื่อจับคู่คำขอคำนวณ layout/rendering หลายรายการที่ยิงพร้อมกันไปยัง worker กับผลลัพธ์ที่ตอบกลับมาไม่เรียงลำดับ
->
-> **Squoosh** (เครื่องมือบีบอัดภาพของ Google) — ห่อการเรียก codec worker ด้วย wrapper แบบ Promise-based ทำให้โค้ดฝั่ง UI เรียกใช้ worker เหมือนเรียก async function ปกติ โดยไม่ต้องจัดการ `postMessage`/`onmessage` เอง
+<Callout title="ตัวอย่างจากของจริง">
+**Squoosh** เครื่องมือบีบอัดภาพโอเพนซอร์สของ Google รัน codec บีบอัดภาพใน Web Worker แหล่งอ้างอิง: [web.dev, "Squoosh v2"](https://web.dev/blog/squoosh-v2) และ [Squoosh GitHub repository](https://github.com/GoogleChromeLabs/squoosh) การห่อ worker แบบนั้นด้วย RPC pattern ที่ใช้ Promise — จับคู่แต่ละคำขอกับผลลัพธ์ด้วย message ID — ทำให้โค้ดฝั่ง UI เรียกใช้ worker ได้เหมือนเรียก async function ปกติ แทนที่จะต้องจัดการ `postMessage`/`onmessage` ดิบๆ เอง
+</Callout>
 
 export const quizWorkerPatterns = [
   {

@@ -129,6 +129,20 @@ console.log('Cleanup done');
 Do not use `await fetch()`, `await setTimeout()`, or any other call that returns control to the event loop while a transaction is open. IndexedDB will auto-commit the transaction the moment the call stack empties with no pending requests. All subsequent requests on that transaction will fail with a `TransactionInactiveError`. Keep all reads and writes in a single synchronous call chain.
 </Callout>
 
+## Trade-offs
+
+| Option | Benefit | Cost |
+|---------|---------|------|
+| A transaction's ACID guarantee | All operations succeed or roll back together — data is never left half-written | Every request must be chained strictly synchronously; you can never yield to the event loop midway |
+| `readonly` mode | Multiple transactions can run concurrently on the same store, increasing parallelism | Can't write data at all — you must open a new `readwrite` transaction to write |
+| `readwrite` mode | Can write data, with an exclusive lock that prevents a race condition on the same store | Other transactions that need the same store must queue, reducing throughput if left open too long |
+
+## Common mistakes
+
+- **Awaiting `fetch()` or `setTimeout` in the middle of a transaction** — once the call stack empties with no pending request, the transaction auto-commits immediately, and the next request throws `TransactionInactiveError` unexpectedly.
+- **Forgetting to list every object store needed when opening `db.transaction()`** — calling `tx.objectStore('name')` for a store that wasn't in that initial array throws `NotFoundError`, even though the store genuinely exists in the database.
+- **Tying a UI update to a request's `onsuccess` instead of the transaction's `oncomplete`** — `onsuccess` only reports that one request succeeded; the transaction may not have actually committed yet. If a later request fails, the UI can show data that gets rolled back.
+
 export const quizTransactions = [
   {
     q: "What does it mean for a transaction to be 'atomic'?",
